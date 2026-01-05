@@ -1,3 +1,4 @@
+// Test comment for /ship command
 export function generateShareCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
