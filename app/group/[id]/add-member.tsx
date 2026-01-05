@@ -1,61 +1,59 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
-import { supabase } from '../../../lib/supabase';
-import { colors, spacing, typography } from '../../../lib/theme';
-import { Button, Input, Avatar } from '../../../components/ui';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, router } from "expo-router";
+import { supabase } from "../../../lib/supabase";
+import { colors, spacing, typography } from "../../../lib/theme";
+import { Button, Input, Avatar } from "../../../components/ui";
 
 export default function AddMemberScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setError('Please enter a name');
+      setError("Please enter a name");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const { error: memberError } = await supabase
-        .from('members')
-        .insert({
-          group_id: id,
-          name: name.trim(),
-        });
+      const { error: memberError } = await supabase.from("members").insert({
+        group_id: id,
+        name: name.trim(),
+      });
 
       if (memberError) throw memberError;
 
       router.back();
     } catch (err) {
-      console.error('Error adding member:', err);
-      setError('Failed to add member. Please try again.');
+      console.error("Error adding member:", err);
+      setError("Failed to add member. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <View style={styles.content}>
           <View style={styles.previewContainer}>
-            <Avatar name={name || '?'} size="lg" />
-            <Text style={styles.previewName}>{name || 'New Member'}</Text>
+            <Avatar name={name || "?"} size="lg" />
+            <Text style={styles.previewName}>{name || "New Member"}</Text>
           </View>
 
           <Input
@@ -98,7 +96,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   previewContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginVertical: spacing.xxl,
   },
   previewName: {
@@ -107,7 +105,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     ...typography.caption,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: spacing.lg,
   },
   footer: {

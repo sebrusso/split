@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   View,
   Text,
@@ -7,36 +7,49 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
-import { generateShareCode } from '../lib/utils';
-import { colors, spacing, typography, borderRadius } from '../lib/theme';
-import { Button, Input, Card } from '../components/ui';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { supabase } from "../lib/supabase";
+import { generateShareCode } from "../lib/utils";
+import { colors, spacing, typography, borderRadius } from "../lib/theme";
+import { Button, Input, Card } from "../components/ui";
 
-const EMOJIS = ['💰', '🏠', '✈️', '🍕', '🎉', '👥', '💳', '🛒', '🎬', '⛽', '🏖️', '🎮'];
+const EMOJIS = [
+  "💰",
+  "🏠",
+  "✈️",
+  "🍕",
+  "🎉",
+  "👥",
+  "💳",
+  "🛒",
+  "🎬",
+  "⛽",
+  "🏖️",
+  "🎮",
+];
 
 export default function CreateGroupScreen() {
-  const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState('💰');
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState("💰");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      setError('Please enter a group name');
+      setError("Please enter a group name");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       const shareCode = generateShareCode();
 
       const { data: group, error: groupError } = await supabase
-        .from('groups')
+        .from("groups")
         .insert({
           name: name.trim(),
           emoji,
@@ -48,28 +61,26 @@ export default function CreateGroupScreen() {
       if (groupError) throw groupError;
 
       // Add creator as first member (using "You" as default name)
-      const { error: memberError } = await supabase
-        .from('members')
-        .insert({
-          group_id: group.id,
-          name: 'You',
-        });
+      const { error: memberError } = await supabase.from("members").insert({
+        group_id: group.id,
+        name: "You",
+      });
 
       if (memberError) throw memberError;
 
       router.replace(`/group/${group.id}`);
     } catch (err) {
-      console.error('Error creating group:', err);
-      setError('Failed to create group. Please try again.');
+      console.error("Error creating group:", err);
+      setError("Failed to create group. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -106,7 +117,7 @@ export default function CreateGroupScreen() {
             <View style={styles.previewContent}>
               <Text style={styles.previewEmoji}>{emoji}</Text>
               <Text style={styles.previewName}>
-                {name.trim() || 'Your Group'}
+                {name.trim() || "Your Group"}
               </Text>
             </View>
           </Card>
@@ -144,8 +155,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
   },
   emojiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     marginHorizontal: -spacing.xs,
   },
   emojiButton: {
@@ -154,10 +165,10 @@ const styles = StyleSheet.create({
     margin: spacing.xs,
     borderRadius: borderRadius.md,
     backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   emojiButtonSelected: {
     borderColor: colors.primary,
@@ -174,8 +185,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   previewContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   previewEmoji: {
     fontSize: 40,

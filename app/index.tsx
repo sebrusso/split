@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,14 +6,20 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '../lib/supabase';
-import { Group } from '../lib/types';
-import { colors, spacing, typography, shadows, borderRadius } from '../lib/theme';
-import { Button, Card } from '../components/ui';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { supabase } from "../lib/supabase";
+import { Group } from "../lib/types";
+import {
+  colors,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from "../lib/theme";
+import { Button, Card } from "../components/ui";
 
 export default function HomeScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -23,14 +29,14 @@ export default function HomeScreen() {
   const fetchGroups = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('groups')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("groups")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setGroups(data || []);
     } catch (error) {
-      console.error('Error fetching groups:', error);
+      console.error("Error fetching groups:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -40,7 +46,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchGroups();
-    }, [fetchGroups])
+    }, [fetchGroups]),
   );
 
   const onRefresh = useCallback(() => {
@@ -54,7 +60,7 @@ export default function HomeScreen() {
       onPress={() => router.push(`/group/${item.id}`)}
     >
       <View style={styles.groupHeader}>
-        <Text style={styles.groupEmoji}>{item.emoji || '💰'}</Text>
+        <Text style={styles.groupEmoji}>{item.emoji || "💰"}</Text>
         <View style={styles.groupInfo}>
           <Text style={styles.groupName}>{item.name}</Text>
           <Text style={styles.groupCode}>Code: {item.share_code}</Text>
@@ -72,14 +78,14 @@ export default function HomeScreen() {
       </Text>
       <Button
         title="Create Your First Group"
-        onPress={() => router.push('/create-group')}
+        onPress={() => router.push("/create-group")}
         style={styles.emptyButton}
       />
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>SplitFree</Text>
         <Text style={styles.subtitle}>Split expenses, stay friends</Text>
@@ -106,7 +112,7 @@ export default function HomeScreen() {
           <View style={styles.fabContainer}>
             <TouchableOpacity
               style={styles.fab}
-              onPress={() => router.push('/create-group')}
+              onPress={() => router.push("/create-group")}
               activeOpacity={0.8}
             >
               <Text style={styles.fabText}>+</Text>
@@ -144,8 +150,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   groupEmoji: {
     fontSize: 40,
@@ -163,8 +169,8 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: spacing.xl,
   },
   emptyEmoji: {
@@ -173,20 +179,20 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.h2,
-    textAlign: 'center',
+    textAlign: "center",
   },
   emptySubtitle: {
     ...typography.body,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
   },
   emptyButton: {
-    width: '100%',
+    width: "100%",
   },
   fabContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: spacing.xl,
     right: spacing.lg,
   },
@@ -195,14 +201,14 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     ...shadows.lg,
   },
   fabText: {
     fontSize: 28,
-    color: '#FFFFFF',
-    fontFamily: 'Inter_400Regular',
+    color: "#FFFFFF",
+    fontFamily: "Inter_400Regular",
     marginTop: -2,
   },
 });

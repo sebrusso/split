@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,24 +8,30 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
-import { supabase } from '../../../lib/supabase';
-import { Member, Group } from '../../../lib/types';
-import { colors, spacing, typography, borderRadius, shadows } from '../../../lib/theme';
-import { Button, Input, Avatar, Card } from '../../../components/ui';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, router } from "expo-router";
+import { supabase } from "../../../lib/supabase";
+import { Member, Group } from "../../../lib/types";
+import {
+  colors,
+  spacing,
+  typography,
+  borderRadius,
+  shadows,
+} from "../../../lib/theme";
+import { Button, Input, Avatar, Card } from "../../../components/ui";
 
 export default function AddExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
   const [paidBy, setPaidBy] = useState<string | null>(null);
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -34,18 +40,18 @@ export default function AddExpenseScreen() {
   const fetchData = async () => {
     try {
       const { data: groupData } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', id)
+        .from("groups")
+        .select("*")
+        .eq("id", id)
         .single();
 
       setGroup(groupData);
 
       const { data: membersData } = await supabase
-        .from('members')
-        .select('*')
-        .eq('group_id', id)
-        .order('created_at', { ascending: true });
+        .from("members")
+        .select("*")
+        .eq("group_id", id)
+        .order("created_at", { ascending: true });
 
       if (membersData && membersData.length > 0) {
         setMembers(membersData);
@@ -53,7 +59,7 @@ export default function AddExpenseScreen() {
         setSplitBetween(membersData.map((m) => m.id));
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error("Error fetching data:", error);
     }
   };
 
@@ -61,7 +67,7 @@ export default function AddExpenseScreen() {
     setSplitBetween((prev) =>
       prev.includes(memberId)
         ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId]
+        : [...prev, memberId],
     );
   };
 
@@ -69,32 +75,32 @@ export default function AddExpenseScreen() {
     const amountNum = parseFloat(amount);
 
     if (!amountNum || amountNum <= 0) {
-      setError('Please enter a valid amount');
+      setError("Please enter a valid amount");
       return;
     }
 
     if (!description.trim()) {
-      setError('Please enter a description');
+      setError("Please enter a description");
       return;
     }
 
     if (!paidBy) {
-      setError('Please select who paid');
+      setError("Please select who paid");
       return;
     }
 
     if (splitBetween.length === 0) {
-      setError('Please select at least one person to split with');
+      setError("Please select at least one person to split with");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       // Create expense
       const { data: expense, error: expenseError } = await supabase
-        .from('expenses')
+        .from("expenses")
         .insert({
           group_id: id,
           description: description.trim(),
@@ -115,24 +121,24 @@ export default function AddExpenseScreen() {
       }));
 
       const { error: splitsError } = await supabase
-        .from('splits')
+        .from("splits")
         .insert(splits);
 
       if (splitsError) throw splitsError;
 
       router.back();
     } catch (err) {
-      console.error('Error creating expense:', err);
-      setError('Failed to add expense. Please try again.');
+      console.error("Error creating expense:", err);
+      setError("Failed to add expense. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -275,9 +281,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   amountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     marginVertical: spacing.xl,
   },
   currencySymbol: {
@@ -288,7 +294,7 @@ const styles = StyleSheet.create({
   amountInput: {
     ...typography.amount,
     minWidth: 120,
-    textAlign: 'center',
+    textAlign: "center",
   },
   inputContainer: {
     marginBottom: spacing.xl,
@@ -304,12 +310,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   memberButton: {
-    alignItems: 'center',
+    alignItems: "center",
     marginRight: spacing.md,
     padding: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
     width: 72,
   },
   memberButtonSelected: {
@@ -319,21 +325,21 @@ const styles = StyleSheet.create({
   memberButtonText: {
     ...typography.small,
     marginTop: spacing.xs,
-    textAlign: 'center',
+    textAlign: "center",
   },
   memberButtonTextSelected: {
     color: colors.primary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
   splitGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     marginHorizontal: -spacing.xs,
     marginBottom: spacing.xl,
   },
   splitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: spacing.sm,
     margin: spacing.xs,
     borderRadius: borderRadius.md,
@@ -352,20 +358,20 @@ const styles = StyleSheet.create({
   },
   splitButtonTextSelected: {
     color: colors.primary,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
   },
   checkmark: {
     width: 18,
     height: 18,
     borderRadius: 9,
     backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   checkmarkText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   previewCard: {
     backgroundColor: colors.primaryLight,
@@ -388,7 +394,7 @@ const styles = StyleSheet.create({
   error: {
     ...typography.caption,
     color: colors.danger,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: spacing.md,
   },
   footer: {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   TouchableOpacity,
   Text,
@@ -6,14 +6,14 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
-} from 'react-native';
-import { colors, borderRadius, spacing } from '../../lib/theme';
+} from "react-native";
+import { colors, borderRadius, spacing } from "../../lib/theme";
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md" | "lg";
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
@@ -24,8 +24,8 @@ interface ButtonProps {
 export function Button({
   title,
   onPress,
-  variant = 'primary',
-  size = 'md',
+  variant = "primary",
+  size = "md",
   disabled = false,
   loading = false,
   style,
@@ -58,7 +58,7 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' ? '#fff' : colors.primary}
+          color={variant === "primary" ? "#fff" : colors.primary}
           size="small"
         />
       ) : (
@@ -70,12 +70,12 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: borderRadius.md,
   },
   fullWidth: {
-    width: '100%',
+    width: "100%",
   },
   primary: {
     backgroundColor: colors.primary,
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
   },
   ghost: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   danger: {
     backgroundColor: colors.danger,
@@ -105,10 +105,10 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   text: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
   },
   text_primary: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   text_secondary: {
     color: colors.primary,
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   text_danger: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   textSize_sm: {
     fontSize: 14,

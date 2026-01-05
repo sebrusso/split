@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, StyleSheet, ViewStyle, TouchableOpacity } from 'react-native';
-import { colors, borderRadius, spacing, shadows } from '../../lib/theme';
+import React from "react";
+import { View, StyleSheet, ViewStyle, TouchableOpacity } from "react-native";
+import { colors, borderRadius, spacing, shadows } from "../../lib/theme";
 
 interface CardProps {
   children: React.ReactNode;
@@ -10,12 +10,7 @@ interface CardProps {
 }
 
 export function Card({ children, style, onPress, padded = true }: CardProps) {
-  const cardStyle = [
-    styles.card,
-    shadows.md,
-    padded && styles.padded,
-    style,
-  ];
+  const cardStyle = [styles.card, shadows.md, padded && styles.padded, style];
 
   if (onPress) {
     return (

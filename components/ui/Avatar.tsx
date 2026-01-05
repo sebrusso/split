@@ -1,24 +1,24 @@
-import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { colors, borderRadius } from '../../lib/theme';
-import { getInitials } from '../../lib/utils';
+import React from "react";
+import { View, Text, StyleSheet, ViewStyle } from "react-native";
+import { colors, borderRadius } from "../../lib/theme";
+import { getInitials } from "../../lib/utils";
 
 interface AvatarProps {
   name: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
   style?: ViewStyle;
   color?: string;
 }
 
 const AVATAR_COLORS = [
-  '#10B981', // emerald
-  '#3B82F6', // blue
-  '#8B5CF6', // purple
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#EC4899', // pink
-  '#06B6D4', // cyan
-  '#84CC16', // lime
+  "#10B981", // emerald
+  "#3B82F6", // blue
+  "#8B5CF6", // purple
+  "#F59E0B", // amber
+  "#EF4444", // red
+  "#EC4899", // pink
+  "#06B6D4", // cyan
+  "#84CC16", // lime
 ];
 
 function getColorForName(name: string): string {
@@ -29,7 +29,7 @@ function getColorForName(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export function Avatar({ name, size = 'md', style, color }: AvatarProps) {
+export function Avatar({ name, size = "md", style, color }: AvatarProps) {
   const backgroundColor = color || getColorForName(name);
   const initials = getInitials(name);
 
@@ -42,8 +42,8 @@ export function Avatar({ name, size = 'md', style, color }: AvatarProps) {
 
 const styles = StyleSheet.create({
   avatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: borderRadius.full,
   },
   sm: {
@@ -59,8 +59,8 @@ const styles = StyleSheet.create({
     height: 56,
   },
   text: {
-    color: '#FFFFFF',
-    fontFamily: 'Inter_600SemiBold',
+    color: "#FFFFFF",
+    fontFamily: "Inter_600SemiBold",
   },
   text_sm: {
     fontSize: 12,

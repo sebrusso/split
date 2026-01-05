@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   TextInput,
@@ -6,8 +6,8 @@ import {
   StyleSheet,
   TextInputProps,
   ViewStyle,
-} from 'react-native';
-import { colors, borderRadius, spacing, typography } from '../../lib/theme';
+} from "react-native";
+import { colors, borderRadius, spacing, typography } from "../../lib/theme";
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -55,15 +55,15 @@ export function Input({
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
+    width: "100%",
   },
   label: {
     ...typography.bodyMedium,
     marginBottom: spacing.sm,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 48,
     borderWidth: 1,
     borderColor: colors.border,
@@ -81,18 +81,18 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     color: colors.text,
   },
   prefix: {
     fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     color: colors.textSecondary,
     marginRight: spacing.xs,
   },
   suffix: {
     fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     color: colors.textSecondary,
     marginLeft: spacing.xs,
   },
