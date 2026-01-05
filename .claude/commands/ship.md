@@ -13,8 +13,8 @@ git status --short
 ```
 
 ```bash
-# Run tests before shipping
-npm test
+# Run unit tests before shipping (skip integration tests that require live Supabase)
+npm run test:unit
 ```
 
 ```bash
