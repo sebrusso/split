@@ -213,10 +213,83 @@ card: '#FFFFFF'
 
 ## Security Notes
 
+### Supabase Security
 - RLS enabled on all tables
 - Anonymous key used (not service role)
 - No sensitive data stored locally yet
 - Share codes are 6-char alphanumeric (no confusing chars)
+
+### GitHub Fine-grained PAT Configuration
+
+**CRITICAL**: Use Fine-grained PATs instead of classic tokens or SSH keys for Claude Code integration.
+
+#### Token Naming Convention
+```
+claude-code-splitfree-YYYY-MM
+```
+Example: `claude-code-splitfree-2026-01`
+
+#### Required Repository Permissions
+```json
+{
+  "repository_permissions": {
+    "actions": "read",
+    "contents": "write",
+    "issues": "write",
+    "metadata": "read",
+    "pull_requests": "write"
+  },
+  "account_permissions": {}
+}
+```
+
+#### Token Settings
+- **Expiration**: 60 days maximum (shorter is better)
+- **Repository access**: Only `sebrusso/split` (never "All repositories")
+- **Resource owner**: Your personal account
+
+#### Creating a New Token
+1. GitHub.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Click "Generate new token"
+3. Name: `claude-code-splitfree-YYYY-MM`
+4. Expiration: 60 days
+5. Repository access: "Only select repositories" → `sebrusso/split`
+6. Permissions:
+   - Contents: Read and write
+   - Pull requests: Read and write
+   - Issues: Read and write
+   - Actions: Read-only
+   - Metadata: Read-only (auto-selected)
+
+#### Local Token Storage (macOS)
+```bash
+# Store token securely in Keychain
+security add-generic-password \
+  -a "$USER" \
+  -s "claude-github-pat-splitfree" \
+  -w "github_pat_YOUR_TOKEN_HERE"
+
+# Retrieve token when needed
+export GITHUB_TOKEN=$(security find-generic-password \
+  -a "$USER" \
+  -s "claude-github-pat-splitfree" \
+  -w)
+```
+
+#### Token Rotation Schedule
+- Rotate every 60 days (before expiration)
+- Set calendar reminder for day 50
+- Never commit tokens to git
+- Revoke old tokens immediately after rotation
+
+### Secrets Management
+
+| Secret | Storage Location | Used For |
+|--------|------------------|----------|
+| GitHub PAT | macOS Keychain / GitHub Secrets | Git operations |
+| Supabase Anon Key | `lib/supabase.ts` (public, safe) | Client API calls |
+| Supabase Service Key | GitHub Secrets only | CI/CD migrations |
+| Anthropic API Key | GitHub Secrets | Claude Code Actions |
 
 ---
 

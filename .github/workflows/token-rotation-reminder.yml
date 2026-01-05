@@ -1,0 +1,89 @@
+name: Token Rotation Reminder
+
+on:
+  schedule:
+    # Run at 9 AM UTC on the 1st and 15th of each month
+    - cron: '0 9 1,15 * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-token-age:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check PAT expiration reminder
+        run: |
+          echo "🔐 Security Reminder: Review your Fine-grained PATs"
+          echo ""
+          echo "Checklist:"
+          echo "  1. Check token expiration dates in GitHub Settings"
+          echo "  2. Rotate tokens older than 50 days"
+          echo "  3. Revoke any unused tokens"
+          echo "  4. Update CLAUDE_PAT secret if rotated"
+          echo ""
+          echo "Token naming convention: claude-code-splitfree-YYYY-MM"
+          echo ""
+          echo "Required permissions for new tokens:"
+          echo "  - Contents: Read and write"
+          echo "  - Pull requests: Read and write"
+          echo "  - Issues: Read and write"
+          echo "  - Actions: Read-only"
+          echo ""
+          echo "Go to: https://github.com/settings/tokens?type=beta"
+
+      - name: Create issue if needed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date();
+            const title = `🔐 Security: Review PAT expiration - ${today.toISOString().slice(0, 7)}`;
+
+            // Check if issue already exists this month
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,maintenance'
+            });
+
+            const existingIssue = issues.data.find(i =>
+              i.title.includes(today.toISOString().slice(0, 7))
+            );
+
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: `## Monthly Security Review
+
+            ### Fine-grained PAT Checklist
+
+            - [ ] Check [token expiration dates](https://github.com/settings/tokens?type=beta)
+            - [ ] Rotate tokens older than 50 days
+            - [ ] Update \`CLAUDE_PAT\` repository secret if rotated
+            - [ ] Revoke old/unused tokens
+            - [ ] Verify token has minimal required permissions
+
+            ### Required Permissions
+            \`\`\`json
+            {
+              "contents": "write",
+              "pull_requests": "write",
+              "issues": "write",
+              "actions": "read",
+              "metadata": "read"
+            }
+            \`\`\`
+
+            ### Token Naming Convention
+            \`claude-code-splitfree-YYYY-MM\`
+
+            ---
+            *This issue was automatically created by the token rotation reminder workflow.*`,
+                labels: ['security', 'maintenance']
+              });
+              console.log('Created security review issue');
+            } else {
+              console.log('Issue already exists for this month');
+            }
