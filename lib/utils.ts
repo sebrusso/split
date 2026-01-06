@@ -1,4 +1,155 @@
 // Test comment for /ship command
+
+// ============================================
+// Error Handling
+// ============================================
+
+/**
+ * Result type for async operations that can fail
+ */
+export interface AsyncResult<T> {
+  data: T | null;
+  error: string | null;
+}
+
+/**
+ * Wraps an async operation with consistent error handling.
+ * Use this for Supabase operations and other async tasks.
+ *
+ * @example
+ * const result = await handleAsync(async () => {
+ *   const { data, error } = await supabase.from('groups').select('*');
+ *   if (error) throw error;
+ *   return data;
+ * }, 'Failed to load groups');
+ */
+export async function handleAsync<T>(
+  operation: () => Promise<T>,
+  errorMessage: string = "An error occurred",
+): Promise<AsyncResult<T>> {
+  try {
+    const data = await operation();
+    return { data, error: null };
+  } catch (error) {
+    console.error(errorMessage, error);
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return { data: null, error: `${errorMessage}: ${message}` };
+  }
+}
+
+/**
+ * Extracts a user-friendly error message from various error types
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return "An unexpected error occurred";
+}
+
+// ============================================
+// Validation
+// ============================================
+
+export interface ValidationResult {
+  isValid: boolean;
+  error: string | null;
+}
+
+/**
+ * Validates an amount value for expenses/settlements
+ *
+ * @param amount - The amount string or number to validate
+ * @param options - Validation options
+ * @returns ValidationResult with isValid flag and error message if invalid
+ */
+export function validateAmount(
+  amount: string | number,
+  options: { min?: number; max?: number; allowZero?: boolean } = {},
+): ValidationResult {
+  const { min = 0.01, max = 999999.99, allowZero = false } = options;
+
+  const numAmount = typeof amount === "string" ? parseFloat(amount) : amount;
+
+  if (isNaN(numAmount)) {
+    return { isValid: false, error: "Please enter a valid amount" };
+  }
+
+  if (!allowZero && numAmount === 0) {
+    return { isValid: false, error: "Amount cannot be zero" };
+  }
+
+  if (numAmount < 0) {
+    return { isValid: false, error: "Amount cannot be negative" };
+  }
+
+  if (numAmount < min) {
+    return { isValid: false, error: `Amount must be at least ${formatCurrency(min)}` };
+  }
+
+  if (numAmount > max) {
+    return { isValid: false, error: `Amount cannot exceed ${formatCurrency(max)}` };
+  }
+
+  return { isValid: true, error: null };
+}
+
+/**
+ * Validates a name string (for groups, members, expenses)
+ *
+ * @param name - The name to validate
+ * @param options - Validation options
+ * @returns ValidationResult with isValid flag and error message if invalid
+ */
+export function validateName(
+  name: string,
+  options: { minLength?: number; maxLength?: number; fieldName?: string } = {},
+): ValidationResult {
+  const {
+    minLength = 1,
+    maxLength = 100,
+    fieldName = "Name",
+  } = options;
+
+  const trimmedName = name.trim();
+
+  if (trimmedName.length === 0) {
+    return { isValid: false, error: `${fieldName} is required` };
+  }
+
+  if (trimmedName.length < minLength) {
+    return {
+      isValid: false,
+      error: `${fieldName} must be at least ${minLength} character${minLength > 1 ? "s" : ""}`,
+    };
+  }
+
+  if (trimmedName.length > maxLength) {
+    return {
+      isValid: false,
+      error: `${fieldName} cannot exceed ${maxLength} characters`,
+    };
+  }
+
+  return { isValid: true, error: null };
+}
+
+// ============================================
+// Code Generation
+// ============================================
+
 export function generateShareCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -69,6 +220,36 @@ export function calculateBalances(
       const currentBalance = balances.get(split.member_id) || 0;
       balances.set(split.member_id, currentBalance - split.amount);
     });
+  });
+
+  return balances;
+}
+
+export function calculateBalancesWithSettlements(
+  expenses: Array<{
+    paid_by: string;
+    amount: number;
+    splits: Array<{ member_id: string; amount: number }>;
+  }>,
+  settlements: Array<{
+    from_member_id: string;
+    to_member_id: string;
+    amount: number;
+  }>,
+  members: Array<{ id: string; name: string }>,
+): Map<string, number> {
+  // Start with expense-based balances
+  const balances = calculateBalances(expenses, members);
+
+  // Apply settlements: when A pays B, A's debt decreases and B's credit decreases
+  settlements.forEach((settlement) => {
+    const fromBalance = balances.get(settlement.from_member_id) || 0;
+    const toBalance = balances.get(settlement.to_member_id) || 0;
+
+    // from_member paid money, so their balance increases (less debt / more credit)
+    balances.set(settlement.from_member_id, fromBalance + settlement.amount);
+    // to_member received money, so their balance decreases (less credit / more debt)
+    balances.set(settlement.to_member_id, toBalance - settlement.amount);
   });
 
   return balances;

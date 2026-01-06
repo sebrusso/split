@@ -47,3 +47,17 @@ export interface Settlement {
   to: Member;
   amount: number;
 }
+
+// Database record for settlements table
+export interface SettlementRecord {
+  id: string;
+  group_id: string;
+  from_member_id: string;
+  to_member_id: string;
+  amount: number;
+  settled_at: string;
+  created_at: string;
+  // Joined fields
+  from_member?: Member;
+  to_member?: Member;
+}

@@ -12,6 +12,9 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { colors } from "../lib/theme";
 
+// Note: Offline support requires native modules (development build)
+// It's disabled in Expo Go - will be enabled when building for production
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -87,6 +90,33 @@ export default function RootLayout() {
           options={{
             title: "Add Member",
             presentation: "modal",
+          }}
+        />
+        <Stack.Screen
+          name="group/[id]/balances"
+          options={{
+            title: "Balances",
+          }}
+        />
+        <Stack.Screen
+          name="group/[id]/share"
+          options={{
+            title: "Share Group",
+            presentation: "modal",
+          }}
+        />
+        <Stack.Screen
+          name="join/index"
+          options={{
+            title: "Join Group",
+            presentation: "modal",
+          }}
+        />
+        <Stack.Screen
+          name="join/[code]"
+          options={{
+            title: "Joining...",
+            headerShown: false,
           }}
         />
       </Stack>

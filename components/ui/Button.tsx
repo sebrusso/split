@@ -58,7 +58,7 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === "primary" ? "#fff" : colors.primary}
+          color={variant === "primary" ? colors.white : colors.primary}
           size="small"
         />
       ) : (
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   text_primary: {
-    color: "#FFFFFF",
+    color: colors.white,
   },
   text_secondary: {
     color: colors.primary,
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   text_danger: {
-    color: "#FFFFFF",
+    color: colors.white,
   },
   textSize_sm: {
     fontSize: 14,

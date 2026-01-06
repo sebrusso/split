@@ -13,13 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { Member, Group } from "../../../lib/types";
-import {
-  colors,
-  spacing,
-  typography,
-  borderRadius,
-  shadows,
-} from "../../../lib/theme";
+import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
 import { Button, Input, Avatar, Card } from "../../../components/ui";
 
 export default function AddExpenseScreen() {
@@ -369,7 +363,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   checkmarkText: {
-    color: "#FFFFFF",
+    color: colors.white,
     fontSize: 12,
     fontWeight: "bold",
   },

@@ -7,6 +7,7 @@ export const colors = {
 
   background: "#FAFAFA",
   card: "#FFFFFF",
+  white: "#FFFFFF", // Use for text on dark backgrounds (buttons, avatars, badges)
 
   text: "#1F2937",
   textSecondary: "#6B7280",

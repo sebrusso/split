@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     height: 56,
   },
   text: {
-    color: "#FFFFFF",
+    color: colors.white,
     fontFamily: "Inter_600SemiBold",
   },
   text_sm: {

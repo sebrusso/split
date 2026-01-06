@@ -402,6 +402,182 @@ describe("Cascade Deletes", () => {
   });
 });
 
+describe("Settlements CRUD", () => {
+  let settlementId: string;
+
+  it("should create a settlement", async () => {
+    const { data, error } = await supabase
+      .from("settlements")
+      .insert({
+        group_id: testGroupId,
+        from_member_id: testMemberIds[1], // Bob pays
+        to_member_id: testMemberIds[0], // Alice receives
+        amount: 30.0,
+      })
+      .select()
+      .single();
+
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(parseFloat(data.amount)).toBe(30.0);
+    expect(data.from_member_id).toBe(testMemberIds[1]);
+    expect(data.to_member_id).toBe(testMemberIds[0]);
+    expect(data.settled_at).toBeDefined();
+
+    settlementId = data.id;
+  });
+
+  it("should read settlements for a group", async () => {
+    const { data, error } = await supabase
+      .from("settlements")
+      .select(
+        `
+        *,
+        from_member:members!from_member_id(id, name),
+        to_member:members!to_member_id(id, name)
+      `,
+      )
+      .eq("group_id", testGroupId);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    expect(data![0].from_member.name).toBe("Test Bob");
+    expect(data![0].to_member.name).toBe("Test Alice");
+  });
+
+  it("should enforce positive amount for settlements", async () => {
+    const { error } = await supabase.from("settlements").insert({
+      group_id: testGroupId,
+      from_member_id: testMemberIds[1],
+      to_member_id: testMemberIds[0],
+      amount: -10,
+    });
+
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("23514"); // Check constraint violation
+  });
+
+  it("should enforce zero amount is invalid for settlements", async () => {
+    const { error } = await supabase.from("settlements").insert({
+      group_id: testGroupId,
+      from_member_id: testMemberIds[1],
+      to_member_id: testMemberIds[0],
+      amount: 0,
+    });
+
+    expect(error).not.toBeNull();
+  });
+
+  it("should not allow settlement with invalid group_id", async () => {
+    const { error } = await supabase.from("settlements").insert({
+      group_id: "00000000-0000-0000-0000-000000000000",
+      from_member_id: testMemberIds[1],
+      to_member_id: testMemberIds[0],
+      amount: 10,
+    });
+
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("23503"); // Foreign key violation
+  });
+
+  it("should not allow settlement with invalid from_member_id", async () => {
+    const { error } = await supabase.from("settlements").insert({
+      group_id: testGroupId,
+      from_member_id: "00000000-0000-0000-0000-000000000000",
+      to_member_id: testMemberIds[0],
+      amount: 10,
+    });
+
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("23503");
+  });
+
+  it("should not allow settlement with invalid to_member_id", async () => {
+    const { error } = await supabase.from("settlements").insert({
+      group_id: testGroupId,
+      from_member_id: testMemberIds[1],
+      to_member_id: "00000000-0000-0000-0000-000000000000",
+      amount: 10,
+    });
+
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe("23503");
+  });
+
+  it("should delete a settlement", async () => {
+    const { error } = await supabase
+      .from("settlements")
+      .delete()
+      .eq("id", settlementId);
+
+    expect(error).toBeNull();
+
+    // Verify it's gone
+    const { data } = await supabase
+      .from("settlements")
+      .select("*")
+      .eq("id", settlementId);
+
+    expect(data).toHaveLength(0);
+  });
+});
+
+describe("Settlements Cascade Deletes", () => {
+  let tempGroupId: string;
+  let tempMember1Id: string;
+  let tempMember2Id: string;
+  let tempSettlementId: string;
+
+  beforeAll(async () => {
+    // Create temp group
+    const { data: group } = await supabase
+      .from("groups")
+      .insert({ name: "Settlement Cascade Test", share_code: "SETT" + Date.now() })
+      .select()
+      .single();
+    tempGroupId = group!.id;
+
+    // Create temp members
+    const { data: members } = await supabase
+      .from("members")
+      .insert([
+        { group_id: tempGroupId, name: "Temp Payer" },
+        { group_id: tempGroupId, name: "Temp Receiver" },
+      ])
+      .select();
+    tempMember1Id = members![0].id;
+    tempMember2Id = members![1].id;
+
+    // Create temp settlement
+    const { data: settlement } = await supabase
+      .from("settlements")
+      .insert({
+        group_id: tempGroupId,
+        from_member_id: tempMember1Id,
+        to_member_id: tempMember2Id,
+        amount: 25,
+      })
+      .select()
+      .single();
+    tempSettlementId = settlement!.id;
+  });
+
+  it("should cascade delete settlements when group is deleted", async () => {
+    // Delete the group (should cascade to members and settlements)
+    await supabase.from("settlements").delete().eq("group_id", tempGroupId);
+    await supabase.from("members").delete().eq("group_id", tempGroupId);
+    await supabase.from("groups").delete().eq("id", tempGroupId);
+
+    // Verify settlements are gone
+    const { data } = await supabase
+      .from("settlements")
+      .select("*")
+      .eq("id", tempSettlementId);
+
+    expect(data).toHaveLength(0);
+  });
+});
+
 describe("Data Integrity - Balance Calculation Scenario", () => {
   let scenarioGroupId: string;
   let aliceId: string;

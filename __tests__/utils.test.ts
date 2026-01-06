@@ -4,6 +4,7 @@ import {
   formatRelativeDate,
   getInitials,
   calculateBalances,
+  calculateBalancesWithSettlements,
   simplifyDebts,
 } from "../lib/utils";
 
@@ -231,6 +232,310 @@ describe("calculateBalances", () => {
     expect(balances.get("1")).toBe(20); // Paid 20, owes nothing
     expect(balances.get("2")).toBe(-20); // Owes 20
     expect(balances.get("3")).toBe(0); // Not involved
+  });
+});
+
+describe("calculateBalancesWithSettlements", () => {
+  const members = [
+    { id: "1", name: "Alice" },
+    { id: "2", name: "Bob" },
+    { id: "3", name: "Charlie" },
+  ];
+
+  it("should return same as calculateBalances when no settlements", () => {
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 30,
+        splits: [
+          { member_id: "1", amount: 10 },
+          { member_id: "2", amount: 10 },
+          { member_id: "3", amount: 10 },
+        ],
+      },
+    ];
+
+    const balancesWithoutSettlements = calculateBalances(expenses, members);
+    const balancesWithSettlements = calculateBalancesWithSettlements(
+      expenses,
+      [],
+      members,
+    );
+
+    expect(balancesWithSettlements.get("1")).toBe(
+      balancesWithoutSettlements.get("1"),
+    );
+    expect(balancesWithSettlements.get("2")).toBe(
+      balancesWithoutSettlements.get("2"),
+    );
+    expect(balancesWithSettlements.get("3")).toBe(
+      balancesWithoutSettlements.get("3"),
+    );
+  });
+
+  it("should apply full settlement correctly", () => {
+    // Alice pays $30, split 3 ways
+    // Balances: Alice +20, Bob -10, Charlie -10
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 30,
+        splits: [
+          { member_id: "1", amount: 10 },
+          { member_id: "2", amount: 10 },
+          { member_id: "3", amount: 10 },
+        ],
+      },
+    ];
+
+    // Bob settles his $10 debt with Alice
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 10 },
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Alice: +20 - 10 (received) = +10
+    expect(balances.get("1")).toBe(10);
+    // Bob: -10 + 10 (paid) = 0
+    expect(balances.get("2")).toBe(0);
+    // Charlie: -10 (unchanged)
+    expect(balances.get("3")).toBe(-10);
+  });
+
+  it("should apply partial settlement correctly", () => {
+    // Alice pays $30, split 3 ways
+    // Balances: Alice +20, Bob -10, Charlie -10
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 30,
+        splits: [
+          { member_id: "1", amount: 10 },
+          { member_id: "2", amount: 10 },
+          { member_id: "3", amount: 10 },
+        ],
+      },
+    ];
+
+    // Bob only pays $5 of his $10 debt
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 5 },
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Alice: +20 - 5 = +15
+    expect(balances.get("1")).toBe(15);
+    // Bob: -10 + 5 = -5
+    expect(balances.get("2")).toBe(-5);
+    // Charlie: -10 (unchanged)
+    expect(balances.get("3")).toBe(-10);
+  });
+
+  it("should handle multiple settlements", () => {
+    // Alice pays $30, split 3 ways
+    // Balances: Alice +20, Bob -10, Charlie -10
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 30,
+        splits: [
+          { member_id: "1", amount: 10 },
+          { member_id: "2", amount: 10 },
+          { member_id: "3", amount: 10 },
+        ],
+      },
+    ];
+
+    // Both Bob and Charlie settle with Alice
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 10 },
+      { from_member_id: "3", to_member_id: "1", amount: 10 },
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Everyone should be settled up
+    expect(balances.get("1")).toBe(0);
+    expect(balances.get("2")).toBe(0);
+    expect(balances.get("3")).toBe(0);
+  });
+
+  it("should handle overpayment (creates reverse debt)", () => {
+    // Alice pays $30, split 3 ways
+    // Balances: Alice +20, Bob -10, Charlie -10
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 30,
+        splits: [
+          { member_id: "1", amount: 10 },
+          { member_id: "2", amount: 10 },
+          { member_id: "3", amount: 10 },
+        ],
+      },
+    ];
+
+    // Bob overpays by $5
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 15 },
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Alice: +20 - 15 = +5
+    expect(balances.get("1")).toBe(5);
+    // Bob: -10 + 15 = +5 (now Alice owes Bob!)
+    expect(balances.get("2")).toBe(5);
+    // Charlie: -10 (unchanged)
+    expect(balances.get("3")).toBe(-10);
+  });
+
+  it("should handle settlements with no expenses", () => {
+    // No expenses, just a settlement (prepayment scenario)
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 50 },
+    ];
+
+    const balances = calculateBalancesWithSettlements([], settlements, members);
+
+    // Alice: 0 - 50 = -50 (now owes Bob)
+    expect(balances.get("1")).toBe(-50);
+    // Bob: 0 + 50 = +50 (is owed by Alice)
+    expect(balances.get("2")).toBe(50);
+    // Charlie: 0
+    expect(balances.get("3")).toBe(0);
+  });
+
+  it("should handle multiple settlements between same members", () => {
+    // Alice pays $60, split 3 ways
+    // Balances: Alice +40, Bob -20, Charlie -20
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 60,
+        splits: [
+          { member_id: "1", amount: 20 },
+          { member_id: "2", amount: 20 },
+          { member_id: "3", amount: 20 },
+        ],
+      },
+    ];
+
+    // Bob makes multiple partial settlements to Alice
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 5 },
+      { from_member_id: "2", to_member_id: "1", amount: 8 },
+      { from_member_id: "2", to_member_id: "1", amount: 7 },
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Alice: +40 - 5 - 8 - 7 = +20
+    expect(balances.get("1")).toBe(20);
+    // Bob: -20 + 5 + 8 + 7 = 0
+    expect(balances.get("2")).toBe(0);
+    // Charlie: -20 (unchanged)
+    expect(balances.get("3")).toBe(-20);
+  });
+
+  it("should handle bidirectional settlements between members", () => {
+    // Complex scenario: Bob initially owes Alice, then Alice owes Bob
+    const expenses = [
+      {
+        paid_by: "1", // Alice pays
+        amount: 30,
+        splits: [
+          { member_id: "1", amount: 10 },
+          { member_id: "2", amount: 10 },
+          { member_id: "3", amount: 10 },
+        ],
+      },
+      {
+        paid_by: "2", // Bob pays
+        amount: 60,
+        splits: [
+          { member_id: "1", amount: 20 },
+          { member_id: "2", amount: 20 },
+          { member_id: "3", amount: 20 },
+        ],
+      },
+    ];
+
+    // Initial balances: Alice: +30-10-20=0, Bob: +60-10-20=+30, Charlie: -10-20=-30
+    // Bob is owed $30, Charlie owes $30
+
+    // Both directions of settlement between Alice and Bob
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 15 }, // Bob pays Alice
+      { from_member_id: "1", to_member_id: "2", amount: 10 }, // Alice pays Bob
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Alice: 0 - 15 + 10 = -5
+    expect(balances.get("1")).toBe(-5);
+    // Bob: +30 + 15 - 10 = +35
+    expect(balances.get("2")).toBe(35);
+    // Charlie: -30 (unchanged)
+    expect(balances.get("3")).toBe(-30);
+  });
+
+  it("should handle settlements with decimal amounts", () => {
+    const expenses = [
+      {
+        paid_by: "1",
+        amount: 100,
+        splits: [
+          { member_id: "1", amount: 33.33 },
+          { member_id: "2", amount: 33.33 },
+          { member_id: "3", amount: 33.34 },
+        ],
+      },
+    ];
+
+    // Bob settles with partial decimal amount
+    const settlements = [
+      { from_member_id: "2", to_member_id: "1", amount: 16.665 },
+    ];
+
+    const balances = calculateBalancesWithSettlements(
+      expenses,
+      settlements,
+      members,
+    );
+
+    // Alice: +100 - 33.33 - 16.665 = 49.995
+    expect(balances.get("1")).toBeCloseTo(50.005, 2);
+    // Bob: -33.33 + 16.665 = -16.665
+    expect(balances.get("2")).toBeCloseTo(-16.665, 2);
+    // Charlie: -33.34 (unchanged)
+    expect(balances.get("3")).toBeCloseTo(-33.34, 2);
   });
 });
 

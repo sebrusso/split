@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -86,15 +85,8 @@ export default function GroupDetailScreen() {
     fetchData();
   }, [fetchData]);
 
-  const handleShare = async () => {
-    if (!group) return;
-    try {
-      await Share.share({
-        message: `Join my expense group "${group.name}" on SplitFree!\n\nCode: ${group.share_code}`,
-      });
-    } catch (error) {
-      console.error("Error sharing:", error);
-    }
+  const handleShare = () => {
+    router.push(`/group/${id}/share`);
   };
 
   const renderExpense = ({ item }: { item: Expense }) => (
@@ -146,6 +138,17 @@ export default function GroupDetailScreen() {
             <Text style={styles.addMemberPlus}>+</Text>
           </View>
           <Text style={styles.memberName}>Add</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.balanceButtonContainer}>
+        <TouchableOpacity
+          style={styles.balanceButton}
+          onPress={() => router.push(`/group/${id}/balances`)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.balanceButtonText}>View Balances</Text>
+          <Text style={styles.balanceButtonArrow}>→</Text>
         </TouchableOpacity>
       </View>
 
@@ -346,8 +349,29 @@ const styles = StyleSheet.create({
     ...shadows.lg,
   },
   fabText: {
-    color: "#FFFFFF",
+    color: colors.white,
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
+  },
+  balanceButtonContainer: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  balanceButton: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  balanceButtonText: {
+    ...typography.bodyMedium,
+    color: colors.primaryDark,
+  },
+  balanceButtonArrow: {
+    fontSize: 18,
+    color: colors.primaryDark,
   },
 });

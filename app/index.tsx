@@ -111,6 +111,13 @@ export default function HomeScreen() {
           />
           <View style={styles.fabContainer}>
             <TouchableOpacity
+              style={styles.fabSecondary}
+              onPress={() => router.push("/join")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.fabSecondaryText}>Join</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.fab}
               onPress={() => router.push("/create-group")}
               activeOpacity={0.8}
@@ -195,6 +202,25 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: spacing.xl,
     right: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  fabSecondary: {
+    height: 48,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 24,
+    backgroundColor: colors.card,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.primary,
+    ...shadows.md,
+  },
+  fabSecondaryText: {
+    fontSize: 16,
+    color: colors.primary,
+    fontFamily: "Inter_600SemiBold",
   },
   fab: {
     width: 56,
@@ -207,7 +233,7 @@ const styles = StyleSheet.create({
   },
   fabText: {
     fontSize: 28,
-    color: "#FFFFFF",
+    color: colors.white,
     fontFamily: "Inter_400Regular",
     marginTop: -2,
   },
