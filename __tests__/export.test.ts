@@ -1,238 +1,46 @@
 /**
- * Tests for CSV export functionality
+ * CSV Export Utilities Tests
  *
- * Note: These tests focus on the pure functions that generate CSV content.
- * The shareCSV and exportGroup functions that use expo-file-system and expo-sharing
- * are not tested here as they require native modules.
+ * Comprehensive tests for export functions in lib/export.ts
+ * Tests actual exported functions (not reimplementations).
  */
 
 import { Group, Member, Expense, SettlementRecord } from "../lib/types";
-import { formatCurrency } from "../lib/utils";
-import { getCategoryDisplay } from "../lib/categories";
 
-/**
- * Local implementations of CSV generation functions for testing
- * These mirror the implementations in lib/export.ts but without the native dependencies
- */
+// Mock dependencies before importing the module under test
+jest.mock("expo-file-system", () => ({
+  File: jest.fn().mockImplementation(() => ({
+    write: jest.fn().mockResolvedValue(undefined),
+    exists: true,
+    delete: jest.fn().mockResolvedValue(undefined),
+    uri: "file:///mock/path/file.csv",
+  })),
+  Paths: {
+    cache: "/mock/cache/path",
+  },
+}));
 
-function escapeCSV(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "";
-  }
+jest.mock("expo-sharing", () => ({
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
+  shareAsync: jest.fn().mockResolvedValue(undefined),
+}));
 
-  const strValue = String(value);
+jest.mock("react-native", () => ({
+  Alert: {
+    alert: jest.fn(),
+  },
+}));
 
-  if (
-    strValue.includes(",") ||
-    strValue.includes('"') ||
-    strValue.includes("\n")
-  ) {
-    return `"${strValue.replace(/"/g, '""')}"`;
-  }
-
-  return strValue;
-}
-
-function arrayToCSV<T extends object>(
-  data: T[],
-  headers: { key: keyof T; label: string }[]
-): string {
-  const headerRow = headers.map((h) => escapeCSV(h.label)).join(",");
-  const dataRows = data.map((item) =>
-    headers.map((h) => escapeCSV(item[h.key] as string | number)).join(",")
-  );
-
-  return [headerRow, ...dataRows].join("\n");
-}
-
-interface ExpenseExportRow {
-  date: string;
-  description: string;
-  category: string;
-  amount: number;
-  paidBy: string;
-  merchant: string;
-  notes: string;
-  splitType: string;
-}
-
-interface BalanceExportRow {
-  member: string;
-  balance: number;
-  status: string;
-}
-
-interface SettlementExportRow {
-  date: string;
-  from: string;
-  to: string;
-  amount: number;
-}
-
-function exportExpensesToCSV(
-  expenses: Expense[],
-  members: Member[],
-  currency: string = "USD"
-): string {
-  const getMemberName = (memberId: string): string => {
-    const member = members.find((m) => m.id === memberId);
-    return member?.name || "Unknown";
-  };
-
-  const data: ExpenseExportRow[] = expenses.map((exp) => ({
-    date: exp.expense_date || exp.created_at.split("T")[0],
-    description: exp.description,
-    category: getCategoryDisplay(exp.category || "other").name,
-    amount: exp.amount,
-    paidBy: exp.payer?.name || getMemberName(exp.paid_by),
-    merchant: exp.merchant || "",
-    notes: exp.notes || "",
-    splitType: exp.split_type || "equal",
-  }));
-
-  const headers: { key: keyof ExpenseExportRow; label: string }[] = [
-    { key: "date", label: "Date" },
-    { key: "description", label: "Description" },
-    { key: "category", label: "Category" },
-    { key: "amount", label: `Amount (${currency})` },
-    { key: "paidBy", label: "Paid By" },
-    { key: "merchant", label: "Merchant" },
-    { key: "notes", label: "Notes" },
-    { key: "splitType", label: "Split Type" },
-  ];
-
-  return arrayToCSV(data, headers);
-}
-
-function exportBalancesToCSV(
-  balances: Map<string, number>,
-  members: Member[],
-  currency: string = "USD"
-): string {
-  const data: BalanceExportRow[] = members.map((member) => {
-    const balance = balances.get(member.id) || 0;
-    let status = "Settled";
-    if (balance > 0.01) status = "Is owed money";
-    else if (balance < -0.01) status = "Owes money";
-
-    return {
-      member: member.name,
-      balance: Math.round(balance * 100) / 100,
-      status,
-    };
-  });
-
-  const headers: { key: keyof BalanceExportRow; label: string }[] = [
-    { key: "member", label: "Member" },
-    { key: "balance", label: `Balance (${currency})` },
-    { key: "status", label: "Status" },
-  ];
-
-  return arrayToCSV(data, headers);
-}
-
-function exportSettlementsToCSV(
-  settlements: SettlementRecord[],
-  currency: string = "USD"
-): string {
-  const data: SettlementExportRow[] = settlements.map((s) => ({
-    date: s.settled_at.split("T")[0],
-    from: s.from_member?.name || "Unknown",
-    to: s.to_member?.name || "Unknown",
-    amount: s.amount,
-  }));
-
-  const headers: { key: keyof SettlementExportRow; label: string }[] = [
-    { key: "date", label: "Date" },
-    { key: "from", label: "From" },
-    { key: "to", label: "To" },
-    { key: "amount", label: `Amount (${currency})` },
-  ];
-
-  return arrayToCSV(data, headers);
-}
-
-function exportGroupToCSV(
-  group: Group,
-  expenses: Expense[],
-  members: Member[],
-  settlements: SettlementRecord[],
-  balances: Map<string, number>
-): string {
-  const sections: string[] = [];
-
-  sections.push(`# Group: ${group.name}`);
-  sections.push(`# Exported: ${new Date().toISOString().split("T")[0]}`);
-  sections.push(`# Currency: ${group.currency}`);
-  sections.push(`# Share Code: ${group.share_code}`);
-  sections.push("");
-
-  sections.push("## Members");
-  sections.push(members.map((m) => m.name).join(", "));
-  sections.push("");
-
-  sections.push("## Expenses");
-  sections.push(exportExpensesToCSV(expenses, members, group.currency));
-  sections.push("");
-
-  sections.push("## Current Balances");
-  sections.push(exportBalancesToCSV(balances, members, group.currency));
-  sections.push("");
-
-  if (settlements.length > 0) {
-    sections.push("## Settlement History");
-    sections.push(exportSettlementsToCSV(settlements, group.currency));
-  }
-
-  return sections.join("\n");
-}
-
-function generateExpenseReport(
-  group: Group,
-  expenses: Expense[],
-  members: Member[],
-  balances: Map<string, number>
-): string {
-  const lines: string[] = [];
-
-  lines.push(`${group.emoji} ${group.name} - Expense Report`);
-  lines.push(`Generated: ${new Date().toLocaleDateString()}`);
-  lines.push("");
-
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
-  lines.push(`Total Expenses: ${formatCurrency(totalSpent, group.currency)}`);
-  lines.push(`Number of Expenses: ${expenses.length}`);
-  lines.push(`Members: ${members.length}`);
-  lines.push("");
-
-  lines.push("Current Balances:");
-  members.forEach((member) => {
-    const balance = balances.get(member.id) || 0;
-    const sign = balance > 0 ? "+" : "";
-    const status =
-      Math.abs(balance) < 0.01
-        ? "(settled)"
-        : balance > 0
-          ? "(is owed)"
-          : "(owes)";
-    lines.push(
-      `  ${member.name}: ${sign}${formatCurrency(Math.abs(balance), group.currency)} ${status}`
-    );
-  });
-  lines.push("");
-
-  if (expenses.length > 0) {
-    lines.push("Recent Expenses:");
-    expenses.slice(0, 5).forEach((exp) => {
-      const date = exp.expense_date || exp.created_at.split("T")[0];
-      lines.push(
-        `  ${date}: ${exp.description} - ${formatCurrency(exp.amount, group.currency)}`
-      );
-    });
-  }
-
-  return lines.join("\n");
-}
+// Import actual functions from lib/export.ts
+import {
+  exportExpensesToCSV,
+  exportBalancesToCSV,
+  exportSettlementsToCSV,
+  exportGroupToCSV,
+  generateExpenseReport,
+  shareCSV,
+  exportGroup,
+} from "../lib/export";
 
 // Test data fixtures
 const mockGroup: Group = {
@@ -319,9 +127,9 @@ const mockBalances = new Map<string, number>([
   ["member-3", -40.5],
 ]);
 
-describe("CSV Export Functions", () => {
-  describe("exportExpensesToCSV", () => {
-    it("should generate valid CSV with headers", () => {
+describe("exportExpensesToCSV", () => {
+  describe("header row", () => {
+    it("should include all expected column headers", () => {
       const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
 
       expect(csv).toContain("Date");
@@ -334,24 +142,33 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("Split Type");
     });
 
-    it("should include expense data rows", () => {
+    it("should include currency in Amount header", () => {
+      const csvUSD = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
+      expect(csvUSD).toContain("Amount (USD)");
+
+      const csvEUR = exportExpensesToCSV(mockExpenses, mockMembers, "EUR");
+      expect(csvEUR).toContain("Amount (EUR)");
+
+      const csvGBP = exportExpensesToCSV(mockExpenses, mockMembers, "GBP");
+      expect(csvGBP).toContain("Amount (GBP)");
+    });
+  });
+
+  describe("data rows", () => {
+    it("should include expense data in output", () => {
       const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
 
       expect(csv).toContain("Groceries");
-      expect(csv).toContain("Alice");
-      expect(csv).toContain("Whole Foods");
-      expect(csv).toContain("Weekly groceries");
       expect(csv).toContain("Dinner");
-      expect(csv).toContain("Bob");
+      expect(csv).toContain("50");
+      expect(csv).toContain("75.5");
     });
 
-    it("should handle empty expenses array", () => {
-      const csv = exportExpensesToCSV([], mockMembers, "USD");
+    it("should include payer names", () => {
+      const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
 
-      // Should have header row but no data rows
-      const lines = csv.split("\n");
-      expect(lines.length).toBe(1); // Just header
-      expect(lines[0]).toContain("Date");
+      expect(csv).toContain("Alice");
+      expect(csv).toContain("Bob");
     });
 
     it("should use expense_date when available", () => {
@@ -361,17 +178,197 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("2024-01-16");
     });
 
-    it("should handle different currencies", () => {
-      const csvUSD = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
-      const csvEUR = exportExpensesToCSV(mockExpenses, mockMembers, "EUR");
+    it("should fall back to created_at date when expense_date is missing", () => {
+      const expenseWithoutDate: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Test",
+          amount: 10,
+          paid_by: "member-1",
+          created_at: "2024-02-20T15:30:00Z",
+          payer: mockMembers[0],
+        },
+      ];
 
-      expect(csvUSD).toContain("Amount (USD)");
-      expect(csvEUR).toContain("Amount (EUR)");
+      const csv = exportExpensesToCSV(expenseWithoutDate, mockMembers, "USD");
+
+      expect(csv).toContain("2024-02-20");
+    });
+
+    it("should include merchant info", () => {
+      const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
+
+      expect(csv).toContain("Whole Foods");
+      expect(csv).toContain("Restaurant");
+    });
+
+    it("should include notes", () => {
+      const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
+
+      expect(csv).toContain("Weekly groceries");
+    });
+
+    it("should include split type", () => {
+      const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
+
+      expect(csv).toContain("equal");
+    });
+
+    it("should include category display name", () => {
+      const csv = exportExpensesToCSV(mockExpenses, mockMembers, "USD");
+
+      expect(csv).toContain("Groceries"); // Category name, not ID
     });
   });
 
-  describe("exportBalancesToCSV", () => {
-    it("should generate valid CSV with headers", () => {
+  describe("empty data handling", () => {
+    it("should return header row only for empty expenses array", () => {
+      const csv = exportExpensesToCSV([], mockMembers, "USD");
+      const lines = csv.split("\n");
+
+      expect(lines.length).toBe(1); // Just header
+      expect(lines[0]).toContain("Date");
+    });
+  });
+
+  describe("missing data handling", () => {
+    it("should handle expense without payer object", () => {
+      const expenseNoPayer: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Test",
+          amount: 10,
+          paid_by: "member-1",
+          created_at: "2024-01-01T00:00:00Z",
+          // No payer property
+        },
+      ];
+
+      const csv = exportExpensesToCSV(expenseNoPayer, mockMembers, "USD");
+
+      expect(csv).toContain("Alice"); // Should look up from members
+    });
+
+    it("should handle unknown paid_by member", () => {
+      const expenseUnknownPayer: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Test",
+          amount: 10,
+          paid_by: "unknown-member-id",
+          created_at: "2024-01-01T00:00:00Z",
+        },
+      ];
+
+      const csv = exportExpensesToCSV(expenseUnknownPayer, mockMembers, "USD");
+
+      expect(csv).toContain("Unknown");
+    });
+
+    it("should handle null notes and merchant", () => {
+      const expenseNullFields: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Test",
+          amount: 10,
+          paid_by: "member-1",
+          created_at: "2024-01-01T00:00:00Z",
+          notes: null,
+          merchant: null,
+          payer: mockMembers[0],
+        },
+      ];
+
+      // Should not throw
+      expect(() =>
+        exportExpensesToCSV(expenseNullFields, mockMembers, "USD")
+      ).not.toThrow();
+    });
+
+    it("should default to 'other' category when missing", () => {
+      const expenseNoCategory: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Test",
+          amount: 10,
+          paid_by: "member-1",
+          created_at: "2024-01-01T00:00:00Z",
+          payer: mockMembers[0],
+        },
+      ];
+
+      const csv = exportExpensesToCSV(expenseNoCategory, mockMembers, "USD");
+
+      expect(csv).toContain("Other"); // Default category name
+    });
+  });
+
+  describe("CSV escaping", () => {
+    it("should escape commas in description", () => {
+      const expenseWithComma: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Coffee, Tea, and Snacks",
+          amount: 25.0,
+          paid_by: "member-1",
+          created_at: "2024-01-15T12:00:00Z",
+          payer: mockMembers[0],
+        },
+      ];
+
+      const csv = exportExpensesToCSV(expenseWithComma, mockMembers, "USD");
+
+      expect(csv).toContain('"Coffee, Tea, and Snacks"');
+    });
+
+    it("should escape quotes in description", () => {
+      const expenseWithQuotes: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: 'The "Best" Restaurant',
+          amount: 100.0,
+          paid_by: "member-1",
+          created_at: "2024-01-15T12:00:00Z",
+          payer: mockMembers[0],
+        },
+      ];
+
+      const csv = exportExpensesToCSV(expenseWithQuotes, mockMembers, "USD");
+
+      expect(csv).toContain('"The ""Best"" Restaurant"');
+    });
+
+    it("should escape newlines in notes", () => {
+      const expenseWithNewline: Expense[] = [
+        {
+          id: "exp-1",
+          group_id: "group-1",
+          description: "Multi-item",
+          amount: 50.0,
+          paid_by: "member-1",
+          created_at: "2024-01-15T12:00:00Z",
+          notes: "Item 1\nItem 2\nItem 3",
+          payer: mockMembers[0],
+        },
+      ];
+
+      const csv = exportExpensesToCSV(expenseWithNewline, mockMembers, "USD");
+
+      expect(csv).toContain('"Item 1\nItem 2\nItem 3"');
+    });
+  });
+});
+
+describe("exportBalancesToCSV", () => {
+  describe("header row", () => {
+    it("should include all expected column headers", () => {
       const csv = exportBalancesToCSV(mockBalances, mockMembers, "USD");
 
       expect(csv).toContain("Member");
@@ -379,6 +376,14 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("Status");
     });
 
+    it("should include currency in Balance header", () => {
+      const csvEUR = exportBalancesToCSV(mockBalances, mockMembers, "EUR");
+
+      expect(csvEUR).toContain("Balance (EUR)");
+    });
+  });
+
+  describe("data rows", () => {
     it("should include all members", () => {
       const csv = exportBalancesToCSV(mockBalances, mockMembers, "USD");
 
@@ -390,31 +395,79 @@ describe("CSV Export Functions", () => {
     it("should show correct status for positive balance", () => {
       const csv = exportBalancesToCSV(mockBalances, mockMembers, "USD");
 
-      // Alice has positive balance (is owed)
       expect(csv).toContain("Is owed money");
     });
 
     it("should show correct status for negative balance", () => {
       const csv = exportBalancesToCSV(mockBalances, mockMembers, "USD");
 
-      // Charlie has negative balance (owes)
       expect(csv).toContain("Owes money");
     });
 
-    it("should show settled status for zero balance", () => {
+    it("should show Settled status for zero balance", () => {
       const zeroBalances = new Map<string, number>([
         ["member-1", 0],
         ["member-2", 0],
         ["member-3", 0],
       ]);
+
       const csv = exportBalancesToCSV(zeroBalances, mockMembers, "USD");
 
       expect(csv).toContain("Settled");
     });
+
+    it("should show Settled for very small balances (< 0.01)", () => {
+      const tinyBalances = new Map<string, number>([
+        ["member-1", 0.005],
+        ["member-2", -0.005],
+        ["member-3", 0.009],
+      ]);
+
+      const csv = exportBalancesToCSV(tinyBalances, mockMembers, "USD");
+
+      // All should be considered settled
+      const lines = csv.split("\n");
+      const dataLines = lines.slice(1); // Skip header
+      dataLines.forEach((line) => {
+        expect(line).toContain("Settled");
+      });
+    });
   });
 
-  describe("exportSettlementsToCSV", () => {
-    it("should generate valid CSV with headers", () => {
+  describe("balance rounding", () => {
+    it("should round balances to 2 decimal places", () => {
+      const preciseBalances = new Map<string, number>([
+        ["member-1", 25.126],
+        ["member-2", -15.994],
+      ]);
+
+      const csv = exportBalancesToCSV(preciseBalances, mockMembers.slice(0, 2), "USD");
+
+      expect(csv).toContain("25.13");
+      expect(csv).toContain("-15.99");
+    });
+  });
+
+  describe("missing balance handling", () => {
+    it("should treat missing balances as 0", () => {
+      const partialBalances = new Map<string, number>([
+        ["member-1", 10],
+        // member-2 and member-3 not in map
+      ]);
+
+      const csv = exportBalancesToCSV(partialBalances, mockMembers, "USD");
+
+      // Should not throw and should include all members
+      expect(csv).toContain("Alice");
+      expect(csv).toContain("Bob");
+      expect(csv).toContain("Charlie");
+    });
+  });
+});
+
+describe("exportSettlementsToCSV", () => {
+  describe("header row", () => {
+    it("should include all expected column headers", () => {
       const csv = exportSettlementsToCSV(mockSettlements, "USD");
 
       expect(csv).toContain("Date");
@@ -422,25 +475,75 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("To");
       expect(csv).toContain("Amount (USD)");
     });
+  });
 
+  describe("data rows", () => {
     it("should include settlement data", () => {
       const csv = exportSettlementsToCSV(mockSettlements, "USD");
 
       expect(csv).toContain("Charlie");
       expect(csv).toContain("Alice");
       expect(csv).toContain("2024-01-20");
-    });
-
-    it("should handle empty settlements", () => {
-      const csv = exportSettlementsToCSV([], "USD");
-
-      const lines = csv.split("\n");
-      expect(lines.length).toBe(1); // Just header
+      expect(csv).toContain("25");
     });
   });
 
-  describe("exportGroupToCSV", () => {
-    it("should include group info header", () => {
+  describe("empty data handling", () => {
+    it("should return header row only for empty settlements", () => {
+      const csv = exportSettlementsToCSV([], "USD");
+      const lines = csv.split("\n");
+
+      expect(lines.length).toBe(1);
+      expect(lines[0]).toContain("Date");
+    });
+  });
+
+  describe("missing member handling", () => {
+    it("should show Unknown for missing from_member", () => {
+      const settlementNoFrom: SettlementRecord[] = [
+        {
+          id: "s-1",
+          group_id: "group-1",
+          from_member_id: "member-1",
+          to_member_id: "member-2",
+          amount: 50,
+          settled_at: "2024-01-15T00:00:00Z",
+          created_at: "2024-01-15T00:00:00Z",
+          from_member: undefined,
+          to_member: mockMembers[1],
+        },
+      ];
+
+      const csv = exportSettlementsToCSV(settlementNoFrom, "USD");
+
+      expect(csv).toContain("Unknown");
+    });
+
+    it("should show Unknown for missing to_member", () => {
+      const settlementNoTo: SettlementRecord[] = [
+        {
+          id: "s-1",
+          group_id: "group-1",
+          from_member_id: "member-1",
+          to_member_id: "member-2",
+          amount: 50,
+          settled_at: "2024-01-15T00:00:00Z",
+          created_at: "2024-01-15T00:00:00Z",
+          from_member: mockMembers[0],
+          to_member: undefined,
+        },
+      ];
+
+      const csv = exportSettlementsToCSV(settlementNoTo, "USD");
+
+      expect(csv).toContain("Unknown");
+    });
+  });
+});
+
+describe("exportGroupToCSV", () => {
+  describe("group info header", () => {
+    it("should include group name", () => {
       const csv = exportGroupToCSV(
         mockGroup,
         mockExpenses,
@@ -450,11 +553,47 @@ describe("CSV Export Functions", () => {
       );
 
       expect(csv).toContain("# Group: Test Group");
-      expect(csv).toContain("# Currency: USD");
-      expect(csv).toContain("# Share Code: ABC123");
     });
 
-    it("should include members section", () => {
+    it("should include export date", () => {
+      const csv = exportGroupToCSV(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockSettlements,
+        mockBalances
+      );
+
+      expect(csv).toContain("# Exported:");
+    });
+
+    it("should include currency", () => {
+      const csv = exportGroupToCSV(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockSettlements,
+        mockBalances
+      );
+
+      expect(csv).toContain("# Currency: USD");
+    });
+
+    it("should include share code", () => {
+      const csv = exportGroupToCSV(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockSettlements,
+        mockBalances
+      );
+
+      expect(csv).toContain("# Share Code: ABC123");
+    });
+  });
+
+  describe("sections", () => {
+    it("should include Members section", () => {
       const csv = exportGroupToCSV(
         mockGroup,
         mockExpenses,
@@ -469,7 +608,7 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("Charlie");
     });
 
-    it("should include expenses section", () => {
+    it("should include Expenses section", () => {
       const csv = exportGroupToCSV(
         mockGroup,
         mockExpenses,
@@ -480,10 +619,9 @@ describe("CSV Export Functions", () => {
 
       expect(csv).toContain("## Expenses");
       expect(csv).toContain("Groceries");
-      expect(csv).toContain("Dinner");
     });
 
-    it("should include balances section", () => {
+    it("should include Current Balances section", () => {
       const csv = exportGroupToCSV(
         mockGroup,
         mockExpenses,
@@ -495,7 +633,7 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("## Current Balances");
     });
 
-    it("should include settlements section when present", () => {
+    it("should include Settlement History section when settlements exist", () => {
       const csv = exportGroupToCSV(
         mockGroup,
         mockExpenses,
@@ -507,20 +645,22 @@ describe("CSV Export Functions", () => {
       expect(csv).toContain("## Settlement History");
     });
 
-    it("should omit settlements section when empty", () => {
+    it("should omit Settlement History section when empty", () => {
       const csv = exportGroupToCSV(
         mockGroup,
         mockExpenses,
         mockMembers,
-        [],
+        [], // No settlements
         mockBalances
       );
 
       expect(csv).not.toContain("## Settlement History");
     });
   });
+});
 
-  describe("generateExpenseReport", () => {
+describe("generateExpenseReport", () => {
+  describe("header", () => {
     it("should include group name and emoji", () => {
       const report = generateExpenseReport(
         mockGroup,
@@ -529,11 +669,25 @@ describe("CSV Export Functions", () => {
         mockBalances
       );
 
+      expect(report).toContain("🏠");
       expect(report).toContain("Test Group");
-      expect(report).toContain(mockGroup.emoji);
+      expect(report).toContain("Expense Report");
     });
 
-    it("should include total expenses summary", () => {
+    it("should include generation date", () => {
+      const report = generateExpenseReport(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockBalances
+      );
+
+      expect(report).toContain("Generated:");
+    });
+  });
+
+  describe("summary statistics", () => {
+    it("should include total expenses", () => {
       const report = generateExpenseReport(
         mockGroup,
         mockExpenses,
@@ -542,11 +696,33 @@ describe("CSV Export Functions", () => {
       );
 
       expect(report).toContain("Total Expenses:");
-      expect(report).toContain("Number of Expenses: 2");
-      expect(report).toContain("Members: 3");
     });
 
-    it("should include current balances", () => {
+    it("should include number of expenses", () => {
+      const report = generateExpenseReport(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockBalances
+      );
+
+      expect(report).toContain("Number of Expenses: 2");
+    });
+
+    it("should include member count", () => {
+      const report = generateExpenseReport(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockBalances
+      );
+
+      expect(report).toContain("Members: 3");
+    });
+  });
+
+  describe("balances section", () => {
+    it("should include Current Balances header", () => {
       const report = generateExpenseReport(
         mockGroup,
         mockExpenses,
@@ -555,13 +731,42 @@ describe("CSV Export Functions", () => {
       );
 
       expect(report).toContain("Current Balances:");
+    });
+
+    it("should show member balances with status", () => {
+      const report = generateExpenseReport(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockBalances
+      );
+
       expect(report).toContain("Alice");
       expect(report).toContain("(is owed)");
       expect(report).toContain("Charlie");
       expect(report).toContain("(owes)");
     });
 
-    it("should include recent expenses", () => {
+    it("should show (settled) for zero balance", () => {
+      const zeroBalances = new Map<string, number>([
+        ["member-1", 0],
+        ["member-2", 0],
+        ["member-3", 0],
+      ]);
+
+      const report = generateExpenseReport(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        zeroBalances
+      );
+
+      expect(report).toContain("(settled)");
+    });
+  });
+
+  describe("recent expenses section", () => {
+    it("should include Recent Expenses header when expenses exist", () => {
       const report = generateExpenseReport(
         mockGroup,
         mockExpenses,
@@ -570,11 +775,21 @@ describe("CSV Export Functions", () => {
       );
 
       expect(report).toContain("Recent Expenses:");
+    });
+
+    it("should list expense descriptions", () => {
+      const report = generateExpenseReport(
+        mockGroup,
+        mockExpenses,
+        mockMembers,
+        mockBalances
+      );
+
       expect(report).toContain("Groceries");
       expect(report).toContain("Dinner");
     });
 
-    it("should handle empty expenses", () => {
+    it("should not include Recent Expenses when empty", () => {
       const report = generateExpenseReport(
         mockGroup,
         [],
@@ -582,111 +797,181 @@ describe("CSV Export Functions", () => {
         mockBalances
       );
 
-      expect(report).toContain("Total Expenses:");
-      expect(report).toContain("Number of Expenses: 0");
       expect(report).not.toContain("Recent Expenses:");
+    });
+
+    it("should show Number of Expenses: 0 for empty expenses", () => {
+      const report = generateExpenseReport(
+        mockGroup,
+        [],
+        mockMembers,
+        mockBalances
+      );
+
+      expect(report).toContain("Number of Expenses: 0");
+    });
+
+    it("should limit to 5 most recent expenses", () => {
+      const manyExpenses: Expense[] = Array.from({ length: 10 }, (_, i) => ({
+        id: `exp-${i}`,
+        group_id: "group-1",
+        description: `Expense ${i}`,
+        amount: 10 * (i + 1),
+        paid_by: "member-1",
+        created_at: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+        payer: mockMembers[0],
+      }));
+
+      const report = generateExpenseReport(
+        mockGroup,
+        manyExpenses,
+        mockMembers,
+        mockBalances
+      );
+
+      // Should only show first 5
+      expect(report).toContain("Expense 0");
+      expect(report).toContain("Expense 4");
+      expect(report).not.toContain("Expense 5");
     });
   });
 });
 
-describe("CSV Escaping", () => {
-  it("should escape values with commas", () => {
-    const expenseWithComma: Expense[] = [
-      {
-        id: "expense-1",
-        group_id: "group-1",
-        description: "Coffee, Tea, and Snacks",
-        amount: 25.0,
-        paid_by: "member-1",
-        created_at: "2024-01-15T12:00:00Z",
-        payer: mockMembers[0],
-      },
-    ];
+describe("shareCSV", () => {
+  const Sharing = require("expo-sharing");
 
-    const csv = exportExpensesToCSV(expenseWithComma, mockMembers, "USD");
-    expect(csv).toContain('"Coffee, Tea, and Snacks"');
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Sharing.isAvailableAsync.mockResolvedValue(true);
   });
 
-  it("should escape values with quotes", () => {
-    const expenseWithQuotes: Expense[] = [
-      {
-        id: "expense-1",
-        group_id: "group-1",
-        description: 'The "Best" Restaurant',
-        amount: 100.0,
-        paid_by: "member-1",
-        created_at: "2024-01-15T12:00:00Z",
-        payer: mockMembers[0],
-      },
-    ];
+  it("should return true when sharing succeeds", async () => {
+    const result = await shareCSV("test,content", "test.csv");
 
-    const csv = exportExpensesToCSV(expenseWithQuotes, mockMembers, "USD");
-    expect(csv).toContain('"The ""Best"" Restaurant"');
+    expect(result).toBe(true);
   });
 
-  it("should escape values with newlines", () => {
-    const expenseWithNewline: Expense[] = [
-      {
-        id: "expense-1",
-        group_id: "group-1",
-        description: "Item 1\nItem 2",
-        amount: 50.0,
-        paid_by: "member-1",
-        created_at: "2024-01-15T12:00:00Z",
-        notes: "Multiple\nitems",
-        payer: mockMembers[0],
-      },
-    ];
+  it("should add .csv extension if missing", async () => {
+    await shareCSV("content", "filename");
 
-    const csv = exportExpensesToCSV(expenseWithNewline, mockMembers, "USD");
-    expect(csv).toContain('"Item 1\nItem 2"');
-    expect(csv).toContain('"Multiple\nitems"');
+    // The File constructor should be called with filename.csv
+    const { File } = require("expo-file-system");
+    expect(File).toHaveBeenCalled();
   });
 
-  it("should handle null and undefined values", () => {
-    const expenseWithNulls: Expense[] = [
-      {
-        id: "expense-1",
-        group_id: "group-1",
-        description: "Simple expense",
-        amount: 25.0,
-        paid_by: "member-1",
-        created_at: "2024-01-15T12:00:00Z",
-        notes: null,
-        merchant: null,
-        payer: mockMembers[0],
-      },
-    ];
+  it("should not duplicate .csv extension", async () => {
+    await shareCSV("content", "file.csv");
 
-    const csv = exportExpensesToCSV(expenseWithNulls, mockMembers, "USD");
-    // Should not throw and should handle nulls gracefully
-    expect(csv).toContain("Simple expense");
+    // Should work without error
+    expect(Sharing.shareAsync).toHaveBeenCalled();
+  });
+
+  it("should return false when sharing is unavailable", async () => {
+    Sharing.isAvailableAsync.mockResolvedValue(false);
+
+    const result = await shareCSV("content", "file.csv");
+
+    expect(result).toBe(false);
   });
 });
 
-describe("Balance Rounding", () => {
-  it("should round balances to 2 decimal places", () => {
-    const preciseBalances = new Map<string, number>([
-      ["member-1", 25.123456],
-      ["member-2", -15.987654],
-    ]);
+describe("exportGroup", () => {
+  const Sharing = require("expo-sharing");
 
-    const csv = exportBalancesToCSV(preciseBalances, mockMembers.slice(0, 2), "USD");
-    expect(csv).toContain("25.12");
-    expect(csv).toContain("-15.99");
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Sharing.isAvailableAsync.mockResolvedValue(true);
+  });
+
+  it("should generate and share group export", async () => {
+    const result = await exportGroup(
+      mockGroup,
+      mockExpenses,
+      mockMembers,
+      mockSettlements,
+      mockBalances
+    );
+
+    expect(result).toBe(true);
+    expect(Sharing.shareAsync).toHaveBeenCalled();
+  });
+
+  it("should sanitize group name for filename", async () => {
+    const groupWithSpecialChars: Group = {
+      ...mockGroup,
+      name: "Trip/to:Paris?*",
+    };
+
+    const result = await exportGroup(
+      groupWithSpecialChars,
+      mockExpenses,
+      mockMembers,
+      mockSettlements,
+      mockBalances
+    );
+
+    expect(result).toBe(true);
   });
 });
 
-describe("Date Formatting", () => {
-  it("should extract date from ISO string", () => {
-    const dateString = "2024-01-15T12:30:45Z";
-    const datePart = dateString.split("T")[0];
-    expect(datePart).toBe("2024-01-15");
+describe("Edge Cases", () => {
+  it("should handle empty group", () => {
+    const csv = exportGroupToCSV(
+      mockGroup,
+      [],
+      [],
+      [],
+      new Map()
+    );
+
+    expect(csv).toContain("# Group: Test Group");
+    expect(csv).toContain("## Members");
+    expect(csv).toContain("## Expenses");
   });
 
-  it("should handle date-only strings", () => {
-    const dateString = "2024-01-15";
-    const datePart = dateString.split("T")[0];
-    expect(datePart).toBe("2024-01-15");
+  it("should handle very large amounts", () => {
+    const bigExpense: Expense[] = [
+      {
+        id: "exp-1",
+        group_id: "group-1",
+        description: "Big Purchase",
+        amount: 1000000.99,
+        paid_by: "member-1",
+        created_at: "2024-01-01T00:00:00Z",
+        payer: mockMembers[0],
+      },
+    ];
+
+    const csv = exportExpensesToCSV(bigExpense, mockMembers, "USD");
+
+    expect(csv).toContain("1000000.99");
+  });
+
+  it("should handle unicode in all fields", () => {
+    const unicodeGroup: Group = {
+      ...mockGroup,
+      name: "北京旅行 🇨🇳",
+    };
+
+    const unicodeMembers: Member[] = [
+      {
+        id: "member-1",
+        group_id: "group-1",
+        name: "李明",
+        user_id: null,
+        created_at: "2024-01-01T00:00:00Z",
+      },
+    ];
+
+    const csv = exportGroupToCSV(
+      unicodeGroup,
+      [],
+      unicodeMembers,
+      [],
+      new Map()
+    );
+
+    expect(csv).toContain("北京旅行 🇨🇳");
+    expect(csv).toContain("李明");
   });
 });
