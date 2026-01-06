@@ -7,14 +7,33 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../../lib/supabase";
-import { Member, Group } from "../../../lib/types";
+import { Member, Group, SplitMethod } from "../../../lib/types";
 import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
-import { Button, Input, Avatar, Card } from "../../../components/ui";
+import {
+  Button,
+  Input,
+  Avatar,
+  Card,
+  CategoryPicker,
+  CategoryButton,
+  SplitMethodPicker,
+  AmountInput,
+  ReceiptThumbnail,
+  AddReceiptButton,
+} from "../../../components/ui";
+import { getDefaultCategory } from "../../../lib/categories";
+import {
+  calculateSplits,
+  validateSplitData,
+  getSplitMethodLabel,
+} from "../../../lib/splits";
+import { uploadReceipt, validateReceiptImage } from "../../../lib/storage";
 
 export default function AddExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,9 +42,25 @@ export default function AddExpenseScreen() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paidBy, setPaidBy] = useState<string | null>(null);
-  const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Category state
+  const [category, setCategory] = useState(getDefaultCategory().id);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+
+  // Notes state
+  const [notes, setNotes] = useState("");
+
+  // Receipt state
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+
+  // Split method state
+  const [splitMethod, setSplitMethod] = useState<SplitMethod>("equal");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [exactAmounts, setExactAmounts] = useState<Record<string, number>>({});
+  const [percentages, setPercentages] = useState<Record<string, number>>({});
+  const [shares, setShares] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchData();
@@ -50,19 +85,101 @@ export default function AddExpenseScreen() {
       if (membersData && membersData.length > 0) {
         setMembers(membersData);
         setPaidBy(membersData[0].id);
-        setSplitBetween(membersData.map((m) => m.id));
+        setSelectedMemberIds(membersData.map((m) => m.id));
+
+        // Initialize shares to 1 for each member
+        const initialShares: Record<string, number> = {};
+        membersData.forEach((m) => {
+          initialShares[m.id] = 1;
+        });
+        setShares(initialShares);
+
+        // Initialize equal percentages
+        const equalPercent = Math.floor(100 / membersData.length);
+        const initialPercentages: Record<string, number> = {};
+        membersData.forEach((m, i) => {
+          initialPercentages[m.id] =
+            i === membersData.length - 1
+              ? 100 - equalPercent * (membersData.length - 1)
+              : equalPercent;
+        });
+        setPercentages(initialPercentages);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
     }
   };
 
-  const toggleSplit = (memberId: string) => {
-    setSplitBetween((prev) =>
+  const handleToggleMember = (memberId: string) => {
+    setSelectedMemberIds((prev) =>
       prev.includes(memberId)
         ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId],
+        : [...prev, memberId]
     );
+  };
+
+  const handlePickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission Required",
+        "Please allow access to your photo library to add receipts."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      const validation = await validateReceiptImage(uri);
+
+      if (!validation.isValid) {
+        Alert.alert("Invalid Image", validation.error || "Please select a valid image.");
+        return;
+      }
+
+      setReceiptUri(uri);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission Required",
+        "Please allow camera access to take receipt photos."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setReceiptUri(uri);
+    }
+  };
+
+  const showReceiptOptions = () => {
+    Alert.alert("Add Receipt", "Choose an option", [
+      { text: "Take Photo", onPress: handleTakePhoto },
+      { text: "Choose from Library", onPress: handlePickImage },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const handleRemoveReceipt = () => {
+    setReceiptUri(null);
   };
 
   const handleSubmit = async () => {
@@ -83,8 +200,16 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    if (splitBetween.length === 0) {
-      setError("Please select at least one person to split with");
+    // Validate split data
+    const splitValidation = validateSplitData(splitMethod, amountNum, {
+      memberIds: selectedMemberIds,
+      amounts: exactAmounts,
+      percents: percentages,
+      shares: shares,
+    });
+
+    if (!splitValidation.isValid) {
+      setError(splitValidation.error || "Invalid split configuration");
       return;
     }
 
@@ -100,23 +225,44 @@ export default function AddExpenseScreen() {
           description: description.trim(),
           amount: amountNum,
           paid_by: paidBy,
+          category,
+          notes: notes.trim() || null,
+          split_type: splitMethod,
         })
         .select()
         .single();
 
       if (expenseError) throw expenseError;
 
-      // Create splits (equal split)
-      const splitAmount = amountNum / splitBetween.length;
-      const splits = splitBetween.map((memberId) => ({
+      // Upload receipt if present
+      let receiptUrl: string | null = null;
+      if (receiptUri) {
+        const uploadResult = await uploadReceipt(receiptUri, id!, expense.id);
+        if (uploadResult.data) {
+          receiptUrl = uploadResult.data;
+          // Update expense with receipt URL
+          await supabase
+            .from("expenses")
+            .update({ receipt_url: receiptUrl })
+            .eq("id", expense.id);
+        }
+      }
+
+      // Calculate splits based on method
+      const calculatedSplits = calculateSplits(splitMethod, amountNum, {
+        memberIds: selectedMemberIds,
+        amounts: exactAmounts,
+        percents: percentages,
+        shares: shares,
+      });
+
+      const splits = calculatedSplits.map((split) => ({
         expense_id: expense.id,
-        member_id: memberId,
-        amount: Math.round(splitAmount * 100) / 100,
+        member_id: split.member_id,
+        amount: split.amount,
       }));
 
-      const { error: splitsError } = await supabase
-        .from("splits")
-        .insert(splits);
+      const { error: splitsError } = await supabase.from("splits").insert(splits);
 
       if (splitsError) throw splitsError;
 
@@ -128,6 +274,53 @@ export default function AddExpenseScreen() {
       setLoading(false);
     }
   };
+
+  // Calculate preview based on split method
+  const getPreviewText = () => {
+    const amountNum = parseFloat(amount) || 0;
+    if (amountNum === 0) return null;
+
+    switch (splitMethod) {
+      case "equal": {
+        if (selectedMemberIds.length === 0) return null;
+        const perPerson = amountNum / selectedMemberIds.length;
+        return `$${perPerson.toFixed(2)} each (${selectedMemberIds.length} people)`;
+      }
+      case "exact": {
+        const total = Object.values(exactAmounts).reduce((sum, val) => sum + (val || 0), 0);
+        const remaining = amountNum - total;
+        if (Math.abs(remaining) < 0.01) return "Amounts add up correctly";
+        return `$${Math.abs(remaining).toFixed(2)} ${remaining > 0 ? "remaining" : "over"}`;
+      }
+      case "percent": {
+        const total = Object.values(percentages).reduce((sum, val) => sum + (val || 0), 0);
+        if (Math.abs(total - 100) < 0.01) return "Percentages add up to 100%";
+        return `${Math.abs(100 - total).toFixed(1)}% ${total < 100 ? "remaining" : "over"}`;
+      }
+      case "shares": {
+        const totalShares = Object.values(shares).reduce((sum, val) => sum + (val || 0), 0);
+        if (totalShares === 0) return "Assign at least 1 share";
+        return `${totalShares} total shares`;
+      }
+      default:
+        return null;
+    }
+  };
+
+  const previewText = getPreviewText();
+  const isValidSplit =
+    splitMethod === "equal"
+      ? selectedMemberIds.length > 0
+      : splitMethod === "exact"
+        ? Math.abs(
+            Object.values(exactAmounts).reduce((sum, val) => sum + (val || 0), 0) -
+              (parseFloat(amount) || 0)
+          ) < 0.01
+        : splitMethod === "percent"
+          ? Math.abs(
+              Object.values(percentages).reduce((sum, val) => sum + (val || 0), 0) - 100
+            ) < 0.01
+          : Object.values(shares).reduce((sum, val) => sum + (val || 0), 0) > 0;
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -141,14 +334,10 @@ export default function AddExpenseScreen() {
         >
           {/* Amount Input */}
           <View style={styles.amountContainer}>
-            <Text style={styles.currencySymbol}>$</Text>
-            <TextInput
-              style={styles.amountInput}
+            <AmountInput
               value={amount}
               onChangeText={setAmount}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
+              currency={group?.currency || "USD"}
               autoFocus
             />
           </View>
@@ -160,6 +349,13 @@ export default function AddExpenseScreen() {
             onChangeText={setDescription}
             placeholder="e.g., Dinner, Uber, Groceries"
             containerStyle={styles.inputContainer}
+          />
+
+          {/* Category */}
+          <Text style={styles.sectionTitle}>Category</Text>
+          <CategoryButton
+            categoryId={category}
+            onPress={() => setShowCategoryPicker(true)}
           />
 
           {/* Paid By */}
@@ -196,55 +392,77 @@ export default function AddExpenseScreen() {
             ))}
           </ScrollView>
 
-          {/* Split Between */}
+          {/* Split Method */}
           <Text style={styles.sectionTitle}>Split between</Text>
-          <View style={styles.splitGrid}>
-            {members.map((member) => {
-              const isSelected = splitBetween.includes(member.id);
-              return (
-                <TouchableOpacity
-                  key={member.id}
-                  style={[
-                    styles.splitButton,
-                    isSelected && styles.splitButtonSelected,
-                  ]}
-                  onPress={() => toggleSplit(member.id)}
-                >
-                  <Avatar
-                    name={member.name}
-                    size="sm"
-                    color={isSelected ? colors.primary : colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.splitButtonText,
-                      isSelected && styles.splitButtonTextSelected,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {member.name}
-                  </Text>
-                  {isSelected && (
-                    <View style={styles.checkmark}>
-                      <Text style={styles.checkmarkText}>✓</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <SplitMethodPicker
+            selectedMethod={splitMethod}
+            onSelect={setSplitMethod}
+            amount={parseFloat(amount) || 0}
+            members={members}
+            selectedMemberIds={selectedMemberIds}
+            exactAmounts={exactAmounts}
+            percentages={percentages}
+            shares={shares}
+            onToggleMember={handleToggleMember}
+            onExactAmountChange={(memberId, amt) =>
+              setExactAmounts((prev) => ({ ...prev, [memberId]: amt }))
+            }
+            onPercentageChange={(memberId, pct) =>
+              setPercentages((prev) => ({ ...prev, [memberId]: pct }))
+            }
+            onSharesChange={(memberId, shrs) =>
+              setShares((prev) => ({ ...prev, [memberId]: shrs }))
+            }
+          />
 
           {/* Split Preview */}
-          {amount && splitBetween.length > 0 && (
-            <Card style={styles.previewCard}>
-              <Text style={styles.previewTitle}>Split Preview</Text>
-              <Text style={styles.previewAmount}>
-                ${(parseFloat(amount) / splitBetween.length).toFixed(2)} each
+          {amount && previewText && (
+            <Card
+              style={[styles.previewCard, !isValidSplit && styles.previewCardError]}
+            >
+              <Text style={styles.previewTitle}>
+                {getSplitMethodLabel(splitMethod)}
               </Text>
-              <Text style={styles.previewSubtext}>
-                Split equally between {splitBetween.length} people
+              <Text
+                style={[
+                  styles.previewAmount,
+                  !isValidSplit && styles.previewAmountError,
+                ]}
+              >
+                {previewText}
               </Text>
             </Card>
+          )}
+
+          {/* Notes (optional) */}
+          <Input
+            label="Notes (optional)"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Add any additional notes..."
+            multiline
+            numberOfLines={2}
+            containerStyle={styles.inputContainer}
+          />
+
+          {/* Receipt */}
+          <Text style={styles.sectionTitle}>Receipt (optional)</Text>
+          {receiptUri ? (
+            <View style={styles.receiptPreview}>
+              <ReceiptThumbnail
+                imageUrl={receiptUri}
+                onRemove={handleRemoveReceipt}
+                size="lg"
+              />
+              <TouchableOpacity
+                style={styles.changeReceiptButton}
+                onPress={showReceiptOptions}
+              >
+                <Text style={styles.changeReceiptText}>Change Receipt</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <AddReceiptButton onPress={showReceiptOptions} />
           )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -255,10 +473,18 @@ export default function AddExpenseScreen() {
             title="Add Expense"
             onPress={handleSubmit}
             loading={loading}
-            disabled={!amount || !description.trim()}
+            disabled={!amount || !description.trim() || !isValidSplit}
           />
         </View>
       </KeyboardAvoidingView>
+
+      {/* Category Picker Modal */}
+      <CategoryPicker
+        visible={showCategoryPicker}
+        selectedCategory={category}
+        onSelect={setCategory}
+        onClose={() => setShowCategoryPicker(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -275,31 +501,19 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   amountContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     marginVertical: spacing.xl,
   },
-  currencySymbol: {
-    ...typography.amount,
-    color: colors.textMuted,
-    marginRight: spacing.xs,
-  },
-  amountInput: {
-    ...typography.amount,
-    minWidth: 120,
-    textAlign: "center",
-  },
   inputContainer: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     ...typography.bodyMedium,
     color: colors.textSecondary,
     marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
   membersScroll: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     marginHorizontal: -spacing.lg,
     paddingHorizontal: spacing.lg,
   },
@@ -325,71 +539,42 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: "Inter_600SemiBold",
   },
-  splitGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  splitButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.sm,
-    margin: spacing.xs,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  splitButtonSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  splitButtonText: {
-    ...typography.caption,
-    marginLeft: spacing.sm,
-    marginRight: spacing.xs,
-  },
-  splitButtonTextSelected: {
-    color: colors.primary,
-    fontFamily: "Inter_500Medium",
-  },
-  checkmark: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkmarkText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: "bold",
-  },
   previewCard: {
     backgroundColor: colors.primaryLight,
-    marginBottom: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  previewCardError: {
+    backgroundColor: colors.dangerLight,
   },
   previewTitle: {
     ...typography.small,
     color: colors.primary,
   },
   previewAmount: {
-    ...typography.h2,
+    ...typography.h3,
     color: colors.primary,
     marginTop: spacing.xs,
   },
-  previewSubtext: {
-    ...typography.caption,
-    color: colors.primaryDark,
-    marginTop: spacing.xs,
+  previewAmountError: {
+    color: colors.danger,
+  },
+  receiptPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  changeReceiptButton: {
+    marginLeft: spacing.lg,
+  },
+  changeReceiptText: {
+    ...typography.bodyMedium,
+    color: colors.primary,
   },
   error: {
     ...typography.caption,
     color: colors.danger,
     textAlign: "center",
-    marginBottom: spacing.md,
+    marginVertical: spacing.md,
   },
   footer: {
     padding: spacing.lg,

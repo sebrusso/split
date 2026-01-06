@@ -6,13 +6,15 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase";
-import { Group, Member, Expense } from "../../../lib/types";
-import { formatCurrency, formatRelativeDate } from "../../../lib/utils";
+import { Group, Member, Expense, SettlementRecord } from "../../../lib/types";
+import { formatCurrency, formatRelativeDate, calculateBalancesWithSettlements } from "../../../lib/utils";
 import {
   colors,
   spacing,
@@ -21,14 +23,17 @@ import {
   borderRadius,
 } from "../../../lib/theme";
 import { Card, Avatar, Button } from "../../../components/ui";
+import { exportGroup } from "../../../lib/export";
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -52,20 +57,38 @@ export default function GroupDetailScreen() {
       if (membersError) throw membersError;
       setMembers(membersData || []);
 
-      // Fetch expenses with payer info
+      // Fetch expenses with payer info and splits
       const { data: expensesData, error: expensesError } = await supabase
         .from("expenses")
         .select(
           `
           *,
-          payer:members!paid_by(id, name)
+          payer:members!paid_by(id, name),
+          splits(member_id, amount)
         `,
         )
         .eq("group_id", id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (expensesError) throw expensesError;
       setExpenses(expensesData || []);
+
+      // Fetch settlements
+      const { data: settlementsData, error: settlementsError } = await supabase
+        .from("settlements")
+        .select(
+          `
+          *,
+          from_member:members!from_member_id(id, name),
+          to_member:members!to_member_id(id, name)
+        `,
+        )
+        .eq("group_id", id)
+        .order("settled_at", { ascending: false });
+
+      if (settlementsError) throw settlementsError;
+      setSettlements(settlementsData || []);
     } catch (error) {
       console.error("Error fetching group data:", error);
     } finally {
@@ -87,6 +110,45 @@ export default function GroupDetailScreen() {
 
   const handleShare = () => {
     router.push(`/group/${id}/share`);
+  };
+
+  const handleExport = async () => {
+    if (!group || exporting) return;
+
+    setExporting(true);
+    try {
+      // Calculate balances for export
+      const expensesForCalc = expenses.map((exp) => ({
+        paid_by: exp.paid_by,
+        amount: parseFloat(String(exp.amount)),
+        splits: (exp.splits || []).map((s: { member_id: string; amount: number }) => ({
+          member_id: s.member_id,
+          amount: parseFloat(String(s.amount)),
+        })),
+      }));
+
+      const settlementsForCalc = settlements.map((s) => ({
+        from_member_id: s.from_member_id,
+        to_member_id: s.to_member_id,
+        amount: parseFloat(String(s.amount)),
+      }));
+
+      const balances = calculateBalancesWithSettlements(
+        expensesForCalc,
+        settlementsForCalc,
+        members
+      );
+
+      const success = await exportGroup(group, expenses, members, settlements, balances);
+      if (success) {
+        // Export was shared successfully
+      }
+    } catch (error) {
+      console.error("Export error:", error);
+      Alert.alert("Export Failed", "Could not export group data. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const renderExpense = ({ item }: { item: Expense }) => (
@@ -180,9 +242,22 @@ export default function GroupDetailScreen() {
         options={{
           title: group?.name || "Group",
           headerRight: () => (
-            <TouchableOpacity onPress={handleShare}>
-              <Text style={styles.headerButton}>Share</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={handleExport}
+                style={styles.headerIconButton}
+                disabled={exporting}
+              >
+                <Ionicons
+                  name="download-outline"
+                  size={22}
+                  color={exporting ? colors.textMuted : colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleShare}>
+                <Text style={styles.headerButton}>Share</Text>
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -235,6 +310,14 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: spacing.md,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  headerIconButton: {
+    padding: spacing.xs,
   },
   headerButton: {
     ...typography.bodyMedium,

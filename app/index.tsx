@@ -6,12 +6,15 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import { useUser } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
-import { Group } from "../lib/types";
+import { Group, GlobalBalance } from "../lib/types";
 import {
   colors,
   spacing,
@@ -19,24 +22,37 @@ import {
   shadows,
   borderRadius,
 } from "../lib/theme";
-import { Button, Card } from "../components/ui";
+import { Button, Card, Avatar } from "../components/ui";
+import { SearchBarCompact } from "../components/ui/SearchBar";
+import { getGlobalBalances } from "../lib/balances";
+import { formatCurrency } from "../lib/utils";
 
 export default function HomeScreen() {
+  const { user } = useUser();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [globalBalance, setGlobalBalance] = useState<GlobalBalance | null>(null);
 
-  const fetchGroups = useCallback(async () => {
+  const displayName = user?.fullName || user?.firstName || user?.username || "User";
+  const avatarUrl = user?.imageUrl;
+
+  const fetchData = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("groups")
-        .select("*")
-        .order("created_at", { ascending: false });
+      // Fetch groups and balances in parallel
+      const [groupsResponse, balances] = await Promise.all([
+        supabase
+          .from("groups")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        getGlobalBalances(),
+      ]);
 
-      if (error) throw error;
-      setGroups(data || []);
+      if (groupsResponse.error) throw groupsResponse.error;
+      setGroups(groupsResponse.data || []);
+      setGlobalBalance(balances);
     } catch (error) {
-      console.error("Error fetching groups:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -45,14 +61,14 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchGroups();
-    }, [fetchGroups]),
+      fetchData();
+    }, [fetchData]),
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchGroups();
-  }, [fetchGroups]);
+    fetchData();
+  }, [fetchData]);
 
   const renderGroup = ({ item }: { item: Group }) => (
     <Card
@@ -84,11 +100,64 @@ export default function HomeScreen() {
     </View>
   );
 
+  const hasOutstandingBalance =
+    globalBalance &&
+    (globalBalance.totalOwed > 0.01 || globalBalance.totalOwing > 0.01);
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>SplitFree</Text>
-        <Text style={styles.subtitle}>Split expenses, stay friends</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.title}>SplitFree</Text>
+            <Text style={styles.subtitle}>Split expenses, stay friends</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => router.push("/profile")}
+            activeOpacity={0.8}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.profileImage} />
+            ) : (
+              <Avatar name={displayName} size="md" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <SearchBarCompact
+          onPress={() => router.push("/search")}
+          style={styles.searchBar}
+        />
+
+        {/* Balance Summary Card */}
+        {hasOutstandingBalance && (
+          <TouchableOpacity
+            style={styles.balanceSummary}
+            onPress={() => router.push("/balances")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.balanceSummaryContent}>
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceLabel}>You are owed</Text>
+                <Text style={[styles.balanceValue, styles.balanceOwed]}>
+                  {formatCurrency(globalBalance.totalOwed)}
+                </Text>
+              </View>
+              <View style={styles.balanceDivider} />
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceLabel}>You owe</Text>
+                <Text style={[styles.balanceValue, styles.balanceOwing]}>
+                  {formatCurrency(globalBalance.totalOwing)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.balanceArrow}>
+              <Ionicons name="chevron-forward" size={20} color={colors.primaryDark} />
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
 
       {groups.length === 0 && !loading ? (
@@ -139,7 +208,12 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   title: {
     ...typography.h1,
@@ -148,6 +222,58 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.caption,
     marginTop: spacing.xs,
+  },
+  profileButton: {
+    marginTop: spacing.xs,
+  },
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  searchBar: {
+    marginTop: spacing.lg,
+  },
+  balanceSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  balanceSummaryContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  balanceItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  balanceLabel: {
+    ...typography.small,
+    color: colors.primaryDark,
+  },
+  balanceValue: {
+    ...typography.bodyMedium,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 2,
+  },
+  balanceOwed: {
+    color: colors.success,
+  },
+  balanceOwing: {
+    color: colors.danger,
+  },
+  balanceDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: colors.primaryDark,
+    opacity: 0.2,
+  },
+  balanceArrow: {
+    marginLeft: spacing.sm,
   },
   list: {
     paddingHorizontal: spacing.lg,

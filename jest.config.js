@@ -22,5 +22,6 @@ module.exports = {
   // Mock React Native modules for component tests
   moduleNameMapper: {
     '^react-native$': '<rootDir>/__tests__/__mocks__/react-native.ts',
+    '^expo-secure-store$': '<rootDir>/__tests__/__mocks__/expo-secure-store.ts',
   },
 };
