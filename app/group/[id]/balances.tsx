@@ -7,6 +7,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   Alert,
+  Modal,
+  Pressable,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, Stack } from "expo-router";
@@ -26,7 +31,10 @@ import {
   borderRadius,
   shadows,
 } from "../../../lib/theme";
-import { Card, Avatar, Button } from "../../../components/ui";
+import { Card, Avatar, Button, SettlementMethodPicker } from "../../../components/ui";
+import type { SettlementMethod } from "../../../components/ui/SettlementMethodPicker";
+import { getSettlementMethodName, getSettlementMethodIcon } from "../../../components/ui/SettlementMethodPicker";
+import { openPaymentApp, getPaymentAppName, getPaymentAppIcon, type PaymentApp } from "../../../lib/payment-links";
 
 interface ExpenseWithSplits {
   id: string;
@@ -47,6 +55,19 @@ export default function BalancesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [settlingIndex, setSettlingIndex] = useState<number | null>(null);
+
+  // Settlement modal state
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
+  const [selectedSettlement, setSelectedSettlement] = useState<{
+    from: string;
+    to: string;
+    amount: number;
+    index: number;
+  } | null>(null);
+  const [settlementMethod, setSettlementMethod] = useState<SettlementMethod>("cash");
+  const [settlementNotes, setSettlementNotes] = useState("");
+  const [settlementDate, setSettlementDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showMethodPicker, setShowMethodPicker] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -166,46 +187,67 @@ export default function BalancesScreen() {
     return "settled up";
   };
 
-  const handleSettle = async (
+  const handleSettle = (
     fromMemberId: string,
     toMemberId: string,
     amount: number,
     index: number,
   ) => {
-    const fromMember = getMemberById(fromMemberId);
-    const toMember = getMemberById(toMemberId);
+    // Open settlement modal
+    setSelectedSettlement({ from: fromMemberId, to: toMemberId, amount, index });
+    setSettlementMethod("cash");
+    setSettlementNotes("");
+    setSettlementDate(new Date().toISOString().split('T')[0]);
+    setShowSettlementModal(true);
+  };
 
-    Alert.alert(
-      "Confirm Settlement",
-      `Record that ${fromMember?.name} paid ${formatCurrency(amount, group?.currency)} to ${toMember?.name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            setSettlingIndex(index);
-            try {
-              const { error } = await supabase.from("settlements").insert({
-                group_id: id,
-                from_member_id: fromMemberId,
-                to_member_id: toMemberId,
-                amount: amount,
-              });
+  const handleConfirmSettlement = async () => {
+    if (!selectedSettlement) return;
 
-              if (error) throw error;
+    setSettlingIndex(selectedSettlement.index);
+    setShowSettlementModal(false);
 
-              // Refresh data
-              fetchData();
-            } catch (error) {
-              console.error("Error creating settlement:", error);
-              Alert.alert("Error", "Failed to record settlement. Please try again.");
-            } finally {
-              setSettlingIndex(null);
-            }
-          },
-        },
-      ],
-    );
+    try {
+      const { error } = await supabase.from("settlements").insert({
+        group_id: id,
+        from_member_id: selectedSettlement.from,
+        to_member_id: selectedSettlement.to,
+        amount: selectedSettlement.amount,
+        settled_at: settlementDate + 'T12:00:00Z',
+        method: settlementMethod,
+        notes: settlementNotes.trim() || null,
+      });
+
+      if (error) throw error;
+
+      // Refresh data
+      fetchData();
+    } catch (error) {
+      console.error("Error creating settlement:", error);
+      Alert.alert("Error", "Failed to record settlement. Please try again.");
+    } finally {
+      setSettlingIndex(null);
+      setSelectedSettlement(null);
+    }
+  };
+
+  const handleCancelSettlement = () => {
+    setShowSettlementModal(false);
+    setSelectedSettlement(null);
+  };
+
+  const handlePayWithApp = async (app: PaymentApp) => {
+    if (!selectedSettlement) return;
+
+    const fromMember = getMemberById(selectedSettlement.from);
+    const toMember = getMemberById(selectedSettlement.to);
+
+    const note = `${group?.name || 'Group'} - Payment from ${fromMember?.name} to ${toMember?.name}`;
+
+    await openPaymentApp(app, {
+      amount: selectedSettlement.amount,
+      note,
+    });
   };
 
   const handleDeleteSettlement = async (settlementId: string) => {
@@ -389,18 +431,31 @@ export default function BalancesScreen() {
                     onLongPress={() => handleDeleteSettlement(record.id)}
                   >
                     <View style={styles.historyInfo}>
-                      <Text style={styles.historyText}>
-                        <Text style={styles.historyName}>
-                          {record.from_member?.name}
+                      <View style={styles.historyHeader}>
+                        <Text style={styles.historyText}>
+                          <Text style={styles.historyName}>
+                            {record.from_member?.name}
+                          </Text>
+                          {" paid "}
+                          <Text style={styles.historyName}>
+                            {record.to_member?.name}
+                          </Text>
                         </Text>
-                        {" paid "}
-                        <Text style={styles.historyName}>
-                          {record.to_member?.name}
-                        </Text>
-                      </Text>
+                        {record.method && (
+                          <Text style={styles.historyMethodIcon}>
+                            {getSettlementMethodIcon(record.method as SettlementMethod)}
+                          </Text>
+                        )}
+                      </View>
                       <Text style={styles.historyDate}>
                         {formatRelativeDate(record.settled_at)}
+                        {record.method && ` • ${getSettlementMethodName(record.method as SettlementMethod)}`}
                       </Text>
+                      {record.notes && (
+                        <Text style={styles.historyNotes} numberOfLines={2}>
+                          {record.notes}
+                        </Text>
+                      )}
                     </View>
                     <Text style={styles.historyAmount}>
                       {formatCurrency(record.amount, group?.currency)}
@@ -426,6 +481,171 @@ export default function BalancesScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {/* Settlement Modal */}
+      <Modal
+        visible={showSettlementModal}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCancelSettlement}
+      >
+        <Pressable style={styles.modalOverlay} onPress={handleCancelSettlement}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalKeyboardAvoid}
+          >
+            <Pressable
+              style={styles.modalContainer}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>Record Settlement</Text>
+
+              {selectedSettlement && (
+                <>
+                  {/* Settlement Summary */}
+                  <View style={styles.settlementSummary}>
+                    <View style={styles.settlementParties}>
+                      <View style={styles.settlementMember}>
+                        <Avatar
+                          name={getMemberById(selectedSettlement.from)?.name || "?"}
+                          size="sm"
+                        />
+                        <Text style={styles.settlementName}>
+                          {getMemberById(selectedSettlement.from)?.name}
+                        </Text>
+                      </View>
+                      <View style={styles.arrowContainer}>
+                        <Text style={styles.arrow}>→</Text>
+                      </View>
+                      <View style={styles.settlementMember}>
+                        <Avatar
+                          name={getMemberById(selectedSettlement.to)?.name || "?"}
+                          size="sm"
+                        />
+                        <Text style={styles.settlementName}>
+                          {getMemberById(selectedSettlement.to)?.name}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.modalAmount}>
+                      {formatCurrency(selectedSettlement.amount, group?.currency)}
+                    </Text>
+                  </View>
+
+                  {/* Quick Pay Buttons */}
+                  <View style={styles.quickPaySection}>
+                    <Text style={styles.quickPayLabel}>Quick Pay With:</Text>
+                    <View style={styles.quickPayButtons}>
+                      <TouchableOpacity
+                        style={styles.quickPayButton}
+                        onPress={() => handlePayWithApp('venmo')}
+                      >
+                        <Text style={styles.quickPayIcon}>
+                          {getPaymentAppIcon('venmo')}
+                        </Text>
+                        <Text style={styles.quickPayText}>Venmo</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.quickPayButton}
+                        onPress={() => handlePayWithApp('paypal')}
+                      >
+                        <Text style={styles.quickPayIcon}>
+                          {getPaymentAppIcon('paypal')}
+                        </Text>
+                        <Text style={styles.quickPayText}>PayPal</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.quickPayButton}
+                        onPress={() => handlePayWithApp('cashapp')}
+                      >
+                        <Text style={styles.quickPayIcon}>
+                          {getPaymentAppIcon('cashapp')}
+                        </Text>
+                        <Text style={styles.quickPayText}>Cash App</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.quickPayButton}
+                        onPress={() => handlePayWithApp('zelle')}
+                      >
+                        <Text style={styles.quickPayIcon}>
+                          {getPaymentAppIcon('zelle')}
+                        </Text>
+                        <Text style={styles.quickPayText}>Zelle</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.quickPayHint}>
+                      Opens the app with pre-filled amount
+                    </Text>
+                  </View>
+
+                  {/* Payment Method */}
+                  <Text style={styles.modalLabel}>Payment Method</Text>
+                  <TouchableOpacity
+                    style={styles.methodSelector}
+                    onPress={() => setShowMethodPicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.methodIcon}>
+                      {getSettlementMethodIcon(settlementMethod)}
+                    </Text>
+                    <Text style={styles.methodText}>
+                      {getSettlementMethodName(settlementMethod)}
+                    </Text>
+                    <Text style={styles.chevron}>›</Text>
+                  </TouchableOpacity>
+
+                  {/* Date */}
+                  <Text style={styles.modalLabel}>Date</Text>
+                  <TextInput
+                    style={styles.dateInput}
+                    value={settlementDate}
+                    onChangeText={setSettlementDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.textMuted}
+                  />
+
+                  {/* Notes */}
+                  <Text style={styles.modalLabel}>Notes (Optional)</Text>
+                  <TextInput
+                    style={styles.notesInput}
+                    value={settlementNotes}
+                    onChangeText={setSettlementNotes}
+                    placeholder="e.g., Venmo transaction #123"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={3}
+                  />
+
+                  {/* Action Buttons */}
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={handleCancelSettlement}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.confirmButton}
+                      onPress={handleConfirmSettlement}
+                    >
+                      <Text style={styles.confirmButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Settlement Method Picker Modal */}
+      <SettlementMethodPicker
+        visible={showMethodPicker}
+        selectedMethod={settlementMethod}
+        onSelect={setSettlementMethod}
+        onClose={() => setShowMethodPicker(false)}
+      />
     </>
   );
 }
@@ -563,16 +783,32 @@ const styles = StyleSheet.create({
   historyInfo: {
     flex: 1,
   },
+  historyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   historyText: {
     ...typography.caption,
     color: colors.text,
+    flex: 1,
   },
   historyName: {
     fontFamily: "Inter_500Medium",
   },
+  historyMethodIcon: {
+    fontSize: 18,
+    marginLeft: spacing.sm,
+  },
   historyDate: {
     ...typography.small,
     marginTop: spacing.xs,
+  },
+  historyNotes: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    fontStyle: "italic",
   },
   historyAmount: {
     ...typography.bodyMedium,
@@ -599,5 +835,167 @@ const styles = StyleSheet.create({
   emptySubtext: {
     ...typography.caption,
     marginTop: spacing.xs,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalKeyboardAvoid: {
+    width: "100%",
+  },
+  modalContainer: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+    maxHeight: "85%",
+    paddingBottom: spacing.xxl,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    ...typography.h3,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+  },
+  settlementSummary: {
+    alignItems: "center",
+    paddingVertical: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.md,
+  },
+  modalAmount: {
+    ...typography.amount,
+    color: colors.primaryDark,
+    marginTop: spacing.md,
+  },
+  quickPaySection: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  quickPayLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  quickPayButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  quickPayButton: {
+    flex: 1,
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickPayIcon: {
+    fontSize: 24,
+    marginBottom: spacing.xs,
+  },
+  quickPayText: {
+    ...typography.small,
+    color: colors.text,
+  },
+  quickPayHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: spacing.sm,
+    fontSize: 11,
+  },
+  modalLabel: {
+    ...typography.bodyMedium,
+    marginLeft: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    color: colors.textSecondary,
+  },
+  methodSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  methodIcon: {
+    fontSize: 24,
+    marginRight: spacing.md,
+  },
+  methodText: {
+    ...typography.bodyMedium,
+    flex: 1,
+  },
+  chevron: {
+    fontSize: 24,
+    color: colors.textMuted,
+  },
+  dateInput: {
+    ...typography.body,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  notesInput: {
+    ...typography.body,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  modalActions: {
+    flexDirection: "row",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    ...typography.bodyMedium,
+    color: colors.text,
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+  },
+  confirmButtonText: {
+    ...typography.bodyMedium,
+    color: colors.white,
+    fontFamily: "Inter_600SemiBold",
   },
 });

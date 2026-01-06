@@ -5,6 +5,7 @@ export { Avatar } from "./Avatar";
 export { SyncIndicator } from "./SyncIndicator";
 export { CategoryPicker, CategoryButton } from "./CategoryPicker";
 export { SplitMethodPicker, SplitMethodButton } from "./SplitMethodPicker";
+export { SettlementMethodPicker, SettlementMethodButton } from "./SettlementMethodPicker";
 export { AmountInput, InlineAmountInput, getCurrencySymbol } from "./AmountInput";
 export { ReceiptViewer, ReceiptThumbnail, AddReceiptButton } from "./ReceiptViewer";
 export { FriendCard } from "./FriendCard";

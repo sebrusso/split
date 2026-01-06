@@ -361,8 +361,11 @@ export async function getBalanceSummary(): Promise<{
 
 /**
  * Get suggested settlements across all groups
+ * @param preloadedBalances Optional preloaded global balances to avoid duplicate queries
  */
-export async function getAllSuggestedSettlements(): Promise<
+export async function getAllSuggestedSettlements(
+  preloadedBalances?: GlobalBalance
+): Promise<
   Array<{
     group: Group;
     from: Member;
@@ -371,7 +374,7 @@ export async function getAllSuggestedSettlements(): Promise<
   }>
 > {
   try {
-    const globalBalances = await getGlobalBalances();
+    const globalBalances = preloadedBalances || await getGlobalBalances();
     const suggestions: Array<{
       group: Group;
       from: Member;

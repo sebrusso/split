@@ -24,13 +24,18 @@ import {
 } from "../../../lib/theme";
 import { Card, Avatar, Button } from "../../../components/ui";
 import { exportGroup } from "../../../lib/export";
+import { getCategoryById } from "../../../lib/categories";
+import { useAuth } from "../../../lib/auth-context";
+import { claimMember, getMemberByUserId } from "../../../lib/members";
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
+  const [userClaimedMember, setUserClaimedMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -89,13 +94,19 @@ export default function GroupDetailScreen() {
 
       if (settlementsError) throw settlementsError;
       setSettlements(settlementsData || []);
+
+      // Check if the current user has a claimed member in this group
+      if (userId) {
+        const claimedMember = await getMemberByUserId(id, userId);
+        setUserClaimedMember(claimedMember);
+      }
     } catch (error) {
       console.error("Error fetching group data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -110,6 +121,47 @@ export default function GroupDetailScreen() {
 
   const handleShare = () => {
     router.push(`/group/${id}/share`);
+  };
+
+  const handleClaimMember = async (memberId: string) => {
+    if (!userId) {
+      Alert.alert("Sign In Required", "Please sign in to claim a member.");
+      return;
+    }
+
+    try {
+      const result = await claimMember(memberId, userId);
+      if (result.error) {
+        Alert.alert("Error", result.error);
+      } else {
+        Alert.alert("Success", "You've claimed this member!");
+        // Refresh data to update the UI
+        fetchData();
+      }
+    } catch (error) {
+      console.error("Error claiming member:", error);
+      Alert.alert("Error", "Failed to claim member. Please try again.");
+    }
+  };
+
+  const handleTogglePin = async () => {
+    if (!group) return;
+
+    try {
+      const newPinnedState = !group.pinned;
+      const { error } = await supabase
+        .from("groups")
+        .update({ pinned: newPinnedState })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Update local state
+      setGroup({ ...group, pinned: newPinnedState });
+    } catch (error) {
+      console.error("Error toggling pin:", error);
+      Alert.alert("Error", "Failed to update pin status. Please try again.");
+    }
   };
 
   const handleExport = async () => {
@@ -151,28 +203,36 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const renderExpense = ({ item }: { item: Expense }) => (
-    <Card style={styles.expenseCard}>
-      <View style={styles.expenseHeader}>
-        <View style={styles.expenseInfo}>
-          <Text style={styles.expenseDescription}>{item.description}</Text>
-          <Text style={styles.expenseMeta}>
-            Paid by {item.payer?.name || "Unknown"} •{" "}
-            {formatRelativeDate(item.created_at)}
+  const renderExpense = ({ item }: { item: Expense }) => {
+    const category = item.category ? getCategoryById(item.category) : null;
+    return (
+      <Card style={styles.expenseCard}>
+        <View style={styles.expenseHeader}>
+          {category && (
+            <View style={styles.categoryIcon}>
+              <Text style={styles.categoryIconText}>{category.icon}</Text>
+            </View>
+          )}
+          <View style={styles.expenseInfo}>
+            <Text style={styles.expenseDescription}>{item.description}</Text>
+            <Text style={styles.expenseMeta}>
+              Paid by {item.payer?.name || "Unknown"} •{" "}
+              {formatRelativeDate(item.created_at)}
+            </Text>
+          </View>
+          <Text style={styles.expenseAmount}>
+            {formatCurrency(item.amount, group?.currency)}
           </Text>
         </View>
-        <Text style={styles.expenseAmount}>
-          {formatCurrency(item.amount, group?.currency)}
-        </Text>
-      </View>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   const ListHeader = () => (
     <View style={styles.header}>
       <View style={styles.groupInfo}>
         <Text style={styles.groupEmoji}>{group?.emoji || "💰"}</Text>
-        <View>
+        <View style={styles.groupInfoText}>
           <Text style={styles.groupName}>{group?.name}</Text>
           <TouchableOpacity onPress={handleShare}>
             <Text style={styles.shareCode}>
@@ -182,16 +242,35 @@ export default function GroupDetailScreen() {
         </View>
       </View>
 
+      {group?.notes && (
+        <View style={styles.notesCard}>
+          <Text style={styles.notesText}>{group.notes}</Text>
+        </View>
+      )}
+
       <Text style={styles.sectionTitle}>Members</Text>
       <View style={styles.membersRow}>
-        {members.map((member) => (
-          <View key={member.id} style={styles.memberItem}>
-            <Avatar name={member.name} size="md" />
-            <Text style={styles.memberName} numberOfLines={1}>
-              {member.name}
-            </Text>
-          </View>
-        ))}
+        {members.map((member) => {
+          const isUnclaimed = !member.user_id;
+          const canShowClaimButton = userId && isUnclaimed && !userClaimedMember;
+
+          return (
+            <View key={member.id} style={styles.memberItem}>
+              <Avatar name={member.name} size="md" />
+              <Text style={styles.memberName} numberOfLines={1}>
+                {member.name}
+              </Text>
+              {canShowClaimButton && (
+                <TouchableOpacity
+                  style={styles.claimButton}
+                  onPress={() => handleClaimMember(member.id)}
+                >
+                  <Text style={styles.claimButtonText}>This is me</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })}
         <TouchableOpacity
           style={styles.addMemberButton}
           onPress={() => router.push(`/group/${id}/add-member`)}
@@ -244,6 +323,26 @@ export default function GroupDetailScreen() {
           headerRight: () => (
             <View style={styles.headerActions}>
               <TouchableOpacity
+                onPress={handleTogglePin}
+                style={styles.headerIconButton}
+              >
+                <Ionicons
+                  name={group?.pinned ? "star" : "star-outline"}
+                  size={22}
+                  color={group?.pinned ? colors.warning : colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push(`/group/${id}/edit`)}
+                style={styles.headerIconButton}
+              >
+                <Ionicons
+                  name="settings-outline"
+                  size={22}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={handleExport}
                 style={styles.headerIconButton}
                 disabled={exporting}
@@ -254,7 +353,7 @@ export default function GroupDetailScreen() {
                   color={exporting ? colors.textMuted : colors.primary}
                 />
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleShare}>
+              <TouchableOpacity onPress={handleShare} style={styles.headerTextButton}>
                 <Text style={styles.headerButton}>Share</Text>
               </TouchableOpacity>
             </View>
@@ -319,6 +418,10 @@ const styles = StyleSheet.create({
   headerIconButton: {
     padding: spacing.xs,
   },
+  headerTextButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
   headerButton: {
     ...typography.bodyMedium,
     color: colors.primary,
@@ -326,7 +429,10 @@ const styles = StyleSheet.create({
   groupInfo: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  groupInfoText: {
+    flex: 1,
   },
   groupEmoji: {
     fontSize: 48,
@@ -339,6 +445,17 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary,
     marginTop: spacing.xs,
+  },
+  notesCard: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  notesText: {
+    ...typography.body,
+    color: colors.primaryDark,
+    lineHeight: 20,
   },
   sectionTitle: {
     ...typography.bodyMedium,
@@ -354,11 +471,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: spacing.lg,
     marginBottom: spacing.sm,
-    width: 56,
+    width: 80,
   },
   memberName: {
     ...typography.small,
     marginTop: spacing.xs,
+    textAlign: "center",
+  },
+  claimButton: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  claimButtonText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: colors.white,
     textAlign: "center",
   },
   addMemberButton: {
@@ -386,6 +516,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+  },
+  categoryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  categoryIconText: {
+    fontSize: 16,
   },
   expenseInfo: {
     flex: 1,

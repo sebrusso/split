@@ -14,6 +14,11 @@ import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
 import { colors } from "../lib/theme";
 import { CLERK_PUBLISHABLE_KEY, tokenCache, isClerkConfigured } from "../lib/clerk";
 import { AuthProvider } from "../lib/auth-context";
+import {
+  configureNotificationHandler,
+  registerPushToken,
+  removePushToken,
+} from "../lib/notifications";
 
 // Note: Offline support requires native modules (development build)
 // It's disabled in Expo Go - will be enabled when building for production
@@ -23,9 +28,10 @@ SplashScreen.preventAutoHideAsync();
 /**
  * Authentication Guard
  * Redirects users based on their auth state
+ * Also handles push notification registration
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -42,6 +48,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       router.replace("/");
     }
   }, [isLoaded, isSignedIn, segments, router]);
+
+  // Register for push notifications when user signs in
+  useEffect(() => {
+    if (isSignedIn && userId) {
+      // Register push token in the background
+      registerPushToken(userId).catch((error) => {
+        console.error("Failed to register push token:", error);
+      });
+    } else if (!isSignedIn && userId) {
+      // Remove push token when user signs out
+      removePushToken(userId).catch((error) => {
+        console.error("Failed to remove push token:", error);
+      });
+    }
+  }, [isSignedIn, userId]);
 
   return <>{children}</>;
 }
@@ -195,6 +216,11 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  // Configure notification handler on app start
+  useEffect(() => {
+    configureNotificationHandler();
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded) {

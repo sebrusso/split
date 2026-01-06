@@ -40,6 +40,12 @@ export async function uploadReceipt(
       });
 
     if (error) {
+      // Check if error is due to missing bucket
+      if (error.message?.includes("Bucket not found") || error.message?.includes("bucket")) {
+        throw new Error(
+          "Receipt storage is not yet configured. Please contact support or check your Supabase configuration."
+        );
+      }
       throw error;
     }
 
