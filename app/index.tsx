@@ -40,16 +40,28 @@ export default function HomeScreen() {
   const fetchData = useCallback(async () => {
     try {
       // Fetch groups and balances in parallel
+      // Filter out archived groups (where archived_at IS NULL)
       const [groupsResponse, balances] = await Promise.all([
         supabase
           .from("groups")
           .select("*")
+          .is("archived_at", null)
           .order("created_at", { ascending: false }),
         getGlobalBalances(),
       ]);
 
       if (groupsResponse.error) throw groupsResponse.error;
-      setGroups(groupsResponse.data || []);
+
+      // Sort groups: pinned first, then by created_at
+      const sortedGroups = (groupsResponse.data || []).sort((a, b) => {
+        // Pinned groups come first
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        // Within same pinned state, sort by created_at (newest first)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      setGroups(sortedGroups);
       setGlobalBalance(balances);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -78,7 +90,17 @@ export default function HomeScreen() {
       <View style={styles.groupHeader}>
         <Text style={styles.groupEmoji}>{item.emoji || "💰"}</Text>
         <View style={styles.groupInfo}>
-          <Text style={styles.groupName}>{item.name}</Text>
+          <View style={styles.groupNameRow}>
+            <Text style={styles.groupName}>{item.name}</Text>
+            {item.pinned && (
+              <Ionicons
+                name="star"
+                size={16}
+                color={colors.warning}
+                style={styles.pinIcon}
+              />
+            )}
+          </View>
           <Text style={styles.groupCode}>Code: {item.share_code}</Text>
         </View>
       </View>
@@ -293,8 +315,15 @@ const styles = StyleSheet.create({
   groupInfo: {
     flex: 1,
   },
+  groupNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   groupName: {
     ...typography.h3,
+  },
+  pinIcon: {
+    marginLeft: spacing.xs,
   },
   groupCode: {
     ...typography.small,

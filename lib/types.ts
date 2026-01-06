@@ -16,6 +16,9 @@ export interface Group {
   currency: string;
   share_code: string;
   created_at: string;
+  archived_at?: string | null;
+  pinned?: boolean;
+  notes?: string | null;
 }
 
 export interface Member {
@@ -87,6 +90,8 @@ export interface SettlementRecord {
   amount: number;
   settled_at: string;
   created_at: string;
+  method?: string; // Payment method (cash, venmo, paypal, bank_transfer, zelle, other)
+  notes?: string | null; // Optional notes about the settlement
   // Joined fields
   from_member?: Member;
   to_member?: Member;

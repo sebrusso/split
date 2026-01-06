@@ -42,10 +42,9 @@ export default function GlobalBalancesScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [balances, settlements] = await Promise.all([
-        getGlobalBalances(),
-        getAllSuggestedSettlements(),
-      ]);
+      // Fetch balances first, then pass to settlements to avoid duplicate queries
+      const balances = await getGlobalBalances();
+      const settlements = await getAllSuggestedSettlements(balances);
       setGlobalBalances(balances);
       setSuggestedSettlements(settlements);
     } catch (error) {

@@ -45,7 +45,8 @@ export async function initDatabase(): Promise<DB> {
       currency TEXT DEFAULT 'USD',
       share_code TEXT UNIQUE NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      archived_at TEXT
     )
   `);
 
@@ -96,6 +97,8 @@ export async function initDatabase(): Promise<DB> {
       amount REAL NOT NULL,
       settled_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      method TEXT DEFAULT 'cash',
+      notes TEXT,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
       FOREIGN KEY (from_member_id) REFERENCES members(id) ON DELETE CASCADE,
@@ -159,8 +162,8 @@ export async function cacheGroups(groups: Group[]): Promise<void> {
 
   for (const group of groups) {
     await database.execute(
-      `INSERT OR REPLACE INTO groups (id, name, emoji, currency, share_code, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO groups (id, name, emoji, currency, share_code, created_at, updated_at, archived_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         group.id,
         group.name,
@@ -169,6 +172,7 @@ export async function cacheGroups(groups: Group[]): Promise<void> {
         group.share_code,
         group.created_at,
         now,
+        group.archived_at || null,
       ],
     );
   }
@@ -237,8 +241,8 @@ export async function cacheSettlements(
 
   for (const settlement of settlements) {
     await database.execute(
-      `INSERT OR REPLACE INTO settlements (id, group_id, from_member_id, to_member_id, amount, settled_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO settlements (id, group_id, from_member_id, to_member_id, amount, settled_at, created_at, method, notes, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         settlement.id,
         settlement.group_id,
@@ -247,6 +251,8 @@ export async function cacheSettlements(
         settlement.amount,
         settlement.settled_at,
         settlement.created_at,
+        settlement.method || 'cash',
+        settlement.notes || null,
         now,
       ],
     );
@@ -260,7 +266,7 @@ export async function cacheSettlements(
 export async function getCachedGroups(): Promise<Group[]> {
   const database = getDatabase();
   const result = await database.execute(
-    `SELECT id, name, emoji, currency, share_code, created_at FROM groups ORDER BY created_at DESC`,
+    `SELECT id, name, emoji, currency, share_code, created_at, archived_at FROM groups WHERE archived_at IS NULL ORDER BY created_at DESC`,
   );
 
   return getRows<Group>(result);
@@ -269,7 +275,7 @@ export async function getCachedGroups(): Promise<Group[]> {
 export async function getCachedGroup(groupId: string): Promise<Group | null> {
   const database = getDatabase();
   const result = await database.execute(
-    `SELECT id, name, emoji, currency, share_code, created_at FROM groups WHERE id = ?`,
+    `SELECT id, name, emoji, currency, share_code, created_at, archived_at FROM groups WHERE id = ?`,
     [groupId],
   );
 
@@ -346,7 +352,7 @@ export async function getCachedSettlements(
 ): Promise<SettlementRecord[]> {
   const database = getDatabase();
   const result = await database.execute(
-    `SELECT s.id, s.group_id, s.from_member_id, s.to_member_id, s.amount, s.settled_at, s.created_at,
+    `SELECT s.id, s.group_id, s.from_member_id, s.to_member_id, s.amount, s.settled_at, s.created_at, s.method, s.notes,
             fm.name as from_member_name, tm.name as to_member_name
      FROM settlements s
      LEFT JOIN members fm ON s.from_member_id = fm.id
@@ -364,6 +370,8 @@ export async function getCachedSettlements(
     amount: number;
     settled_at: string;
     created_at: string;
+    method?: string;
+    notes?: string;
     from_member_name?: string;
     to_member_name?: string;
   }
@@ -376,6 +384,8 @@ export async function getCachedSettlements(
     amount: row.amount,
     settled_at: row.settled_at,
     created_at: row.created_at,
+    method: row.method,
+    notes: row.notes,
     from_member: row.from_member_name
       ? { id: row.from_member_id, name: row.from_member_name }
       : undefined,

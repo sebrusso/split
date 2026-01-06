@@ -503,6 +503,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     width: 60,
     textAlign: "right",
+    marginLeft: spacing.sm,
   },
   // Shares controls
   sharesContainer: {
