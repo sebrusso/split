@@ -15,6 +15,7 @@ import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { Group, GlobalBalance } from "../lib/types";
+import logger from "../lib/logger";
 import {
   colors,
   spacing,
@@ -64,7 +65,7 @@ export default function HomeScreen() {
       setGroups(sortedGroups);
       setGlobalBalance(balances);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      logger.error("Error fetching data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);

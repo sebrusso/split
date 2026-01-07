@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { generateShareCode } from "../lib/utils";
+import logger from "../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../lib/theme";
 import { Button, Input, Card } from "../components/ui";
 
@@ -46,7 +47,7 @@ export default function CreateGroupScreen() {
     setError("");
 
     try {
-      const shareCode = generateShareCode();
+      const shareCode = await generateShareCode();
 
       const { data: group, error: groupError } = await supabase
         .from("groups")
@@ -70,7 +71,7 @@ export default function CreateGroupScreen() {
 
       router.replace(`/group/${group.id}`);
     } catch (err) {
-      console.error("Error creating group:", err);
+      logger.error("Error creating group:", err);
       setError("Failed to create group. Please try again.");
     } finally {
       setLoading(false);

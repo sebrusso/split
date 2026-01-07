@@ -5,10 +5,29 @@
  */
 
 import * as SecureStore from "expo-secure-store";
+import logger from "./logger";
 
-// Clerk publishable key from dashboard
+// Validate required environment variables
+const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const oauthRedirectUrl = process.env.EXPO_PUBLIC_OAUTH_REDIRECT_URL;
+
+if (!clerkPublishableKey) {
+  throw new Error(
+    "Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY environment variable. " +
+      "Please ensure your .env.local file is properly configured."
+  );
+}
+
+if (!oauthRedirectUrl) {
+  throw new Error(
+    "Missing EXPO_PUBLIC_OAUTH_REDIRECT_URL environment variable. " +
+      "Please ensure your .env file is properly configured."
+  );
+}
+
+// Clerk publishable key from environment
 // Frontend API: https://promoted-rattler-76.clerk.accounts.dev
-export const CLERK_PUBLISHABLE_KEY: string = "pk_test_cHJvbW90ZWQtcmF0dGxlci03Ni5jbGVyay5hY2NvdW50cy5kZXYk";
+export const CLERK_PUBLISHABLE_KEY: string = clerkPublishableKey;
 
 /**
  * Token cache configuration using expo-secure-store
@@ -20,7 +39,7 @@ export const tokenCache = {
       const item = await SecureStore.getItemAsync(key);
       return item;
     } catch (error) {
-      console.error("Error getting token from cache:", error);
+      logger.error("Error getting token from cache:", error);
       return null;
     }
   },
@@ -28,23 +47,22 @@ export const tokenCache = {
     try {
       await SecureStore.setItemAsync(key, value);
     } catch (error) {
-      console.error("Error saving token to cache:", error);
+      logger.error("Error saving token to cache:", error);
     }
   },
   async clearToken(key: string): Promise<void> {
     try {
       await SecureStore.deleteItemAsync(key);
     } catch (error) {
-      console.error("Error clearing token from cache:", error);
+      logger.error("Error clearing token from cache:", error);
     }
   },
 };
 
 /**
  * OAuth redirect URL configuration for deep linking
- * Update this when you set up deep linking for OAuth callbacks
  */
-export const OAUTH_REDIRECT_URL = "splitfree://oauth-callback";
+export const OAUTH_REDIRECT_URL: string = oauthRedirectUrl;
 
 /**
  * Check if Clerk is properly configured

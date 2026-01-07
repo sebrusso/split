@@ -1,5 +1,8 @@
 // Test comment for /ship command
 
+import * as Crypto from "expo-crypto";
+import logger from "./logger";
+
 // ============================================
 // Error Handling
 // ============================================
@@ -31,7 +34,7 @@ export async function handleAsync<T>(
     const data = await operation();
     return { data, error: null };
   } catch (error) {
-    console.error(errorMessage, error);
+    logger.error(errorMessage, error);
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     return { data: null, error: `${errorMessage}: ${message}` };
@@ -150,11 +153,12 @@ export function validateName(
 // Code Generation
 // ============================================
 
-export function generateShareCode(): string {
+export async function generateShareCode(): Promise<string> {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const randomBytes = await Crypto.getRandomBytesAsync(6);
   let code = "";
   for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
 }

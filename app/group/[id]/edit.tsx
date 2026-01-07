@@ -14,6 +14,7 @@ import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../../../lib/supabase";
 import { generateShareCode } from "../../../lib/utils";
+import logger from "../../../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
 import { Button, Input, Card } from "../../../components/ui";
 import { Group, Member } from "../../../lib/types";
@@ -84,7 +85,7 @@ export default function EditGroupScreen() {
         setUserMember(claimedMember);
       }
     } catch (error) {
-      console.error("Error fetching group:", error);
+      logger.error("Error fetching group:", error);
       Alert.alert("Error", "Failed to load group data");
       router.back();
     } finally {
@@ -123,7 +124,7 @@ export default function EditGroupScreen() {
       Alert.alert("Success", "Group updated successfully");
       router.back();
     } catch (err) {
-      console.error("Error updating group:", err);
+      logger.error("Error updating group:", err);
       setError("Failed to update group. Please try again.");
     } finally {
       setSaving(false);
@@ -141,7 +142,7 @@ export default function EditGroupScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const newShareCode = generateShareCode();
+              const newShareCode = await generateShareCode();
               const { error } = await supabase
                 .from("groups")
                 .update({ share_code: newShareCode })
@@ -155,7 +156,7 @@ export default function EditGroupScreen() {
               );
               fetchData(); // Refresh data
             } catch (err) {
-              console.error("Error regenerating share code:", err);
+              logger.error("Error regenerating share code:", err);
               Alert.alert("Error", "Failed to regenerate share code");
             }
           },
@@ -193,7 +194,7 @@ export default function EditGroupScreen() {
               Alert.alert("Left Group", "You have left the group");
               router.replace("/");
             } catch (err) {
-              console.error("Error leaving group:", err);
+              logger.error("Error leaving group:", err);
               Alert.alert("Error", "Failed to leave group. Please try again.");
             }
           },
@@ -223,7 +224,7 @@ export default function EditGroupScreen() {
               Alert.alert("Group Archived", "The group has been archived");
               router.replace("/");
             } catch (err) {
-              console.error("Error archiving group:", err);
+              logger.error("Error archiving group:", err);
               Alert.alert("Error", "Failed to archive group. Please try again.");
             }
           },

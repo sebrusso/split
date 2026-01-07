@@ -14,6 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase";
 import { Group, Member, Expense, SettlementRecord } from "../../../lib/types";
+import logger from "../../../lib/logger";
 import { formatCurrency, formatRelativeDate, calculateBalancesWithSettlements } from "../../../lib/utils";
 import {
   colors,
@@ -101,7 +102,7 @@ export default function GroupDetailScreen() {
         setUserClaimedMember(claimedMember);
       }
     } catch (error) {
-      console.error("Error fetching group data:", error);
+      logger.error("Error fetching group data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -139,7 +140,7 @@ export default function GroupDetailScreen() {
         fetchData();
       }
     } catch (error) {
-      console.error("Error claiming member:", error);
+      logger.error("Error claiming member:", error);
       Alert.alert("Error", "Failed to claim member. Please try again.");
     }
   };
@@ -159,7 +160,7 @@ export default function GroupDetailScreen() {
       // Update local state
       setGroup({ ...group, pinned: newPinnedState });
     } catch (error) {
-      console.error("Error toggling pin:", error);
+      logger.error("Error toggling pin:", error);
       Alert.alert("Error", "Failed to update pin status. Please try again.");
     }
   };
@@ -196,7 +197,7 @@ export default function GroupDetailScreen() {
         // Export was shared successfully
       }
     } catch (error) {
-      console.error("Export error:", error);
+      logger.error("Export error:", error);
       Alert.alert("Export Failed", "Could not export group data. Please try again.");
     } finally {
       setExporting(false);

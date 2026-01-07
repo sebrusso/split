@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "./supabase";
+import logger from "./logger";
 import { Group, Member } from "./types";
 import { calculateBalancesWithSettlements, simplifyDebts } from "./utils";
 
@@ -153,7 +154,7 @@ export async function getGroupBalances(groupId: string): Promise<GroupBalance | 
       expenseCount: expenses?.length || 0,
     };
   } catch (error) {
-    console.error("getGroupBalances error:", error);
+    logger.error("getGroupBalances error:", error);
     return null;
   }
 }
@@ -230,7 +231,7 @@ export async function getGlobalBalances(userId?: string): Promise<GlobalBalance>
       byFriend: friendBalances,
     };
   } catch (error) {
-    console.error("getGlobalBalances error:", error);
+    logger.error("getGlobalBalances error:", error);
     return {
       totalOwed: 0,
       totalOwing: 0,
@@ -307,7 +308,7 @@ export async function getExpenseBreakdown(
 
     return breakdown;
   } catch (error) {
-    console.error("getExpenseBreakdown error:", error);
+    logger.error("getExpenseBreakdown error:", error);
     return [];
   }
 }
@@ -350,7 +351,7 @@ export async function getBalanceSummary(): Promise<{
       totalExpenses: count || 0,
     };
   } catch (error) {
-    console.error("getBalanceSummary error:", error);
+    logger.error("getBalanceSummary error:", error);
     return {
       groupsWithBalance: 0,
       settledGroups: 0,
@@ -420,7 +421,7 @@ export async function getAllSuggestedSettlements(
 
     return suggestions;
   } catch (error) {
-    console.error("getAllSuggestedSettlements error:", error);
+    logger.error("getAllSuggestedSettlements error:", error);
     return [];
   }
 }

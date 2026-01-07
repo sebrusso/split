@@ -6,6 +6,7 @@
 import { supabase } from "./supabase";
 import { Member } from "./types";
 import { handleAsync, AsyncResult } from "./utils";
+import logger from "./logger";
 
 /**
  * Claim a guest member by linking it to a user account
@@ -71,7 +72,7 @@ export async function getMemberByUserId(
 
     return data;
   } catch (error) {
-    console.error("Error getting member by user ID:", error);
+    logger.error("Error getting member by user ID:", error);
     return null;
   }
 }
@@ -118,7 +119,7 @@ export async function canClaimMember(
 
     return { canClaim: true };
   } catch (error) {
-    console.error("Error checking if member can be claimed:", error);
+    logger.error("Error checking if member can be claimed:", error);
     return { canClaim: false, reason: "Error checking claim eligibility" };
   }
 }

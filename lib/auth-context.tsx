@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useMemo } from "react";
 import { useAuth as useClerkAuth, useUser } from "@clerk/clerk-expo";
 import { UserProfile } from "./types";
+import logger from "./logger";
 
 interface AuthContextValue {
   // Authentication state
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await clerkSignOut();
     } catch (error) {
-      console.error("Error signing out:", error);
+      logger.error("Error signing out:", error);
       throw error;
     }
   };

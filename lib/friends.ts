@@ -7,6 +7,8 @@
 
 import { supabase } from "./supabase";
 import { Friendship, UserProfile, FriendshipStatus } from "./types";
+import { validateClerkId, escapeILike } from "./sanitize";
+import logger from "./logger";
 
 /**
  * Database row type for friendships table
@@ -71,12 +73,16 @@ export async function sendFriendRequest(
   currentUserId: string,
   targetClerkId: string
 ): Promise<void> {
+  // Validate IDs to prevent SQL injection
+  const validCurrentUserId = validateClerkId(currentUserId, 'currentUserId');
+  const validTargetClerkId = validateClerkId(targetClerkId, 'targetClerkId');
+
   // Check if friendship already exists (in either direction)
   const { data: existing } = await supabase
     .from("friendships")
     .select("id, status")
     .or(
-      `and(requester_id.eq.${currentUserId},addressee_id.eq.${targetClerkId}),and(requester_id.eq.${targetClerkId},addressee_id.eq.${currentUserId})`
+      `and(requester_id.eq.${validCurrentUserId},addressee_id.eq.${validTargetClerkId}),and(requester_id.eq.${validTargetClerkId},addressee_id.eq.${validCurrentUserId})`
     )
     .single();
 
@@ -99,7 +105,7 @@ export async function sendFriendRequest(
   });
 
   if (error) {
-    console.error("Error sending friend request:", error);
+    logger.error("Error sending friend request:", error);
     throw new Error("Failed to send friend request");
   }
 }
@@ -119,7 +125,7 @@ export async function acceptFriendRequest(friendshipId: string): Promise<void> {
     .eq("status", "pending");
 
   if (error) {
-    console.error("Error accepting friend request:", error);
+    logger.error("Error accepting friend request:", error);
     throw new Error("Failed to accept friend request");
   }
 }
@@ -136,7 +142,7 @@ export async function rejectFriendRequest(friendshipId: string): Promise<void> {
     .eq("status", "pending");
 
   if (error) {
-    console.error("Error rejecting friend request:", error);
+    logger.error("Error rejecting friend request:", error);
     throw new Error("Failed to reject friend request");
   }
 }
@@ -152,7 +158,7 @@ export async function removeFriend(friendshipId: string): Promise<void> {
     .eq("id", friendshipId);
 
   if (error) {
-    console.error("Error removing friend:", error);
+    logger.error("Error removing friend:", error);
     throw new Error("Failed to remove friend");
   }
 }
@@ -166,12 +172,16 @@ export async function blockUser(
   currentUserId: string,
   targetClerkId: string
 ): Promise<void> {
+  // Validate IDs to prevent SQL injection
+  const validCurrentUserId = validateClerkId(currentUserId, 'currentUserId');
+  const validTargetClerkId = validateClerkId(targetClerkId, 'targetClerkId');
+
   // Check if friendship exists
   const { data: existing } = await supabase
     .from("friendships")
     .select("id")
     .or(
-      `and(requester_id.eq.${currentUserId},addressee_id.eq.${targetClerkId}),and(requester_id.eq.${targetClerkId},addressee_id.eq.${currentUserId})`
+      `and(requester_id.eq.${validCurrentUserId},addressee_id.eq.${validTargetClerkId}),and(requester_id.eq.${validTargetClerkId},addressee_id.eq.${validCurrentUserId})`
     )
     .single();
 
@@ -186,7 +196,7 @@ export async function blockUser(
       .eq("id", existing.id);
 
     if (error) {
-      console.error("Error blocking user:", error);
+      logger.error("Error blocking user:", error);
       throw new Error("Failed to block user");
     }
   } else {
@@ -198,7 +208,7 @@ export async function blockUser(
     });
 
     if (error) {
-      console.error("Error blocking user:", error);
+      logger.error("Error blocking user:", error);
       throw new Error("Failed to block user");
     }
   }
@@ -216,7 +226,7 @@ export async function unblockUser(friendshipId: string): Promise<void> {
     .eq("status", "blocked");
 
   if (error) {
-    console.error("Error unblocking user:", error);
+    logger.error("Error unblocking user:", error);
     throw new Error("Failed to unblock user");
   }
 }
@@ -235,7 +245,7 @@ export async function getFriends(userId: string): Promise<Friendship[]> {
     .eq("status", "accepted");
 
   if (error1) {
-    console.error("Error fetching friends (as requester):", error1);
+    logger.error("Error fetching friends (as requester):", error1);
     throw new Error("Failed to fetch friends");
   }
 
@@ -247,7 +257,7 @@ export async function getFriends(userId: string): Promise<Friendship[]> {
     .eq("status", "accepted");
 
   if (error2) {
-    console.error("Error fetching friends (as addressee):", error2);
+    logger.error("Error fetching friends (as addressee):", error2);
     throw new Error("Failed to fetch friends");
   }
 
@@ -290,7 +300,7 @@ export async function getPendingRequests(userId: string): Promise<Friendship[]> 
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching pending requests:", error);
+    logger.error("Error fetching pending requests:", error);
     throw new Error("Failed to fetch pending requests");
   }
 
@@ -329,7 +339,7 @@ export async function getOutgoingRequests(userId: string): Promise<Friendship[]>
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching outgoing requests:", error);
+    logger.error("Error fetching outgoing requests:", error);
     throw new Error("Failed to fetch outgoing requests");
   }
 
@@ -368,7 +378,7 @@ export async function searchUsers(
     return [];
   }
 
-  const searchTerm = query.toLowerCase().trim();
+  const searchTerm = escapeILike(query.toLowerCase().trim());
 
   const { data, error } = await supabase
     .from("user_profiles")
@@ -378,7 +388,7 @@ export async function searchUsers(
     .limit(20);
 
   if (error) {
-    console.error("Error searching users:", error);
+    logger.error("Error searching users:", error);
     throw new Error("Failed to search users");
   }
 
@@ -395,11 +405,15 @@ export async function getFriendshipStatus(
   currentUserId: string,
   otherUserId: string
 ): Promise<Friendship | null> {
+  // Validate IDs to prevent SQL injection
+  const validCurrentUserId = validateClerkId(currentUserId, 'currentUserId');
+  const validOtherUserId = validateClerkId(otherUserId, 'otherUserId');
+
   const { data, error } = await supabase
     .from("friendships")
     .select("*")
     .or(
-      `and(requester_id.eq.${currentUserId},addressee_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},addressee_id.eq.${currentUserId})`
+      `and(requester_id.eq.${validCurrentUserId},addressee_id.eq.${validOtherUserId}),and(requester_id.eq.${validOtherUserId},addressee_id.eq.${validCurrentUserId})`
     )
     .single();
 
@@ -423,7 +437,7 @@ export async function getPendingRequestCount(userId: string): Promise<number> {
     .eq("status", "pending");
 
   if (error) {
-    console.error("Error fetching pending request count:", error);
+    logger.error("Error fetching pending request count:", error);
     return 0;
   }
 

@@ -13,6 +13,7 @@ import {
   UserProfile,
   Group,
 } from "./types";
+import logger from "./logger";
 
 /**
  * Database row type for activity_log table
@@ -61,7 +62,7 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
   });
 
   if (error) {
-    console.error("Error logging activity:", error);
+    logger.error("Error logging activity:", error);
     // Don't throw - activity logging should be non-blocking
   }
 }
@@ -84,7 +85,7 @@ export async function getGroupActivity(
     .limit(limit);
 
   if (error) {
-    console.error("Error fetching group activity:", error);
+    logger.error("Error fetching group activity:", error);
     throw new Error("Failed to fetch group activity");
   }
 
@@ -153,7 +154,7 @@ export async function getGlobalActivity(
     .limit(limit);
 
   if (error) {
-    console.error("Error fetching global activity:", error);
+    logger.error("Error fetching global activity:", error);
     throw new Error("Failed to fetch activity");
   }
 
@@ -246,7 +247,7 @@ export async function deleteActivityForEntity(
     .eq("entity_id", entityId);
 
   if (error) {
-    console.error("Error deleting activity:", error);
+    logger.error("Error deleting activity:", error);
     // Don't throw - cleanup should be non-blocking
   }
 }
