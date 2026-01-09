@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -108,6 +108,13 @@ export default function HomeScreen() {
       fetchData();
     }, [fetchData]),
   );
+
+  // Also fetch when userId becomes available (handles race condition on initial load)
+  useEffect(() => {
+    if (userId) {
+      fetchData();
+    }
+  }, [userId, fetchData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
