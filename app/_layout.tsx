@@ -151,6 +151,13 @@ function RootNavigator() {
         }}
       />
       <Stack.Screen
+        name="group/[id]/edit"
+        options={{
+          title: "Edit Group",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
         name="join/index"
         options={{
           title: "Join Group",

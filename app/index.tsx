@@ -27,9 +27,11 @@ import { Button, Card, Avatar } from "../components/ui";
 import { SearchBarCompact } from "../components/ui/SearchBar";
 import { getGlobalBalances } from "../lib/balances";
 import { formatCurrency } from "../lib/utils";
+import { useAuth } from "../lib/auth-context";
 
 export default function HomeScreen() {
   const { user } = useUser();
+  const { userId } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,12 +42,41 @@ export default function HomeScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      // If no user is logged in, show empty state
+      if (!userId) {
+        setGroups([]);
+        setGlobalBalance(null);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      // First, get all group IDs where the user is a member
+      const { data: memberData, error: memberError } = await supabase
+        .from("members")
+        .select("group_id")
+        .eq("clerk_user_id", userId);
+
+      if (memberError) throw memberError;
+
+      const userGroupIds = (memberData || []).map((m) => m.group_id);
+
+      // If user has no groups, show empty state
+      if (userGroupIds.length === 0) {
+        setGroups([]);
+        setGlobalBalance(null);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       // Fetch groups and balances in parallel
-      // Filter out archived groups (where archived_at IS NULL)
+      // Filter to only groups the user is a member of and not archived
       const [groupsResponse, balances] = await Promise.all([
         supabase
           .from("groups")
           .select("*")
+          .in("id", userGroupIds)
           .is("archived_at", null)
           .order("created_at", { ascending: false }),
         getGlobalBalances(),
@@ -70,7 +101,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {

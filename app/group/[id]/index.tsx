@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -29,11 +30,16 @@ import { getCategoryById } from "../../../lib/categories";
 import { useAuth } from "../../../lib/auth-context";
 import { claimMember, getMemberByUserId } from "../../../lib/members";
 
+// Extended member type with profile info
+interface MemberWithProfile extends Member {
+  avatar_url?: string | null;
+}
+
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<MemberWithProfile[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [userClaimedMember, setUserClaimedMember] = useState<Member | null>(null);
@@ -61,7 +67,34 @@ export default function GroupDetailScreen() {
         .order("created_at", { ascending: true });
 
       if (membersError) throw membersError;
-      setMembers(membersData || []);
+
+      // Fetch profile images for claimed members
+      const claimedMemberIds = (membersData || [])
+        .filter((m) => m.clerk_user_id)
+        .map((m) => m.clerk_user_id);
+
+      let memberAvatars: Record<string, string | null> = {};
+      if (claimedMemberIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("user_profiles")
+          .select("clerk_id, avatar_url")
+          .in("clerk_id", claimedMemberIds);
+
+        if (profilesData) {
+          memberAvatars = profilesData.reduce((acc, profile) => {
+            acc[profile.clerk_id] = profile.avatar_url;
+            return acc;
+          }, {} as Record<string, string | null>);
+        }
+      }
+
+      // Merge avatar URLs into members
+      const membersWithAvatars: MemberWithProfile[] = (membersData || []).map((m) => ({
+        ...m,
+        avatar_url: m.clerk_user_id ? memberAvatars[m.clerk_user_id] : null,
+      }));
+
+      setMembers(membersWithAvatars);
 
       // Fetch expenses with payer info and splits
       const { data: expensesData, error: expensesError } = await supabase
@@ -252,12 +285,16 @@ export default function GroupDetailScreen() {
       <Text style={styles.sectionTitle}>Members</Text>
       <View style={styles.membersRow}>
         {members.map((member) => {
-          const isUnclaimed = !member.user_id;
+          const isUnclaimed = !member.clerk_user_id;
           const canShowClaimButton = userId && isUnclaimed && !userClaimedMember;
 
           return (
             <View key={member.id} style={styles.memberItem}>
-              <Avatar name={member.name} size="md" />
+              {member.avatar_url ? (
+                <Image source={{ uri: member.avatar_url }} style={styles.memberAvatar} />
+              ) : (
+                <Avatar name={member.name} size="md" />
+              )}
               <Text style={styles.memberName} numberOfLines={1}>
                 {member.name}
               </Text>
@@ -473,6 +510,11 @@ const styles = StyleSheet.create({
     marginRight: spacing.lg,
     marginBottom: spacing.sm,
     width: 80,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   memberName: {
     ...typography.small,

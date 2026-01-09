@@ -10,11 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useUser } from "@clerk/clerk-expo";
 import { supabase } from "../lib/supabase";
 import { generateShareCode } from "../lib/utils";
 import logger from "../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../lib/theme";
 import { Button, Input, Card } from "../components/ui";
+import { useAuth } from "../lib/auth-context";
 
 const EMOJIS = [
   "💰",
@@ -32,6 +34,8 @@ const EMOJIS = [
 ];
 
 export default function CreateGroupScreen() {
+  const { user } = useUser();
+  const { userId } = useAuth();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("💰");
   const [loading, setLoading] = useState(false);
@@ -61,10 +65,13 @@ export default function CreateGroupScreen() {
 
       if (groupError) throw groupError;
 
-      // Add creator as first member (using "You" as default name)
+      // Add creator as first member with their clerk_user_id
+      // Use user's name if available, otherwise "You"
+      const memberName = user?.fullName || user?.firstName || "You";
       const { error: memberError } = await supabase.from("members").insert({
         group_id: group.id,
-        name: "You",
+        name: memberName,
+        clerk_user_id: userId,
       });
 
       if (memberError) throw memberError;
