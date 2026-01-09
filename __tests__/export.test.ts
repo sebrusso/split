@@ -250,6 +250,7 @@ const mockMembers: Member[] = [
     group_id: "group-1",
     name: "Alice",
     user_id: null,
+    clerk_user_id: null,
     created_at: "2024-01-01T00:00:00Z",
   },
   {
@@ -257,6 +258,7 @@ const mockMembers: Member[] = [
     group_id: "group-1",
     name: "Bob",
     user_id: null,
+    clerk_user_id: null,
     created_at: "2024-01-01T00:00:00Z",
   },
   {
@@ -264,6 +266,7 @@ const mockMembers: Member[] = [
     group_id: "group-1",
     name: "Charlie",
     user_id: null,
+    clerk_user_id: null,
     created_at: "2024-01-01T00:00:00Z",
   },
 ];

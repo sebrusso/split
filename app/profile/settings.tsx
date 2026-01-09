@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -17,6 +18,13 @@ import {
   borderRadius,
 } from "../../lib/theme";
 import { Card } from "../../components/ui";
+import {
+  getDefaultCurrency,
+  setDefaultCurrency as saveDefaultCurrency,
+  clearAllLocalData,
+} from "../../lib/preferences";
+import { exportAllUserData } from "../../lib/export";
+import { useAuth } from "../../lib/auth-context";
 
 // Available currencies
 const CURRENCIES = [
@@ -37,7 +45,9 @@ const CURRENCIES = [
  * App preferences and configuration
  */
 export default function SettingsScreen() {
-  // TODO: Load these from user preferences (AsyncStorage or Supabase)
+  const { userId } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
@@ -46,11 +56,30 @@ export default function SettingsScreen() {
   const [settlementNotifications, setSettlementNotifications] = useState(true);
   const [groupUpdates, setGroupUpdates] = useState(false);
 
-  const handleCurrencyChange = useCallback((currencyCode: string) => {
-    setDefaultCurrency(currencyCode);
-    setShowCurrencyPicker(false);
-    // TODO: Save to user preferences
-    Alert.alert("Currency Updated", `Default currency set to ${currencyCode}`);
+  // Load preferences on mount
+  useEffect(() => {
+    async function loadPreferences() {
+      try {
+        const currency = await getDefaultCurrency();
+        setDefaultCurrency(currency);
+      } catch (error) {
+        console.error("Error loading preferences:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPreferences();
+  }, []);
+
+  const handleCurrencyChange = useCallback(async (currencyCode: string) => {
+    try {
+      await saveDefaultCurrency(currencyCode);
+      setDefaultCurrency(currencyCode);
+      setShowCurrencyPicker(false);
+      Alert.alert("Currency Updated", `Default currency set to ${currencyCode}`);
+    } catch (error) {
+      Alert.alert("Error", "Failed to save currency preference");
+    }
   }, []);
 
   const selectedCurrency = CURRENCIES.find((c) => c.code === defaultCurrency);
@@ -192,21 +221,29 @@ export default function SettingsScreen() {
           <Card style={styles.settingCard}>
             <TouchableOpacity
               style={styles.settingItem}
-              onPress={() => {
-                Alert.alert(
-                  "Export Data",
-                  "Export your expense data as a CSV file.\n\nThis feature is coming soon!",
-                  [{ text: "OK" }]
-                );
+              disabled={exporting}
+              onPress={async () => {
+                if (!userId) {
+                  Alert.alert("Error", "Please sign in to export data");
+                  return;
+                }
+                setExporting(true);
+                try {
+                  await exportAllUserData(userId);
+                } finally {
+                  setExporting(false);
+                }
               }}
             >
               <View style={styles.settingContent}>
-                <Text style={styles.settingLabel}>Export Data</Text>
+                <Text style={styles.settingLabel}>
+                  {exporting ? "Exporting..." : "Export Data"}
+                </Text>
                 <Text style={styles.settingDescription}>
-                  Download your expense history
+                  Download your expense history as CSV
                 </Text>
               </View>
-              <Text style={styles.menuArrow}>→</Text>
+              <Text style={styles.menuArrow}>{exporting ? "⏳" : "→"}</Text>
             </TouchableOpacity>
 
             <View style={styles.settingDivider} />
@@ -222,9 +259,14 @@ export default function SettingsScreen() {
                     {
                       text: "Clear",
                       style: "destructive",
-                      onPress: () => {
-                        // TODO: Clear AsyncStorage/local cache
-                        Alert.alert("Done", "Local cache cleared");
+                      onPress: async () => {
+                        try {
+                          await clearAllLocalData();
+                          setDefaultCurrency("USD"); // Reset to default
+                          Alert.alert("Done", "Local cache cleared");
+                        } catch (error) {
+                          Alert.alert("Error", "Failed to clear local data");
+                        }
                       },
                     },
                   ]

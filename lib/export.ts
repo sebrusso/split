@@ -7,8 +7,9 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Alert } from "react-native";
 import { Group, Member, Expense, SettlementRecord } from "./types";
-import { formatCurrency } from "./utils";
+import { formatCurrency, calculateBalances } from "./utils";
 import { getCategoryDisplay } from "./categories";
+import { supabase } from "./supabase";
 
 /**
  * Escape a value for CSV format
@@ -345,4 +346,108 @@ export function generateExpenseReport(
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Export all user data across all groups
+ * Fetches all groups the user is a member of and exports everything
+ */
+export async function exportAllUserData(userId: string): Promise<boolean> {
+  try {
+    // Get all groups where user is a member
+    const { data: memberData, error: memberError } = await supabase
+      .from("members")
+      .select("group_id")
+      .eq("clerk_user_id", userId);
+
+    if (memberError) throw memberError;
+
+    const groupIds = (memberData || []).map((m) => m.group_id);
+
+    if (groupIds.length === 0) {
+      Alert.alert("No Data", "You don't have any groups to export.");
+      return false;
+    }
+
+    // Fetch all groups
+    const { data: groups, error: groupsError } = await supabase
+      .from("groups")
+      .select("*")
+      .in("id", groupIds);
+
+    if (groupsError) throw groupsError;
+
+    // Fetch all members for these groups
+    const { data: members, error: membersError } = await supabase
+      .from("members")
+      .select("*")
+      .in("group_id", groupIds);
+
+    if (membersError) throw membersError;
+
+    // Fetch all expenses for these groups
+    const { data: expenses, error: expensesError } = await supabase
+      .from("expenses")
+      .select("*, payer:members!paid_by(id, name)")
+      .in("group_id", groupIds)
+      .order("created_at", { ascending: false });
+
+    if (expensesError) throw expensesError;
+
+    // Fetch all settlements for these groups
+    const { data: settlements, error: settlementsError } = await supabase
+      .from("settlements")
+      .select("*, from_member:members!from_member_id(id, name), to_member:members!to_member_id(id, name)")
+      .in("group_id", groupIds);
+
+    if (settlementsError) throw settlementsError;
+
+    // Generate combined CSV
+    const sections: string[] = [];
+    sections.push("# SplitFree Data Export");
+    sections.push(`# Exported: ${new Date().toISOString()}`);
+    sections.push(`# Total Groups: ${groups?.length || 0}`);
+    sections.push(`# Total Expenses: ${expenses?.length || 0}`);
+    sections.push("");
+
+    // For each group, add a section
+    for (const group of groups || []) {
+      const groupMembers = (members || []).filter((m) => m.group_id === group.id);
+      const groupExpenses = (expenses || []).filter((e) => e.group_id === group.id);
+      const groupSettlements = (settlements || []).filter((s) => s.group_id === group.id);
+
+      // Calculate balances
+      const balances = calculateBalances(groupExpenses, groupMembers);
+
+      sections.push(`## ${group.emoji} ${group.name}`);
+      sections.push(`Currency: ${group.currency}`);
+      sections.push(`Members: ${groupMembers.map((m) => m.name).join(", ")}`);
+      sections.push("");
+
+      if (groupExpenses.length > 0) {
+        sections.push("### Expenses");
+        sections.push(exportExpensesToCSV(groupExpenses, groupMembers, group.currency));
+        sections.push("");
+      }
+
+      sections.push("### Balances");
+      sections.push(exportBalancesToCSV(balances, groupMembers, group.currency));
+      sections.push("");
+
+      if (groupSettlements.length > 0) {
+        sections.push("### Settlements");
+        sections.push(exportSettlementsToCSV(groupSettlements, group.currency));
+        sections.push("");
+      }
+    }
+
+    const content = sections.join("\n");
+    const filename = `splitfree_full_export_${new Date().toISOString().split("T")[0]}.csv`;
+
+    return shareCSV(content, filename);
+  } catch (error) {
+    console.error("Export all data error:", error);
+    Alert.alert("Export Failed", "Could not export your data. Please try again.");
+    return false;
+  }
 }

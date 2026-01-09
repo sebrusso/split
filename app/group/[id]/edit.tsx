@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -62,8 +62,13 @@ export default function EditGroupScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const isFetching = useRef(false);
 
   const fetchData = useCallback(async () => {
+    // Prevent concurrent fetches
+    if (isFetching.current) return;
+    isFetching.current = true;
+
     try {
       // Fetch group
       const { data: groupData, error: groupError } = await supabase
@@ -90,6 +95,7 @@ export default function EditGroupScreen() {
       router.back();
     } finally {
       setLoading(false);
+      isFetching.current = false;
     }
   }, [id, userId]);
 

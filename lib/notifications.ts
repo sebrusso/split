@@ -61,7 +61,12 @@ export async function registerForPushNotifications(): Promise<string | null> {
     console.log("Push notification token obtained:", token);
     return token;
   } catch (error) {
-    console.error("Error registering for push notifications:", error);
+    // In Expo Go without a valid projectId, this will fail - that's OK for development
+    if (__DEV__) {
+      console.warn("Push notifications unavailable in dev (need EAS projectId):", (error as Error).message);
+    } else {
+      console.error("Error registering for push notifications:", error);
+    }
     return null;
   }
 }

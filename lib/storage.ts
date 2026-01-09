@@ -28,13 +28,31 @@ export async function uploadReceipt(
     const response = await fetch(uri);
     const blob = await response.blob();
 
-    // Convert blob to ArrayBuffer
-    const arrayBuffer = await blob.arrayBuffer();
+    // In React Native, blob.arrayBuffer() may not be available
+    // Use FileReader to convert blob to base64, then decode
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // Extract base64 data from data URL (remove "data:image/xxx;base64," prefix)
+        const base64Data = dataUrl.split(",")[1];
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // Decode base64 to Uint8Array for upload
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
 
     // Upload to Supabase storage
     const { data, error } = await supabase.storage
       .from(RECEIPTS_BUCKET)
-      .upload(filename, arrayBuffer, {
+      .upload(filename, bytes, {
         contentType: `image/${extension === "jpg" ? "jpeg" : extension}`,
         upsert: true,
       });

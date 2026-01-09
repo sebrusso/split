@@ -25,7 +25,8 @@ export interface Member {
   id: string;
   group_id: string;
   name: string;
-  user_id: string | null;
+  user_id: string | null; // Legacy UUID column (not used for Clerk)
+  clerk_user_id: string | null; // Clerk user ID (TEXT column)
   created_at: string;
 }
 

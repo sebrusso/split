@@ -6,6 +6,7 @@ import {
   Share,
   TouchableOpacity,
   Alert,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, Stack } from "expo-router";
@@ -109,7 +110,7 @@ export default function ShareScreen() {
         }}
       />
       <SafeAreaView style={styles.container} edges={["bottom"]}>
-        <View style={styles.content}>
+        <ScrollView contentContainerStyle={styles.content}>
           {/* Group Info */}
           <View style={styles.groupInfo}>
             <Text style={styles.groupEmoji}>{group?.emoji || "👥"}</Text>
@@ -165,7 +166,7 @@ export default function ShareScreen() {
               3. Enter the code manually in the app
             </Text>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </>
   );
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     padding: spacing.lg,
     alignItems: "center",
   },

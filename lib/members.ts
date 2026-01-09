@@ -22,10 +22,10 @@ export async function claimMember(
   userId: string
 ): Promise<AsyncResult<Member>> {
   return handleAsync(async () => {
-    // Update the member's user_id
+    // Update the member's clerk_user_id (TEXT column for Clerk IDs)
     const { data, error } = await supabase
       .from("members")
-      .update({ user_id: userId })
+      .update({ clerk_user_id: userId })
       .eq("id", memberId)
       .select()
       .single();
@@ -59,7 +59,7 @@ export async function getMemberByUserId(
       .from("members")
       .select("*")
       .eq("group_id", groupId)
-      .eq("user_id", userId)
+      .eq("clerk_user_id", userId)
       .single();
 
     if (error) {
@@ -103,8 +103,8 @@ export async function canClaimMember(
       return { canClaim: false, reason: "Member not found" };
     }
 
-    // Check if member is already claimed
-    if (member.user_id) {
+    // Check if member is already claimed (using clerk_user_id)
+    if (member.clerk_user_id) {
       return { canClaim: false, reason: "This member is already claimed" };
     }
 

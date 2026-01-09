@@ -104,13 +104,7 @@ export default function ProfileScreen() {
           <Card style={styles.menuCard}>
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => {
-                // TODO: Implement edit profile with Clerk's UserProfile component
-                Alert.alert(
-                  "Coming Soon",
-                  "Profile editing will be available soon."
-                );
-              }}
+              onPress={() => router.push("/profile/edit")}
             >
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuIcon}>👤</Text>
@@ -128,13 +122,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => {
-                // TODO: Implement change email
-                Alert.alert(
-                  "Coming Soon",
-                  "Email change will be available soon."
-                );
-              }}
+              onPress={() => router.push("/profile/change-email")}
             >
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuIcon}>📧</Text>
@@ -150,13 +138,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => {
-                // TODO: Implement password change
-                Alert.alert(
-                  "Coming Soon",
-                  "Password change will be available soon."
-                );
-              }}
+              onPress={() => router.push("/profile/change-password")}
             >
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuIcon}>🔒</Text>
@@ -304,8 +286,28 @@ export default function ProfileScreen() {
                   style: "destructive",
                   onPress: () => {
                     Alert.alert(
-                      "Coming Soon",
-                      "Account deletion will be available soon. Contact support@splitfree.app for immediate assistance."
+                      "Confirm Deletion",
+                      "Are you absolutely sure? Type DELETE to confirm.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Yes, Delete My Account",
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              await user?.delete();
+                              router.replace("/auth/sign-in");
+                            } catch (error: any) {
+                              console.error("Delete account error:", error);
+                              Alert.alert(
+                                "Error",
+                                error.errors?.[0]?.message ||
+                                  "Failed to delete account. Contact support@splitfree.app"
+                              );
+                            }
+                          },
+                        },
+                      ]
                     );
                   },
                 },
