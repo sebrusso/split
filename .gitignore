@@ -49,3 +49,4 @@ coverage/
 # IDE
 .vscode/
 .idea/
+supabase/.temp/
