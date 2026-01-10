@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 
   -- OCR results
   ocr_status TEXT NOT NULL DEFAULT 'pending' CHECK (ocr_status IN ('pending', 'processing', 'completed', 'failed')),
-  ocr_provider TEXT CHECK (ocr_provider IN ('google_vision', 'claude', 'gpt4v', 'textract')),
+  ocr_provider TEXT CHECK (ocr_provider IN ('gemini', 'google_vision', 'claude', 'gpt4v', 'textract')),
   ocr_raw_response JSONB,
   ocr_confidence DECIMAL(3,2) CHECK (ocr_confidence >= 0 AND ocr_confidence <= 1),
 

@@ -385,15 +385,15 @@ export function canClaimItem(
     return { canClaim: false, reason: 'This item cannot be claimed' };
   }
 
-  // Check if fully claimed
-  if (isItemFullyClaimed(item)) {
-    return { canClaim: false, reason: 'Item is fully claimed' };
-  }
-
-  // Check if member already claimed this item fully
+  // Check if member already claimed this item fully (check this first for better UX)
   const memberClaim = item.claims?.find((c) => c.member_id === memberId);
   if (memberClaim && memberClaim.share_fraction >= 1) {
     return { canClaim: false, reason: 'You already claimed this item' };
+  }
+
+  // Check if fully claimed by others
+  if (isItemFullyClaimed(item)) {
+    return { canClaim: false, reason: 'Item is fully claimed' };
   }
 
   return { canClaim: true };
