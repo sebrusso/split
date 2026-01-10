@@ -95,7 +95,15 @@ function RootNavigator() {
         }}
       />
 
-      {/* Main app screens */}
+      {/* Tab Navigator (Groups, Balances, Activity, Account) */}
+      <Stack.Screen
+        name="(tabs)"
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      {/* Legacy index redirect - will be handled by (tabs)/index.tsx */}
       <Stack.Screen
         name="index"
         options={{
@@ -103,6 +111,7 @@ function RootNavigator() {
           title: "Home",
         }}
       />
+
       <Stack.Screen
         name="create-group"
         options={{
@@ -114,7 +123,7 @@ function RootNavigator() {
         name="group/[id]/index"
         options={{
           title: "",
-          headerBackTitle: "Home",
+          headerBackTitle: "Groups",
         }}
       />
       <Stack.Screen
@@ -213,7 +222,7 @@ function RootNavigator() {
         }}
       />
 
-      {/* Activity screen */}
+      {/* Standalone Activity screen (deprecated - use tabs) */}
       <Stack.Screen
         name="activity"
         options={{
@@ -229,12 +238,12 @@ function RootNavigator() {
         }}
       />
 
-      {/* Global balances screen */}
+      {/* Standalone Global balances screen (deprecated - use tabs) */}
       <Stack.Screen
         name="balances"
         options={{
           title: "All Balances",
-          headerBackTitle: "Home",
+          headerBackTitle: "Groups",
         }}
       />
     </Stack>

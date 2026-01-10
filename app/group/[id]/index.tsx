@@ -8,6 +8,10 @@ import {
   RefreshControl,
   Alert,
   Image,
+  ActionSheetIOS,
+  Platform,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
@@ -46,6 +50,7 @@ export default function GroupDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -237,6 +242,51 @@ export default function GroupDetailScreen() {
     }
   };
 
+  const showOptionsMenu = () => {
+    const isPinned = group?.pinned;
+    const options = [
+      isPinned ? "Unpin Group" : "Pin Group",
+      "Edit Group",
+      "Export Data",
+      "Share Group",
+      "Cancel",
+    ];
+    const cancelButtonIndex = options.length - 1;
+
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex,
+        },
+        (buttonIndex) => {
+          handleOptionsSelection(buttonIndex);
+        }
+      );
+    } else {
+      setOptionsModalVisible(true);
+    }
+  };
+
+  const handleOptionsSelection = (index: number) => {
+    setOptionsModalVisible(false);
+    switch (index) {
+      case 0: // Pin/Unpin Group
+        handleTogglePin();
+        break;
+      case 1: // Edit Group
+        router.push(`/group/${id}/edit`);
+        break;
+      case 2: // Export Data
+        handleExport();
+        break;
+      case 3: // Share Group
+        handleShare();
+        break;
+      // case 4 is Cancel - do nothing
+    }
+  };
+
   const renderExpense = ({ item }: { item: Expense }) => {
     const category = item.category ? getCategoryById(item.category) : null;
     return (
@@ -381,42 +431,17 @@ export default function GroupDetailScreen() {
         options={{
           title: group?.name || "Group",
           headerRight: () => (
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                onPress={handleTogglePin}
-                style={styles.headerIconButton}
-              >
-                <Ionicons
-                  name={group?.pinned ? "star" : "star-outline"}
-                  size={22}
-                  color={group?.pinned ? colors.warning : colors.primary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => router.push(`/group/${id}/edit`)}
-                style={styles.headerIconButton}
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={22}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleExport}
-                style={styles.headerIconButton}
-                disabled={exporting}
-              >
-                <Ionicons
-                  name="download-outline"
-                  size={22}
-                  color={exporting ? colors.textMuted : colors.primary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleShare} style={styles.headerTextButton}>
-                <Text style={styles.headerButton}>Share</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={showOptionsMenu}
+              style={styles.headerOptionsButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={24}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
           ),
         }}
       />
@@ -447,6 +472,84 @@ export default function GroupDetailScreen() {
             <Text style={styles.fabText}>+ Add Expense</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Options Modal for Android */}
+        <Modal
+          visible={optionsModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setOptionsModalVisible(false)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setOptionsModalVisible(false)}
+          >
+            <View style={styles.optionsModal}>
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => handleOptionsSelection(0)}
+              >
+                <Ionicons
+                  name={group?.pinned ? "star" : "star-outline"}
+                  size={20}
+                  color={group?.pinned ? colors.warning : colors.text}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>
+                  {group?.pinned ? "Unpin Group" : "Pin Group"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => handleOptionsSelection(1)}
+              >
+                <Ionicons
+                  name="settings-outline"
+                  size={20}
+                  color={colors.text}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>Edit Group</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => handleOptionsSelection(2)}
+              >
+                <Ionicons
+                  name="download-outline"
+                  size={20}
+                  color={colors.text}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>Export Data</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => handleOptionsSelection(3)}
+              >
+                <Ionicons
+                  name="share-outline"
+                  size={20}
+                  color={colors.text}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>Share Group</Text>
+              </TouchableOpacity>
+
+              <View style={styles.optionDivider} />
+
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => setOptionsModalVisible(false)}
+              >
+                <Text style={[styles.optionText, styles.cancelText]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </>
   );
@@ -470,21 +573,44 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: spacing.md,
   },
-  headerActions: {
+  headerOptionsButton: {
+    padding: spacing.xs,
+    marginRight: spacing.xs,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  optionsModal: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  optionItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
-  headerIconButton: {
-    padding: spacing.xs,
+  optionIcon: {
+    marginRight: spacing.md,
   },
-  headerTextButton: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
+  optionText: {
+    ...typography.body,
+    color: colors.text,
   },
-  headerButton: {
-    ...typography.bodyMedium,
-    color: colors.primary,
+  optionDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.sm,
+  },
+  cancelText: {
+    color: colors.textSecondary,
+    textAlign: "center",
+    flex: 1,
   },
   groupInfo: {
     flexDirection: "row",

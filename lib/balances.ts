@@ -65,6 +65,31 @@ export interface ExpenseBreakdownItem {
 }
 
 /**
+ * Balance with a specific person across all groups
+ * Used for the Splitwise-style "balances across all groups" view
+ */
+export interface PersonBalance {
+  name: string;
+  netBalance: number; // Positive = they owe you, Negative = you owe them
+  groups: Array<{
+    groupId: string;
+    groupName: string;
+    balance: number;
+  }>;
+}
+
+/**
+ * User's global balance summary
+ * Shows overall balance and list of people with outstanding balances
+ */
+export interface UserGlobalBalance {
+  totalOwed: number; // Total others owe you
+  totalOwing: number; // Total you owe others
+  netBalance: number; // totalOwed - totalOwing
+  people: PersonBalance[];
+}
+
+/**
  * Get balances for a specific group
  */
 export async function getGroupBalances(groupId: string): Promise<GroupBalance | null> {
@@ -423,5 +448,205 @@ export async function getAllSuggestedSettlements(
   } catch (error) {
     logger.error("getAllSuggestedSettlements error:", error);
     return [];
+  }
+}
+
+/**
+ * Get global balances for a specific user across all their groups
+ * This calculates who owes the user money and who the user owes money to
+ * Aggregates balances by person name across all groups
+ */
+export async function getGlobalBalancesForUser(
+  clerkUserId: string
+): Promise<UserGlobalBalance> {
+  try {
+    // Get all groups where this user is a member
+    const { data: userMemberships, error: memberError } = await supabase
+      .from("members")
+      .select("id, group_id, name")
+      .eq("clerk_user_id", clerkUserId);
+
+    if (memberError) throw memberError;
+
+    if (!userMemberships || userMemberships.length === 0) {
+      return {
+        totalOwed: 0,
+        totalOwing: 0,
+        netBalance: 0,
+        people: [],
+      };
+    }
+
+    // Map of group_id to user's member_id in that group
+    const userMemberByGroup = new Map<string, string>();
+    userMemberships.forEach((m) => {
+      userMemberByGroup.set(m.group_id, m.id);
+    });
+
+    const groupIds = userMemberships.map((m) => m.group_id);
+
+    // Fetch all groups
+    const { data: groups, error: groupsError } = await supabase
+      .from("groups")
+      .select("*")
+      .in("id", groupIds)
+      .is("archived_at", null);
+
+    if (groupsError) throw groupsError;
+
+    // Map to aggregate balances by person name
+    const personBalanceMap = new Map<
+      string,
+      {
+        displayName: string;
+        netBalance: number;
+        groups: Array<{ groupId: string; groupName: string; balance: number }>
+      }
+    >();
+
+    let totalOwed = 0;
+    let totalOwing = 0;
+
+    // Process each group
+    for (const group of groups || []) {
+      const userMemberId = userMemberByGroup.get(group.id);
+      if (!userMemberId) continue;
+
+      // Fetch members for this group
+      const { data: members, error: membersError } = await supabase
+        .from("members")
+        .select("*")
+        .eq("group_id", group.id);
+
+      if (membersError) throw membersError;
+
+      // Fetch expenses with splits
+      const { data: expenses, error: expensesError } = await supabase
+        .from("expenses")
+        .select("id, paid_by, amount, splits(member_id, amount)")
+        .eq("group_id", group.id)
+        .is("deleted_at", null);
+
+      if (expensesError) throw expensesError;
+
+      // Fetch settlements
+      const { data: settlements, error: settlementsError } = await supabase
+        .from("settlements")
+        .select("from_member_id, to_member_id, amount")
+        .eq("group_id", group.id);
+
+      if (settlementsError) throw settlementsError;
+
+      // Calculate balances for this group
+      const expensesForCalc = (expenses || []).map((exp) => ({
+        paid_by: exp.paid_by,
+        amount: parseFloat(String(exp.amount)),
+        splits: (exp.splits || []).map((s: { member_id: string; amount: number }) => ({
+          member_id: s.member_id,
+          amount: parseFloat(String(s.amount)),
+        })),
+      }));
+
+      const settlementsForCalc = (settlements || []).map((s) => ({
+        from_member_id: s.from_member_id,
+        to_member_id: s.to_member_id,
+        amount: parseFloat(String(s.amount)),
+      }));
+
+      const balances = calculateBalancesWithSettlements(
+        expensesForCalc,
+        settlementsForCalc,
+        members || []
+      );
+
+      // Get user's balance in this group
+      const userBalance = balances.get(userMemberId) || 0;
+
+      // For each other member, calculate their relationship with the user
+      // Using simplified debt algorithm
+      const debts = simplifyDebts(balances, members || []);
+
+      // Find debts involving the user
+      for (const debt of debts) {
+        const isUserPaying = debt.from === userMemberId;
+        const isUserReceiving = debt.to === userMemberId;
+
+        if (!isUserPaying && !isUserReceiving) continue;
+
+        // Get the other person's info
+        const otherMemberId = isUserPaying ? debt.to : debt.from;
+        const otherMember = (members || []).find((m) => m.id === otherMemberId);
+        if (!otherMember) continue;
+
+        const personName = otherMember.name;
+        const balanceWithPerson = isUserPaying ? -debt.amount : debt.amount;
+
+        // Aggregate by person name (case-insensitive)
+        const key = personName.toLowerCase();
+        const existing = personBalanceMap.get(key);
+
+        if (existing) {
+          existing.netBalance += balanceWithPerson;
+          existing.groups.push({
+            groupId: group.id,
+            groupName: group.name,
+            balance: balanceWithPerson,
+          });
+        } else {
+          personBalanceMap.set(key, {
+            displayName: personName,
+            netBalance: balanceWithPerson,
+            groups: [
+              {
+                groupId: group.id,
+                groupName: group.name,
+                balance: balanceWithPerson,
+              },
+            ],
+          });
+        }
+
+        // Update totals
+        if (balanceWithPerson > 0) {
+          totalOwed += balanceWithPerson;
+        } else {
+          totalOwing += Math.abs(balanceWithPerson);
+        }
+      }
+    }
+
+    // Convert map to array
+    const people: PersonBalance[] = [];
+    personBalanceMap.forEach((data, key) => {
+      // Only include people with non-zero balances
+      if (Math.abs(data.netBalance) > 0.01) {
+        people.push({
+          name: data.displayName,
+          netBalance: Math.round(data.netBalance * 100) / 100,
+          groups: data.groups.map((g) => ({
+            ...g,
+            balance: Math.round(g.balance * 100) / 100,
+          })),
+        });
+      }
+    });
+
+    // Sort by absolute balance (most significant first)
+    people.sort((a, b) => Math.abs(b.netBalance) - Math.abs(a.netBalance));
+
+    return {
+      totalOwed: Math.round(totalOwed * 100) / 100,
+      totalOwing: Math.round(totalOwing * 100) / 100,
+      netBalance: Math.round((totalOwed - totalOwing) * 100) / 100,
+      people,
+    };
+  } catch (error) {
+    logger.error("getGlobalBalancesForUser error:", error);
+    return {
+      totalOwed: 0,
+      totalOwing: 0,
+      netBalance: 0,
+      people: [],
+    };
   }
 }
