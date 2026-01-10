@@ -1,23 +1,41 @@
 /**
  * OCR Service Layer
  *
- * Provides receipt text extraction and parsing using multiple providers:
- * - Google Cloud Vision (primary, fast)
- * - Claude Vision (fallback, high accuracy)
- *
- * The service uses a hybrid approach: Google Vision for initial extraction,
- * then Claude for semantic parsing and validation.
+ * Provides receipt text extraction and parsing using Google Gemini.
+ * Two modes available:
+ * - Single-pass (default): Gemini vision extracts and parses in one call
+ * - Two-pass: Gemini extracts text first, then parses semantically
  */
 
 import { OCRResult, OCRExtractedItem, OCRExtractedMetadata, OCRProvider } from './types';
 
 // API configuration
-const GOOGLE_VISION_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_VISION_API_KEY;
-const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
-// Claude prompt for receipt parsing
-const RECEIPT_PARSE_PROMPT = `Analyze this receipt image and extract all information. Return a JSON object with this exact structure:
+// OCR Mode configuration
+export type OCRMode = 'single_pass' | 'two_pass';
 
+// Default mode - single pass is active
+let currentOCRMode: OCRMode = 'single_pass';
+
+/**
+ * Set the OCR processing mode
+ */
+export function setOCRMode(mode: OCRMode): void {
+  currentOCRMode = mode;
+}
+
+/**
+ * Get the current OCR processing mode
+ */
+export function getOCRMode(): OCRMode {
+  return currentOCRMode;
+}
+
+// Single-pass prompt: Extract and parse receipt in one call
+const SINGLE_PASS_PROMPT = `You are a receipt parser. Analyze this receipt image and extract all information into a structured JSON format.
+
+Return a JSON object with this exact structure:
 {
   "merchant": {
     "name": "Store Name",
@@ -45,13 +63,20 @@ Important rules:
 3. Prices should be numbers without currency symbols
 4. If you can't read a value clearly, use null
 5. Do not guess or make up values
-6. Include discounts as negative items
-7. Only include actual purchased items, not section headers
+6. Include discounts as negative totalPrice values
+7. Only include actual purchased items, not section headers or payment info
+8. The currency should be inferred from symbols ($=USD, €=EUR, £=GBP) or default to USD
 
-Return ONLY the JSON object, no other text.`;
+Return ONLY the JSON object, no other text or markdown.`;
 
-// Text parsing prompt for when we have raw OCR text
-const TEXT_PARSE_PROMPT = `Parse this receipt text and extract structured data. The text was extracted via OCR and may have some errors.
+// Two-pass: First pass extracts raw text
+const TEXT_EXTRACTION_PROMPT = `Extract all text from this receipt image exactly as it appears.
+Preserve the layout as much as possible, keeping items and prices on the same lines.
+Include everything: store name, address, items, prices, tax, total, date, etc.
+Return only the extracted text, nothing else.`;
+
+// Two-pass: Second pass parses the extracted text
+const TEXT_PARSE_PROMPT = `Parse this receipt text and extract structured data. The text was extracted via OCR and may have some errors or formatting issues.
 
 Receipt text:
 ---
@@ -59,7 +84,6 @@ Receipt text:
 ---
 
 Return a JSON object with this exact structure:
-
 {
   "merchant": {
     "name": "Store Name",
@@ -85,193 +109,185 @@ Important rules:
 1. Extract ALL line items from the receipt
 2. For quantity, default to 1 if not specified
 3. Prices should be numbers without currency symbols
-4. If you can't read a value clearly, use null
+4. If you can't determine a value clearly, use null
 5. Do not guess or make up values
-6. Include discounts as negative items
-7. Only include actual purchased items, not section headers
+6. Include discounts as negative totalPrice values
+7. Only include actual purchased items, not section headers or payment info
 
-Return ONLY the JSON object, no other text.`;
+Return ONLY the JSON object, no other text or markdown.`;
 
 /**
- * Extract text from image using Google Cloud Vision API
+ * Call Gemini API with image (vision)
  */
-export async function extractTextWithGoogleVision(
-  imageBase64: string
-): Promise<{ text: string; confidence: number }> {
-  if (!GOOGLE_VISION_API_KEY) {
-    throw new Error('Google Vision API key not configured');
+async function callGeminiVision(
+  imageBase64: string,
+  prompt: string,
+  mediaType: string = 'image/jpeg'
+): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key not configured. Set EXPO_PUBLIC_GEMINI_API_KEY in your environment.');
   }
 
-  const requestBody = {
-    requests: [
-      {
-        image: {
-          content: imageBase64,
-        },
-        features: [
-          {
-            type: 'TEXT_DETECTION',
-            maxResults: 1,
-          },
-        ],
-      },
-    ],
-  };
-
   const response = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inline_data: {
+                  mime_type: mediaType,
+                  data: imageBase64,
+                },
+              },
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 4096,
+        },
+      }),
     }
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Google Vision API error: ${response.status} - ${errorText}`);
+    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
 
-  if (!data.responses || !data.responses[0]) {
-    throw new Error('No response from Google Vision API');
+  if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+    throw new Error('Invalid response from Gemini API');
   }
 
-  const result = data.responses[0];
-
-  if (result.error) {
-    throw new Error(`Google Vision error: ${result.error.message}`);
-  }
-
-  const fullText = result.fullTextAnnotation?.text || '';
-  const confidence = result.fullTextAnnotation?.pages?.[0]?.confidence || 0.8;
-
-  return { text: fullText, confidence };
+  return data.candidates[0].content.parts[0].text;
 }
 
 /**
- * Parse receipt using Claude Vision API (direct image analysis)
+ * Call Gemini API with text only (no image)
  */
-export async function parseReceiptWithClaude(
+async function callGeminiText(prompt: string): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key not configured. Set EXPO_PUBLIC_GEMINI_API_KEY in your environment.');
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 4096,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+    throw new Error('Invalid response from Gemini API');
+  }
+
+  return data.candidates[0].content.parts[0].text;
+}
+
+/**
+ * Single-pass OCR: Gemini vision extracts and parses in one call
+ */
+export async function processReceiptSinglePass(
   imageBase64: string,
   mediaType: string = 'image/jpeg'
 ): Promise<OCRResult> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('Anthropic API key not configured');
-  }
+  const responseText = await callGeminiVision(imageBase64, SINGLE_PASS_PROMPT, mediaType);
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: imageBase64,
-              },
-            },
-            {
-              type: 'text',
-              text: RECEIPT_PARSE_PROMPT,
-            },
-          ],
-        },
-      ],
-    }),
-  });
+  // Parse JSON response
+  const parsed = parseJsonResponse(responseText);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Claude API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-
-  if (!data.content || !data.content[0] || data.content[0].type !== 'text') {
-    throw new Error('Invalid response from Claude API');
-  }
-
-  const jsonText = data.content[0].text.trim();
-
-  // Parse the JSON response
-  let parsed;
-  try {
-    // Handle potential markdown code blocks
-    const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-    parsed = JSON.parse(cleanJson);
-  } catch (e) {
-    throw new Error(`Failed to parse Claude response as JSON: ${jsonText.substring(0, 200)}`);
-  }
-
-  return convertToOCRResult(parsed, 'claude');
+  return convertToOCRResult(parsed, 'gemini');
 }
 
 /**
- * Parse receipt text using Claude (text-only, no image)
+ * Two-pass OCR:
+ * 1. Gemini extracts raw text from image
+ * 2. Gemini parses the text into structured data
  */
-export async function parseReceiptTextWithClaude(rawText: string): Promise<OCRResult> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('Anthropic API key not configured');
+export async function processReceiptTwoPass(
+  imageBase64: string,
+  mediaType: string = 'image/jpeg'
+): Promise<OCRResult> {
+  // Pass 1: Extract raw text from image
+  const rawText = await callGeminiVision(imageBase64, TEXT_EXTRACTION_PROMPT, mediaType);
+
+  if (!rawText || rawText.trim().length < 20) {
+    throw new Error('Failed to extract sufficient text from receipt image');
   }
 
-  const prompt = TEXT_PARSE_PROMPT.replace('{TEXT}', rawText);
+  // Pass 2: Parse the extracted text
+  const parsePrompt = TEXT_PARSE_PROMPT.replace('{TEXT}', rawText);
+  const responseText = await callGeminiText(parsePrompt);
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    }),
-  });
+  // Parse JSON response
+  const parsed = parseJsonResponse(responseText);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Claude API error: ${response.status} - ${errorText}`);
-  }
+  return convertToOCRResult(parsed, 'gemini', rawText);
+}
 
-  const data = await response.json();
+/**
+ * Parse JSON from model response, handling potential markdown code blocks
+ */
+function parseJsonResponse(text: string): any {
+  const cleanText = text.trim();
 
-  if (!data.content || !data.content[0] || data.content[0].type !== 'text') {
-    throw new Error('Invalid response from Claude API');
-  }
+  // Remove markdown code blocks if present
+  let jsonText = cleanText
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
 
-  const jsonText = data.content[0].text.trim();
-
-  let parsed;
   try {
-    const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-    parsed = JSON.parse(cleanJson);
+    return JSON.parse(jsonText);
   } catch (e) {
-    throw new Error(`Failed to parse Claude response as JSON: ${jsonText.substring(0, 200)}`);
+    // Try to find JSON object in the response
+    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e2) {
+        throw new Error(`Failed to parse response as JSON: ${cleanText.substring(0, 200)}`);
+      }
+    }
+    throw new Error(`Failed to parse response as JSON: ${cleanText.substring(0, 200)}`);
   }
-
-  return convertToOCRResult(parsed, 'claude', rawText);
 }
 
 /**
@@ -319,51 +335,101 @@ function convertToOCRResult(
 }
 
 /**
- * Hybrid OCR: Use Google Vision for text extraction, Claude for parsing
- * This gives us fast extraction with high-quality semantic parsing
+ * Main entry point: Process receipt image based on current mode
  */
-export async function extractReceiptHybrid(imageBase64: string): Promise<OCRResult> {
-  // First try Google Vision for fast text extraction
-  let rawText: string | undefined;
-  let googleConfidence = 0;
-
-  if (GOOGLE_VISION_API_KEY) {
-    try {
-      const googleResult = await extractTextWithGoogleVision(imageBase64);
-      rawText = googleResult.text;
-      googleConfidence = googleResult.confidence;
-    } catch (error) {
-      console.warn('Google Vision extraction failed:', error);
-    }
+export async function extractReceipt(
+  imageBase64: string,
+  mediaType: string = 'image/jpeg'
+): Promise<OCRResult> {
+  if (currentOCRMode === 'single_pass') {
+    return processReceiptSinglePass(imageBase64, mediaType);
+  } else {
+    return processReceiptTwoPass(imageBase64, mediaType);
   }
-
-  // If we have raw text, use Claude to parse it (cheaper than sending image)
-  if (rawText && rawText.length > 50) {
-    try {
-      const result = await parseReceiptTextWithClaude(rawText);
-      // Combine confidences
-      result.confidence = (result.confidence + googleConfidence) / 2;
-      return result;
-    } catch (error) {
-      console.warn('Claude text parsing failed:', error);
-    }
-  }
-
-  // Fall back to Claude vision (direct image analysis)
-  if (ANTHROPIC_API_KEY) {
-    return parseReceiptWithClaude(imageBase64);
-  }
-
-  // If all else fails, try basic text parsing
-  if (rawText) {
-    return parseReceiptTextBasic(rawText);
-  }
-
-  throw new Error('No OCR provider available or configured');
 }
 
 /**
- * Basic receipt text parser (fallback when APIs unavailable)
+ * Process receipt from image URI (convenience wrapper)
+ */
+export async function processReceiptImage(imageUri: string): Promise<OCRResult> {
+  // Convert image URI to base64
+  const response = await fetch(imageUri);
+  const blob = await response.blob();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+
+        // Determine media type from data URL
+        const mediaTypeMatch = dataUrl.match(/^data:([^;]+);/);
+        const mediaType = mediaTypeMatch ? mediaTypeMatch[1] : 'image/jpeg';
+
+        const result = await extractReceipt(base64, mediaType);
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Validate OCR result quality
+ */
+export function validateOCRResult(result: OCRResult): {
+  isValid: boolean;
+  warnings: string[];
+  errors: string[];
+} {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  // Check for items
+  if (result.items.length === 0) {
+    errors.push('No items detected on receipt');
+  }
+
+  // Check for total
+  if (!result.metadata.total) {
+    warnings.push('Receipt total not detected');
+  }
+
+  // Validate item prices
+  for (const item of result.items) {
+    if (item.totalPrice <= 0) {
+      warnings.push(`Invalid price for "${item.description}"`);
+    }
+  }
+
+  // Check if items sum to subtotal/total
+  const itemsSum = result.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const expectedSubtotal = result.metadata.subtotal || result.metadata.total;
+
+  if (expectedSubtotal && Math.abs(itemsSum - expectedSubtotal) > 1) {
+    warnings.push(
+      `Items total ($${itemsSum.toFixed(2)}) doesn't match receipt subtotal ($${expectedSubtotal.toFixed(2)})`
+    );
+  }
+
+  // Check confidence
+  if (result.confidence < 0.5) {
+    warnings.push('Low confidence OCR result - please verify items');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    warnings,
+    errors,
+  };
+}
+
+/**
+ * Basic receipt text parser (fallback when API unavailable)
  */
 export function parseReceiptTextBasic(text: string): OCRResult {
   const lines = text.split('\n').filter((line) => line.trim());
@@ -424,82 +490,6 @@ export function parseReceiptTextBasic(text: string): OCRResult {
     },
     rawText: text,
     confidence: 0.4,
-    provider: 'google_vision', // Basic parser, but we got text from Google
-  };
-}
-
-/**
- * Main entry point: Extract and parse receipt from image
- */
-export async function processReceiptImage(
-  imageUri: string
-): Promise<OCRResult> {
-  // Convert image URI to base64
-  const response = await fetch(imageUri);
-  const blob = await response.blob();
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      try {
-        const base64 = (reader.result as string).split(',')[1];
-        const result = await extractReceiptHybrid(base64);
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-/**
- * Validate OCR result quality
- */
-export function validateOCRResult(result: OCRResult): {
-  isValid: boolean;
-  warnings: string[];
-  errors: string[];
-} {
-  const warnings: string[] = [];
-  const errors: string[] = [];
-
-  // Check for items
-  if (result.items.length === 0) {
-    errors.push('No items detected on receipt');
-  }
-
-  // Check for total
-  if (!result.metadata.total) {
-    warnings.push('Receipt total not detected');
-  }
-
-  // Validate item prices
-  for (const item of result.items) {
-    if (item.totalPrice <= 0) {
-      warnings.push(`Invalid price for "${item.description}"`);
-    }
-  }
-
-  // Check if items sum to subtotal/total
-  const itemsSum = result.items.reduce((sum, item) => sum + item.totalPrice, 0);
-  const expectedSubtotal = result.metadata.subtotal || result.metadata.total;
-
-  if (expectedSubtotal && Math.abs(itemsSum - expectedSubtotal) > 1) {
-    warnings.push(
-      `Items total ($${itemsSum.toFixed(2)}) doesn't match receipt subtotal ($${expectedSubtotal.toFixed(2)})`
-    );
-  }
-
-  // Check confidence
-  if (result.confidence < 0.5) {
-    warnings.push('Low confidence OCR result - please verify items');
-  }
-
-  return {
-    isValid: errors.length === 0,
-    warnings,
-    errors,
+    provider: 'gemini',
   };
 }

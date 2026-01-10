@@ -231,7 +231,7 @@ export interface ExpenseBreakdownItem {
 
 export type ReceiptStatus = 'draft' | 'processing' | 'claiming' | 'settled' | 'archived';
 export type OCRStatus = 'pending' | 'processing' | 'completed' | 'failed';
-export type OCRProvider = 'google_vision' | 'claude' | 'gpt4v' | 'textract';
+export type OCRProvider = 'gemini' | 'google_vision' | 'claude' | 'gpt4v' | 'textract';
 export type ClaimType = 'full' | 'split' | 'partial';
 export type ClaimSource = 'app' | 'imessage' | 'web' | 'assigned';
 
