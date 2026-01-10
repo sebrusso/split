@@ -34,9 +34,12 @@ import {
   getSplitMethodLabel,
 } from "../../../lib/splits";
 import { uploadReceipt, validateReceiptImage } from "../../../lib/storage";
+import { notifyExpenseAdded } from "../../../lib/notifications";
+import { useAuth } from "../../../lib/auth-context";
 
 export default function AddExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [amount, setAmount] = useState("");
@@ -265,6 +268,21 @@ export default function AddExpenseScreen() {
       const { error: splitsError } = await supabase.from("splits").insert(splits);
 
       if (splitsError) throw splitsError;
+
+      // Send push notification to other group members
+      const payer = members.find((m) => m.id === paidBy);
+      if (group && payer) {
+        notifyExpenseAdded(
+          id!,
+          {
+            description: description.trim(),
+            amount: amountNum,
+            payerName: payer.name,
+          },
+          group.name,
+          userId || undefined
+        );
+      }
 
       router.back();
     } catch (err) {

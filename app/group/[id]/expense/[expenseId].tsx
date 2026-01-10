@@ -74,6 +74,9 @@ export default function ExpenseDetailScreen() {
 
   const [error, setError] = useState("");
 
+  // Check if expense is deleted (soft deleted)
+  const isDeleted = expense?.deleted_at !== null && expense?.deleted_at !== undefined;
+
   useEffect(() => {
     fetchData();
   }, [groupId, expenseId]);
@@ -326,7 +329,7 @@ export default function ExpenseDetailScreen() {
   const handleDelete = () => {
     Alert.alert(
       "Delete Expense",
-      "Are you sure you want to delete this expense? This action cannot be undone.",
+      "This expense will be moved to trash and can be restored within 30 days.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -334,19 +337,15 @@ export default function ExpenseDetailScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Delete receipt if exists
-              if (receiptUrl) {
-                await deleteReceipt(receiptUrl);
-              }
-
-              // Delete expense (cascades to splits)
+              // Soft delete - set deleted_at timestamp
               const { error } = await supabase
                 .from("expenses")
-                .delete()
+                .update({ deleted_at: new Date().toISOString() })
                 .eq("id", expenseId);
 
               if (error) throw error;
 
+              Alert.alert("Expense Deleted", "You can restore this expense from the trash within 30 days.");
               router.back();
             } catch (err) {
               console.error("Error deleting expense:", err);
@@ -356,6 +355,58 @@ export default function ExpenseDetailScreen() {
         },
       ]
     );
+  };
+
+  const handlePermanentDelete = () => {
+    Alert.alert(
+      "Permanently Delete",
+      "Are you sure? This action cannot be undone and will permanently delete the expense.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Forever",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Delete receipt if exists
+              if (receiptUrl) {
+                await deleteReceipt(receiptUrl);
+              }
+
+              // Hard delete expense (cascades to splits)
+              const { error } = await supabase
+                .from("expenses")
+                .delete()
+                .eq("id", expenseId);
+
+              if (error) throw error;
+
+              router.back();
+            } catch (err) {
+              console.error("Error permanently deleting expense:", err);
+              Alert.alert("Error", "Failed to delete expense. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRestore = async () => {
+    try {
+      const { error } = await supabase
+        .from("expenses")
+        .update({ deleted_at: null })
+        .eq("id", expenseId);
+
+      if (error) throw error;
+
+      Alert.alert("Expense Restored", "The expense has been restored.");
+      router.back();
+    } catch (err) {
+      console.error("Error restoring expense:", err);
+      Alert.alert("Error", "Failed to restore expense. Please try again.");
+    }
   };
 
   const handleRemoveReceipt = () => {
@@ -412,6 +463,15 @@ export default function ExpenseDetailScreen() {
           }
           keyboardShouldPersistTaps="handled"
         >
+          {/* Deleted Banner */}
+          {isDeleted && (
+            <View style={styles.deletedBanner}>
+              <Text style={styles.deletedBannerText}>
+                🗑️ This expense is in trash and will be permanently deleted after 30 days
+              </Text>
+            </View>
+          )}
+
           {/* Amount */}
           {isEditing ? (
             <View style={styles.amountContainer}>
@@ -618,7 +678,23 @@ export default function ExpenseDetailScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          {isEditing ? (
+          {isDeleted ? (
+            <View style={styles.viewButtons}>
+              <Button
+                title="Delete Forever"
+                variant="danger"
+                onPress={handlePermanentDelete}
+                fullWidth={false}
+                style={styles.deleteButton}
+              />
+              <Button
+                title="Restore"
+                onPress={handleRestore}
+                fullWidth={false}
+                style={styles.editButton}
+              />
+            </View>
+          ) : isEditing ? (
             <View style={styles.editButtons}>
               <Button
                 title="Cancel"
@@ -891,5 +967,18 @@ const styles = StyleSheet.create({
   editButton: {
     flex: 2,
     marginLeft: spacing.sm,
+  },
+  deletedBanner: {
+    backgroundColor: colors.danger + "15",
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.danger + "30",
+  },
+  deletedBannerText: {
+    ...typography.small,
+    color: colors.danger,
+    textAlign: "center",
   },
 });

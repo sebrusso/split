@@ -158,6 +158,31 @@ function RootNavigator() {
         }}
       />
       <Stack.Screen
+        name="group/[id]/trash"
+        options={{
+          title: "Trash",
+        }}
+      />
+      <Stack.Screen
+        name="group/[id]/ledger"
+        options={{
+          title: "Transaction Ledger",
+        }}
+      />
+      <Stack.Screen
+        name="group/[id]/recurring"
+        options={{
+          title: "Recurring Expenses",
+        }}
+      />
+      <Stack.Screen
+        name="group/[id]/add-recurring"
+        options={{
+          title: "Add Recurring Expense",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
         name="join/index"
         options={{
           title: "Join Group",

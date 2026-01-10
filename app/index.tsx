@@ -57,7 +57,9 @@ export default function HomeScreen() {
         .select("group_id")
         .eq("clerk_user_id", userId);
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        throw memberError;
+      }
 
       const userGroupIds = (memberData || []).map((m) => m.group_id);
 
@@ -70,22 +72,20 @@ export default function HomeScreen() {
         return;
       }
 
-      // Fetch groups and balances in parallel
-      // Filter to only groups the user is a member of and not archived
-      const [groupsResponse, balances] = await Promise.all([
-        supabase
-          .from("groups")
-          .select("*")
-          .in("id", userGroupIds)
-          .is("archived_at", null)
-          .order("created_at", { ascending: false }),
-        getGlobalBalances(),
-      ]);
+      // Fetch groups first (fast query)
+      const { data: groupsData, error: groupsError } = await supabase
+        .from("groups")
+        .select("*")
+        .in("id", userGroupIds)
+        .is("archived_at", null)
+        .order("created_at", { ascending: false });
 
-      if (groupsResponse.error) throw groupsResponse.error;
+      if (groupsError) {
+        throw groupsError;
+      }
 
       // Sort groups: pinned first, then by created_at
-      const sortedGroups = (groupsResponse.data || []).sort((a, b) => {
+      const sortedGroups = (groupsData || []).sort((a, b) => {
         // Pinned groups come first
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
@@ -93,11 +93,19 @@ export default function HomeScreen() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
+      // Set groups immediately so UI renders
       setGroups(sortedGroups);
-      setGlobalBalance(balances);
+      setLoading(false);
+      setRefreshing(false);
+
+      // Fetch global balances in the background (don't block UI)
+      getGlobalBalances().then((balances) => {
+        setGlobalBalance(balances);
+      }).catch((error) => {
+        logger.error("Error fetching global balances:", error);
+      });
     } catch (error) {
       logger.error("Error fetching data:", error);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }

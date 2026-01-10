@@ -331,6 +331,28 @@ export default function GroupDetailScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.ledgerButtonContainer}>
+        <TouchableOpacity
+          style={styles.ledgerButton}
+          onPress={() => router.push(`/group/${id}/ledger`)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.ledgerButtonText}>📒 Transaction Ledger</Text>
+          <Text style={styles.ledgerButtonArrow}>→</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.recurringButtonContainer}>
+        <TouchableOpacity
+          style={styles.recurringButton}
+          onPress={() => router.push(`/group/${id}/recurring`)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.recurringButtonText}>🔄 Recurring Expenses</Text>
+          <Text style={styles.recurringButtonArrow}>→</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.sectionTitle}>Expenses</Text>
     </View>
   );
@@ -641,5 +663,49 @@ const styles = StyleSheet.create({
   balanceButtonArrow: {
     fontSize: 18,
     color: colors.primaryDark,
+  },
+  ledgerButtonContainer: {
+    marginTop: spacing.sm,
+  },
+  ledgerButton: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ledgerButtonText: {
+    ...typography.bodyMedium,
+    color: colors.text,
+  },
+  ledgerButtonArrow: {
+    fontSize: 18,
+    color: colors.textMuted,
+  },
+  recurringButtonContainer: {
+    marginTop: spacing.sm,
+  },
+  recurringButton: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  recurringButtonText: {
+    ...typography.bodyMedium,
+    color: colors.text,
+  },
+  recurringButtonArrow: {
+    fontSize: 18,
+    color: colors.textMuted,
   },
 });

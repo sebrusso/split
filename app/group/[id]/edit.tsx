@@ -13,11 +13,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../../../lib/supabase";
-import { generateShareCode } from "../../../lib/utils";
+import { generateShareCode, formatCurrency, calculateBalancesWithSettlements } from "../../../lib/utils";
 import logger from "../../../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
 import { Button, Input, Card } from "../../../components/ui";
-import { Group, Member } from "../../../lib/types";
+import { Group, Member, Expense, SettlementRecord } from "../../../lib/types";
 import { useAuth } from "../../../lib/auth-context";
 import { getMemberByUserId } from "../../../lib/members";
 
@@ -54,6 +54,8 @@ export default function EditGroupScreen() {
   const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [userMember, setUserMember] = useState<Member | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [userBalance, setUserBalance] = useState<number>(0);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("💰");
   const [currency, setCurrency] = useState("USD");
@@ -70,24 +72,52 @@ export default function EditGroupScreen() {
     isFetching.current = true;
 
     try {
-      // Fetch group
-      const { data: groupData, error: groupError } = await supabase
-        .from("groups")
-        .select("*")
-        .eq("id", id)
-        .single();
+      // Fetch group, members, expenses, and settlements in parallel
+      const [groupResult, membersResult, expensesResult, settlementsResult] = await Promise.all([
+        supabase.from("groups").select("*").eq("id", id).single(),
+        supabase.from("members").select("*").eq("group_id", id),
+        supabase.from("expenses").select("*, splits(member_id, amount)").eq("group_id", id).is("deleted_at", null),
+        supabase.from("settlements").select("*").eq("group_id", id),
+      ]);
 
-      if (groupError) throw groupError;
+      if (groupResult.error) throw groupResult.error;
+      const groupData = groupResult.data;
       setGroup(groupData);
       setName(groupData.name);
       setEmoji(groupData.emoji);
       setCurrency(groupData.currency || "USD");
       setNotes(groupData.notes || "");
 
+      const membersData = membersResult.data || [];
+      setMembers(membersData);
+
       // Check if the current user has a claimed member in this group
+      let claimedMember: Member | null = null;
       if (userId) {
-        const claimedMember = await getMemberByUserId(id, userId);
+        claimedMember = membersData.find((m) => m.clerk_user_id === userId) || null;
         setUserMember(claimedMember);
+      }
+
+      // Calculate user's balance if they have a claimed member
+      if (claimedMember) {
+        const expensesForCalc = (expensesResult.data || []).map((exp) => ({
+          paid_by: exp.paid_by,
+          amount: parseFloat(String(exp.amount)),
+          splits: (exp.splits || []).map((s: { member_id: string; amount: number }) => ({
+            member_id: s.member_id,
+            amount: parseFloat(String(s.amount)),
+          })),
+        }));
+
+        const settlementsForCalc = (settlementsResult.data || []).map((s) => ({
+          from_member_id: s.from_member_id,
+          to_member_id: s.to_member_id,
+          amount: parseFloat(String(s.amount)),
+        }));
+
+        const balances = calculateBalancesWithSettlements(expensesForCalc, settlementsForCalc, membersData);
+        const memberBalance = balances.get(claimedMember.id) || 0;
+        setUserBalance(memberBalance);
       }
     } catch (error) {
       logger.error("Error fetching group:", error);
@@ -180,6 +210,28 @@ export default function EditGroupScreen() {
       return;
     }
 
+    // Check if user has outstanding balance
+    const hasOutstandingBalance = Math.abs(userBalance) > 0.01;
+
+    if (hasOutstandingBalance) {
+      const balanceText = userBalance > 0
+        ? `You are owed ${formatCurrency(userBalance, group?.currency || "USD")} in this group.`
+        : `You owe ${formatCurrency(Math.abs(userBalance), group?.currency || "USD")} in this group.`;
+
+      Alert.alert(
+        "Settle Up First",
+        `${balanceText}\n\nPlease settle all balances before leaving the group.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "View Balances",
+            onPress: () => router.push(`/group/${id}/balances`),
+          },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       "Leave Group",
       "Are you sure you want to leave this group? You'll need a new invite to rejoin.",
@@ -190,9 +242,11 @@ export default function EditGroupScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              // Unclaim the member (set clerk_user_id to null) instead of deleting
+              // This preserves expense history
               const { error } = await supabase
                 .from("members")
-                .delete()
+                .update({ clerk_user_id: null })
                 .eq("id", userMember.id);
 
               if (error) throw error;
@@ -379,6 +433,23 @@ export default function EditGroupScreen() {
               </View>
             </Card>
 
+            <Text style={[styles.sectionTitle, styles.trashTitle]}>Trash</Text>
+            <Card style={styles.trashCard}>
+              <TouchableOpacity
+                style={styles.trashButton}
+                onPress={() => router.push(`/group/${id}/trash`)}
+              >
+                <View style={styles.trashContent}>
+                  <Text style={styles.trashIcon}>🗑️</Text>
+                  <View>
+                    <Text style={styles.trashText}>View Deleted Expenses</Text>
+                    <Text style={styles.trashSubtext}>Restore or permanently delete</Text>
+                  </View>
+                </View>
+                <Text style={styles.trashArrow}>→</Text>
+              </TouchableOpacity>
+            </Card>
+
             <View style={styles.dangerZone}>
               <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
 
@@ -559,6 +630,38 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.primary,
     marginTop: spacing.xs,
+  },
+  trashTitle: {
+    marginTop: spacing.xl,
+  },
+  trashCard: {
+    padding: 0,
+    overflow: "hidden",
+  },
+  trashButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.md,
+  },
+  trashContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  trashIcon: {
+    fontSize: 24,
+  },
+  trashText: {
+    ...typography.bodyMedium,
+  },
+  trashSubtext: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  trashArrow: {
+    fontSize: 18,
+    color: colors.textMuted,
   },
   dangerZone: {
     marginTop: spacing.xxl,

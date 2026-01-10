@@ -440,3 +440,156 @@ export function addNotificationResponseListener(
 
   return () => subscription.remove();
 }
+
+/**
+ * Send push notifications to specified users via Supabase Edge Function
+ * @param userIds - Array of Clerk user IDs to send notifications to
+ * @param title - Notification title
+ * @param body - Notification body
+ * @param data - Optional additional data
+ */
+export async function sendPushNotifications(
+  userIds: string[],
+  title: string,
+  body: string,
+  data?: Record<string, any>
+): Promise<{ success: boolean; sent?: number; error?: string }> {
+  try {
+    if (!userIds || userIds.length === 0) {
+      return { success: true, sent: 0 };
+    }
+
+    const { data: response, error } = await supabase.functions.invoke("send-push-notification", {
+      body: {
+        userIds,
+        title,
+        body,
+        data,
+      },
+    });
+
+    if (error) {
+      console.error("Error calling send-push-notification:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, sent: response?.sent || 0 };
+  } catch (error) {
+    console.error("Error sending push notifications:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Send expense notification to group members
+ * @param groupId - The group ID
+ * @param expense - Expense details
+ * @param excludeUserId - User ID to exclude (typically the user who added the expense)
+ */
+export async function notifyExpenseAdded(
+  groupId: string,
+  expense: { description: string; amount: number; payerName: string },
+  groupName: string,
+  excludeUserId?: string
+): Promise<void> {
+  try {
+    // Get all members of the group with Clerk user IDs
+    const { data: members, error } = await supabase
+      .from("members")
+      .select("clerk_user_id")
+      .eq("group_id", groupId)
+      .not("clerk_user_id", "is", null);
+
+    if (error || !members) {
+      console.error("Error fetching members for notification:", error);
+      return;
+    }
+
+    // Filter out the excluded user and get user IDs
+    const userIds = members
+      .map((m) => m.clerk_user_id)
+      .filter((id): id is string => id !== null && id !== excludeUserId);
+
+    if (userIds.length === 0) return;
+
+    const title = `New expense in ${groupName}`;
+    const body = `${expense.payerName} added "${expense.description}" - $${expense.amount.toFixed(2)}`;
+
+    await sendPushNotifications(userIds, title, body, {
+      type: "expense_added",
+      groupId,
+    });
+  } catch (error) {
+    console.error("Error sending expense notification:", error);
+  }
+}
+
+/**
+ * Send settlement notification to the recipient
+ * @param settlement - Settlement details
+ * @param groupName - The group name
+ */
+export async function notifySettlementRecorded(
+  settlement: { fromName: string; toUserId: string; amount: number },
+  groupName: string,
+  groupId: string
+): Promise<void> {
+  try {
+    if (!settlement.toUserId) return;
+
+    const title = `Payment received in ${groupName}`;
+    const body = `${settlement.fromName} paid you $${settlement.amount.toFixed(2)}`;
+
+    await sendPushNotifications([settlement.toUserId], title, body, {
+      type: "settlement_recorded",
+      groupId,
+    });
+  } catch (error) {
+    console.error("Error sending settlement notification:", error);
+  }
+}
+
+/**
+ * Send notification when a new member joins a group
+ * @param groupId - The group ID
+ * @param memberName - Name of the new member
+ * @param groupName - Name of the group
+ * @param excludeUserId - User ID to exclude (the new member)
+ */
+export async function notifyMemberJoined(
+  groupId: string,
+  memberName: string,
+  groupName: string,
+  excludeUserId?: string
+): Promise<void> {
+  try {
+    // Get all members of the group with Clerk user IDs
+    const { data: members, error } = await supabase
+      .from("members")
+      .select("clerk_user_id")
+      .eq("group_id", groupId)
+      .not("clerk_user_id", "is", null);
+
+    if (error || !members) {
+      console.error("Error fetching members for notification:", error);
+      return;
+    }
+
+    // Filter out the excluded user and get user IDs
+    const userIds = members
+      .map((m) => m.clerk_user_id)
+      .filter((id): id is string => id !== null && id !== excludeUserId);
+
+    if (userIds.length === 0) return;
+
+    const title = `New member in ${groupName}`;
+    const body = `${memberName} joined the group`;
+
+    await sendPushNotifications(userIds, title, body, {
+      type: "member_joined",
+      groupId,
+    });
+  } catch (error) {
+    console.error("Error sending member joined notification:", error);
+  }
+}

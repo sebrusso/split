@@ -35,6 +35,7 @@ import { Card, Avatar, Button, SettlementMethodPicker } from "../../../component
 import type { SettlementMethod } from "../../../components/ui/SettlementMethodPicker";
 import { getSettlementMethodName, getSettlementMethodIcon } from "../../../components/ui/SettlementMethodPicker";
 import { openPaymentApp, getPaymentAppName, getPaymentAppIcon, type PaymentApp } from "../../../lib/payment-links";
+import { notifySettlementRecorded } from "../../../lib/notifications";
 
 interface ExpenseWithSplits {
   id: string;
@@ -219,6 +220,21 @@ export default function BalancesScreen() {
       });
 
       if (error) throw error;
+
+      // Send notification to the recipient
+      const fromMember = getMemberById(selectedSettlement.from);
+      const toMember = getMemberById(selectedSettlement.to);
+      if (fromMember && toMember && toMember.clerk_user_id && group) {
+        notifySettlementRecorded(
+          {
+            fromName: fromMember.name,
+            toUserId: toMember.clerk_user_id,
+            amount: selectedSettlement.amount,
+          },
+          group.name,
+          id!
+        );
+      }
 
       // Refresh data
       fetchData();
