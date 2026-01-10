@@ -1,63 +1,74 @@
 # Security Review - SplitFree
 
-**Review Date:** 2026-01-06
-**Reviewer:** Claude Code Security Analysis
-**Severity Levels:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low
+**Review Date:** 2026-01-10
+**Reviewer:** Security Analysis
+**Codebase Version:** commit 55f5f71
 
 ---
 
-## Executive Summary
+## Summary
 
-This security review identified **11 security concerns** across the SplitFree codebase. The most critical issues relate to **hardcoded API credentials**, **SQL injection vulnerabilities**, and **insufficient authorization controls** in database access.
+This review identified **12 security concerns** across the SplitFree codebase, categorized by severity. The most critical issues involve **hardcoded credentials**, **query injection vulnerabilities**, and **insufficient access controls**.
+
+| Severity | Count |
+|----------|-------|
+| Critical | 4 |
+| High | 3 |
+| Medium | 3 |
+| Low | 2 |
 
 ---
 
-## Critical Issues
+## Critical Severity
 
-### 🔴 1. Hardcoded Supabase Credentials in Source Code
+### 1. Hardcoded Supabase Credentials
 
-**File:** `lib/supabase.ts:3-5`
+**Location:** `lib/supabase.ts:3-6`
 
 ```typescript
 const supabaseUrl = "https://rzwuknfycyqitcbotsvx.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
 ```
 
-**Risk:** The Supabase URL and anonymous key are hardcoded directly in the source code. While the anonymous key is designed to be public, this approach:
-- Makes key rotation difficult (requires app update)
-- Exposes the exact Supabase project URL
-- Prevents different configurations for dev/staging/prod environments
+**Issue:** Database credentials are committed directly to source code.
 
-**Recommendation:**
-- Move credentials to environment variables using `expo-constants` or `react-native-config`
-- Use different keys for development and production
-- Configure Expo's `app.config.js` for dynamic configuration
+**Impact:**
+- Credentials exposed in version control history
+- No separation between development and production environments
+- Key rotation requires code changes and app updates
+
+**Mitigation:**
+- Use environment variables via `expo-constants` or `app.config.js`
+- Store secrets in `.env` files (gitignored)
+- Use Expo's EAS secrets for production builds
 
 ---
 
-### 🔴 2. Hardcoded Clerk Publishable Key
+### 2. Hardcoded Clerk Test Key
 
-**File:** `lib/clerk.ts:11`
+**Location:** `lib/clerk.ts:11`
 
 ```typescript
 export const CLERK_PUBLISHABLE_KEY: string = "pk_test_cHJvbW90ZWQtcmF0dGxlci03Ni5jbGVyay5hY2NvdW50cy5kZXYk";
 ```
 
-**Risk:**
-- Using a `pk_test_` key indicates this is a **test/development key** that should not be used in production
-- Hardcoding prevents environment-specific configurations
-- Key rotation requires code changes and app updates
+**Issue:** A `pk_test_` prefixed key indicates test/development credentials that should never be used in production.
 
-**Recommendation:**
+**Impact:**
+- Test authentication backend used in production
+- Different security policies than production Clerk instance
+- Potential for test data to intermingle with production
+
+**Mitigation:**
 - Use environment variables for Clerk keys
-- Ensure production builds use `pk_live_` keys
-- Add build-time validation to prevent test keys in production builds
+- Validate key prefix at build time (reject `pk_test_` in production)
+- Configure separate Clerk instances for dev/staging/prod
 
 ---
 
-### 🔴 3. SQL Injection via String Interpolation in Supabase Queries
+### 3. Query Injection via String Interpolation
 
-**File:** `lib/friends.ts:77-79`
+**Location:** `lib/friends.ts:78-80, 173-175, 401-403`
 
 ```typescript
 .or(
@@ -65,100 +76,137 @@ export const CLERK_PUBLISHABLE_KEY: string = "pk_test_cHJvbW90ZWQtcmF0dGxlci03Ni
 )
 ```
 
-**Also found at:** `lib/friends.ts:173-174`, `lib/friends.ts:401-402`
+**Issue:** User-controlled values (Clerk IDs) are interpolated directly into query filter strings without validation.
 
-**Risk:** User IDs are directly interpolated into the query string without sanitization. While Clerk IDs are typically UUIDs, this pattern is dangerous because:
-- Malformed or malicious IDs could modify query behavior
-- This bypasses Supabase's parameterized query protection
+**Impact:**
+- Malformed IDs could alter query logic
+- Bypasses Supabase's parameterized query protection
+- Could expose unintended data or cause query errors
 
-**Recommendation:**
-- Use separate `.eq()` calls or Supabase's proper filter syntax
-- Validate ID format before use (UUID regex validation)
-- Example safe pattern:
+**Mitigation:**
+- Validate UUID format before interpolation: `/^user_[a-zA-Z0-9]+$/`
+- Use separate filter calls where possible
+- Implement a validation helper function:
 ```typescript
-.or(`requester_id.eq.${validateUUID(currentUserId)},addressee_id.eq.${validateUUID(targetClerkId)}`)
+function validateClerkId(id: string): string {
+  if (!/^user_[a-zA-Z0-9]+$/.test(id)) {
+    throw new Error('Invalid user ID format');
+  }
+  return id;
+}
 ```
 
 ---
 
-### 🔴 4. SQL Injection in Search Functionality
+### 4. Query Injection in Search Functions
 
-**File:** `lib/search.ts:50-53`
+**Location:** `lib/search.ts:50-54, 120-125` and `lib/friends.ts:377`
 
 ```typescript
 const searchPattern = `%${query.trim()}%`;
 queryBuilder = queryBuilder.or(
-  `description.ilike.${searchPattern},merchant.ilike.${searchPattern},notes.ilike.${searchPattern}`
+  `description.ilike.${searchPattern},merchant.ilike.${searchPattern}`
 );
 ```
 
-**Also found at:** `lib/search.ts:120-125`, `lib/friends.ts:377`
+**Issue:** User search input is interpolated directly into query strings. Special characters (`%`, `_`, `.`) have meaning in LIKE patterns and filter syntax.
 
-**Risk:** User search input is directly interpolated into query strings. Special characters in search queries could:
-- Escape the ILIKE pattern
-- Cause query errors or unexpected behavior
-- Potentially expose data through pattern manipulation
+**Impact:**
+- Users could craft search terms that alter query behavior
+- Potential for information disclosure through pattern manipulation
+- Query errors from malformed input
 
-**Recommendation:**
-- Sanitize search input to escape special SQL/regex characters
-- Use parameterized queries where possible
-- Add input validation and length limits
-
----
-
-## High Severity Issues
-
-### 🟠 5. Overly Permissive RLS Policies
-
-**Referenced in:** `CLAUDE.md` - "All tables have RLS enabled with public read/write policies for MVP"
-
-**Risk:** The documentation explicitly states that Row Level Security policies allow public read/write access. This means:
-- Any authenticated user can read ALL data across ALL groups
-- Any authenticated user can modify ANY record
-- No user isolation or authorization checking at the database level
-- Users can access other users' expense data, settlements, and personal information
-
-**Recommendation:**
-- Implement proper RLS policies immediately:
-  - Groups: Only members can read/write their group data
-  - Members: Only group members can see other members
-  - Expenses/Splits: Only group members can access
-  - Friendships: Only participants can access their relationships
-- Add `user_id` column to relevant tables for ownership tracking
-- Create policies based on authenticated user's JWT claims
-
----
-
-### 🟠 6. No Authorization Checks on API Operations
-
-**Files:** `app/group/[id]/add-expense.tsx`, `app/create-group.tsx`, various lib files
-
-**Risk:** The application performs database operations without verifying:
-- User is authenticated before making requests
-- User has permission to access/modify the specific resource
-- User is a member of the group being accessed
-
-**Example in `add-expense.tsx`:**
+**Mitigation:**
+- Escape special characters in search input:
 ```typescript
+function escapeSearchTerm(term: string): string {
+  return term.replace(/[%_\\]/g, '\\$&');
+}
+```
+- Add input length limits (already limited to 50 results)
+- Consider using Supabase full-text search instead of ILIKE
+
+---
+
+## High Severity
+
+### 5. Overly Permissive Row Level Security
+
+**Location:** Database configuration (referenced in `CLAUDE.md`)
+
+> "All tables have RLS enabled with public read/write policies for MVP"
+
+**Issue:** RLS policies allow any authenticated user to read and write all records across all tables.
+
+**Impact:**
+- User A can read User B's expense data
+- Any user can modify or delete any group's data
+- No data isolation between users or groups
+- Complete bypass of authorization at database level
+
+**Mitigation:**
+Implement proper RLS policies:
+
+```sql
+-- Groups: Only members can access
+CREATE POLICY "Users can view groups they belong to"
+ON groups FOR SELECT
+USING (
+  id IN (SELECT group_id FROM members WHERE clerk_user_id = auth.uid())
+);
+
+-- Expenses: Only group members can access
+CREATE POLICY "Group members can view expenses"
+ON expenses FOR SELECT
+USING (
+  group_id IN (SELECT group_id FROM members WHERE clerk_user_id = auth.uid())
+);
+```
+
+---
+
+### 6. Missing Application-Level Authorization
+
+**Locations:** `app/group/[id]/add-expense.tsx`, `app/group/[id]/add-member.tsx`, `app/group/[id]/balances.tsx`
+
+```typescript
+// add-expense.tsx - No membership verification
 const { data: expense, error: expenseError } = await supabase
   .from("expenses")
   .insert({
     group_id: id,  // No check if user is member of this group
     ...
-  })
+  });
 ```
 
-**Recommendation:**
-- Add authorization checks before all database operations
-- Verify group membership before allowing expense creation
-- Implement RLS policies as the primary authorization layer
-- Add application-level checks as defense in depth
+**Issue:** Database operations are performed without verifying the current user has permission to access or modify the resource.
+
+**Impact:**
+- Users can add expenses to groups they're not members of
+- Users can view balances of arbitrary groups by guessing group IDs
+- No defense-in-depth if RLS policies are misconfigured
+
+**Mitigation:**
+- Verify group membership before all group-related operations:
+```typescript
+async function isGroupMember(groupId: string, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('members')
+    .select('id')
+    .eq('group_id', groupId)
+    .eq('clerk_user_id', userId)
+    .single();
+  return !!data;
+}
+```
+- Add membership check before insert/update/delete operations
+- Return 403 error if user is not a member
 
 ---
 
-### 🟠 7. Weak Share Code Generation
+### 7. Insecure Random Number Generation for Share Codes
 
-**File:** `lib/utils.ts:153-160`
+**Location:** `lib/utils.ts:153-160`
 
 ```typescript
 export function generateShareCode(): string {
@@ -171,173 +219,203 @@ export function generateShareCode(): string {
 }
 ```
 
-**Risk:**
-- Uses `Math.random()` which is not cryptographically secure
-- 6-character code with 32 possible characters = ~1 billion combinations
-- Susceptible to brute-force attacks to discover valid group codes
-- No rate limiting mentioned for code validation
+**Issue:** `Math.random()` is not cryptographically secure. The output is predictable if the internal state is known.
 
-**Recommendation:**
-- Use `expo-crypto` or `expo-random` for secure random generation
-- Consider longer codes (8-10 characters)
-- Implement rate limiting on join attempts
-- Add expiration for share codes
-- Log and alert on multiple failed join attempts
+**Impact:**
+- Share codes may be predictable
+- Attackers could enumerate valid codes
+- 6-character code with 32 chars = ~1 billion combinations (brute-forceable)
 
----
-
-## Medium Severity Issues
-
-### 🟡 8. Sensitive Data in Console Logs
-
-**Files:** Multiple locations throughout the codebase
-
+**Mitigation:**
+- Use `expo-crypto` for secure random generation:
 ```typescript
-// lib/friends.ts:102
-console.error("Error sending friend request:", error);
+import * as Crypto from 'expo-crypto';
 
-// app/auth/sign-up.tsx:116-117
-console.log("Sign-up result status:", result.status);
-console.log("Missing fields:", result.missingFields);
+export async function generateShareCode(): Promise<string> {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const randomBytes = await Crypto.getRandomBytesAsync(6);
+  return Array.from(randomBytes)
+    .map(byte => chars[byte % chars.length])
+    .join('');
+}
 ```
-
-**Risk:**
-- Error objects may contain sensitive information (stack traces, user data)
-- Authentication flow logs could expose session details
-- Logs may be captured in crash reporting tools or device logs
-
-**Recommendation:**
-- Remove or gate console.log statements for production builds
-- Use a logging library that respects environment (development vs production)
-- Sanitize error objects before logging
-- Never log tokens, passwords, or personal data
+- Consider increasing code length to 8 characters
+- Implement rate limiting on join attempts
 
 ---
 
-### 🟡 9. Missing Input Validation on Client Side
+## Medium Severity
 
-**File:** `components/ui/Input.tsx`
+### 8. Public Receipt Storage URLs
 
-The Input component has no built-in sanitization or validation.
-
-**Risk:**
-- While React Native's TextInput is generally safe from XSS, malicious input could:
-  - Cause display issues with special characters
-  - Be stored and later displayed in problematic ways
-  - Affect other users viewing shared data
-
-**Recommendation:**
-- Add input sanitization at the component level
-- Implement max length restrictions
-- Strip or escape potentially problematic characters for stored data
-- Validate input format where applicable (emails, phone numbers, amounts)
-
----
-
-### 🟡 10. Receipt Storage Without Access Control
-
-**File:** `lib/storage.ts:35-39`
+**Location:** `lib/storage.ts:47-51`
 
 ```typescript
 const { data: urlData } = supabase.storage
   .from(RECEIPTS_BUCKET)
   .getPublicUrl(filename);
+return urlData.publicUrl;
 ```
 
-**Risk:**
-- Receipts are stored with public URLs
-- Anyone with the URL can access the receipt image
-- Receipt URLs follow predictable pattern: `{groupId}/{expenseId}.{extension}`
-- Could expose sensitive financial documents
+**Issue:** Receipt images are stored with permanent public URLs. Anyone with the URL can access the image indefinitely.
 
-**Recommendation:**
-- Use signed URLs with expiration instead of public URLs
+**Impact:**
+- Receipt URLs follow predictable pattern: `{groupId}/{expenseId}.{ext}`
+- Sensitive financial documents exposed if URL is leaked
+- No access control on receipt viewing
+- URLs never expire
+
+**Mitigation:**
+- Use signed URLs with expiration:
+```typescript
+const { data: urlData } = await supabase.storage
+  .from(RECEIPTS_BUCKET)
+  .createSignedUrl(filename, 3600); // 1 hour expiration
+```
 - Implement storage bucket RLS policies
-- Consider encrypting sensitive uploads
-- Add access logging for receipt downloads
+- Verify user has access to the expense before generating signed URL
 
 ---
 
-## Low Severity Issues
+### 9. Sensitive Data in Console Logs
 
-### 🟢 11. Missing Security Headers for Web Build
+**Locations:** Multiple files including `lib/friends.ts:102`, `lib/activity.ts:64`, `app/auth/sign-up.tsx:116-117`
 
-**File:** `app.json`
+```typescript
+console.error("Error sending friend request:", error);
+console.log("Sign-up result status:", result.status);
+```
 
-The web configuration doesn't specify security-related settings.
+**Issue:** Error objects and authentication flow details are logged to console, which may be captured by crash reporting or device logs.
 
-**Risk:** If deployed as a web app, missing security headers could allow:
-- Clickjacking attacks
-- MIME type sniffing
-- XSS attacks (if vulnerabilities exist)
+**Impact:**
+- Error objects may contain stack traces with sensitive paths
+- Authentication logs could expose session information
+- Logs accessible on device or in crash reports
 
-**Recommendation:**
-- Add Content Security Policy headers
-- Configure X-Frame-Options, X-Content-Type-Options
-- Use HTTPS-only cookies
-- Consider web-specific security configurations
+**Mitigation:**
+- Remove or gate debug logs for production:
+```typescript
+const isDev = __DEV__;
+export function debugLog(...args: any[]) {
+  if (isDev) console.log(...args);
+}
+```
+- Sanitize error objects before logging
+- Use a proper logging library with log levels
+
+---
+
+### 10. Missing Rate Limiting
+
+**Locations:** `app/join/index.tsx`, `lib/friends.ts:363-386`
+
+**Issue:** No rate limiting on sensitive operations like share code validation or user search.
+
+**Impact:**
+- Share codes can be brute-forced
+- User enumeration through search API
+- Potential for abuse of friend request system
+
+**Mitigation:**
+- Implement client-side rate limiting with exponential backoff
+- Add server-side rate limiting via Supabase Edge Functions or RLS
+- Log and alert on suspicious patterns (many failed join attempts)
+
+---
+
+## Low Severity
+
+### 11. Missing Input Sanitization
+
+**Location:** `components/ui/Input.tsx`
+
+**Issue:** The Input component provides no built-in sanitization or validation beyond what React Native TextInput provides.
+
+**Impact:**
+- Special characters stored without escaping
+- Potential display issues with certain character sequences
+- Could affect downstream systems that consume the data
+
+**Mitigation:**
+- Add input sanitization at component level for specific use cases
+- Implement max length restrictions in the component
+- Strip or escape problematic characters before storage
+
+---
+
+### 12. Web Build Security Headers
+
+**Location:** `app.json` web configuration
+
+**Issue:** No security-related configuration for web builds.
+
+**Impact:**
+- If deployed as web app, missing security headers could allow:
+  - Clickjacking attacks
+  - MIME type sniffing
+  - Improper content embedding
+
+**Mitigation:**
+- Configure Content Security Policy
+- Add X-Frame-Options, X-Content-Type-Options headers
+- Use HTTPS-only configuration
+- Configure in hosting platform (Vercel, Netlify, etc.)
+
+---
+
+## Files Reviewed
+
+| File | Security-Relevant Areas |
+|------|------------------------|
+| `lib/supabase.ts` | Credential storage |
+| `lib/clerk.ts` | Authentication configuration |
+| `lib/friends.ts` | Query construction, user search |
+| `lib/search.ts` | Query construction, input handling |
+| `lib/utils.ts` | Random generation, validation |
+| `lib/storage.ts` | File storage, URL generation |
+| `lib/auth-context.tsx` | Session management |
+| `lib/offline.ts` | Local data storage |
+| `lib/sync.ts` | Data synchronization |
+| `lib/export.ts` | Data export |
+| `app/group/[id]/add-expense.tsx` | Data operations |
+| `app/group/[id]/add-member.tsx` | Data operations |
+| `app/group/[id]/balances.tsx` | Data operations |
+| `app/join/index.tsx` | Share code validation |
+| `app/friends/add.tsx` | User search |
+| `app/auth/sign-up.tsx` | Authentication flow |
+| `app/_layout.tsx` | Auth guard |
+| `app.json` | App configuration |
+
+---
+
+## Recommended Priority Order
+
+1. **Immediate:** Fix RLS policies to implement proper user-based access control
+2. **Immediate:** Move credentials to environment variables
+3. **High:** Fix query injection vulnerabilities with input validation
+4. **High:** Add application-level authorization checks
+5. **High:** Replace `Math.random()` with cryptographically secure alternative
+6. **Medium:** Implement signed URLs for receipt storage
+7. **Medium:** Add rate limiting on sensitive endpoints
+8. **Low:** Remove/gate debug logging for production
+9. **Low:** Add input sanitization layer
 
 ---
 
 ## Additional Recommendations
 
 ### Environment Configuration
-1. Create `.env.example` with placeholder values
-2. Use `expo-constants` for environment variables
-3. Never commit actual credentials to version control
-4. Set up different environments (dev, staging, prod)
+- Create `.env.example` with placeholder values
+- Use different credentials for dev/staging/prod
+- Never commit actual credentials to version control
 
 ### Authentication Hardening
-1. Implement session timeout/refresh logic
-2. Add biometric authentication option for sensitive actions
-3. Implement account lockout after failed attempts
-4. Add 2FA for account recovery
+- Implement session timeout/refresh logic
+- Add biometric authentication for sensitive actions
+- Implement account lockout after failed attempts
 
-### Data Protection
-1. Encrypt sensitive data at rest in local SQLite cache
-2. Clear cached data on logout
-3. Implement secure key storage using `expo-secure-store` (already used for Clerk)
-4. Add data export/deletion functionality for GDPR compliance
-
-### Monitoring & Alerting
-1. Implement security event logging
-2. Set up alerts for suspicious activity
-3. Monitor for unusual API usage patterns
-4. Add crash reporting with privacy consideration
-
----
-
-## Immediate Action Items (Priority Order)
-
-1. **[CRITICAL]** Fix RLS policies - implement proper user-based access control
-2. **[CRITICAL]** Move credentials to environment variables
-3. **[CRITICAL]** Fix SQL injection in friend search and queries
-4. **[HIGH]** Add authorization checks at application level
-5. **[HIGH]** Replace `Math.random()` with secure random generation
-6. **[MEDIUM]** Implement signed URLs for receipt storage
-7. **[MEDIUM]** Remove/gate debug logging for production
-8. **[LOW]** Add input validation and sanitization
-
----
-
-## Files Reviewed
-
-- `lib/supabase.ts`
-- `lib/clerk.ts`
-- `lib/auth-context.tsx`
-- `lib/storage.ts`
-- `lib/offline.ts`
-- `lib/sync.ts`
-- `lib/friends.ts`
-- `lib/search.ts`
-- `lib/export.ts`
-- `lib/utils.ts`
-- `lib/types.ts`
-- `app/auth/sign-in.tsx`
-- `app/auth/sign-up.tsx`
-- `app/join/[code].tsx`
-- `app/group/[id]/add-expense.tsx`
-- `app/create-group.tsx`
-- `components/ui/Input.tsx`
-- `app.json`
-- `CLAUDE.md`
+### Monitoring
+- Set up alerts for unusual API usage patterns
+- Log security-relevant events (failed auth, access denied)
+- Monitor for brute-force attempts on share codes
