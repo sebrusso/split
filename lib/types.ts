@@ -45,6 +45,10 @@ export interface Expense {
   receipt_url?: string | null;
   split_type?: SplitMethod;
   deleted_at?: string | null;
+  // Multi-currency support
+  currency?: string | null; // Currency code (e.g., USD, EUR). NULL means use group currency
+  exchange_rate?: number | null; // Exchange rate to group currency at time of expense creation
+  exchange_rate_time?: string | null; // When the exchange rate was fetched
   // Joined fields
   payer?: Member;
   splits?: Split[];
@@ -106,6 +110,7 @@ export interface UserProfile {
   displayName: string;
   avatarUrl: string | null;
   defaultCurrency: string;
+  venmoUsername: string | null;
   createdAt: string;
 }
 

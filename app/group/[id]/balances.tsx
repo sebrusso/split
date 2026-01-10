@@ -36,12 +36,16 @@ import type { SettlementMethod } from "../../../components/ui/SettlementMethodPi
 import { getSettlementMethodName, getSettlementMethodIcon } from "../../../components/ui/SettlementMethodPicker";
 import { openPaymentApp, getPaymentAppName, getPaymentAppIcon, type PaymentApp } from "../../../lib/payment-links";
 import { notifySettlementRecorded } from "../../../lib/notifications";
+import { getVenmoUsernamesForMembers } from "../../../lib/user-profile";
 
 interface ExpenseWithSplits {
   id: string;
   paid_by: string;
   amount: number;
   splits: Array<{ member_id: string; amount: number }>;
+  // Multi-currency fields
+  currency?: string | null;
+  exchange_rate?: number | null;
 }
 
 export default function BalancesScreen() {
@@ -56,6 +60,7 @@ export default function BalancesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [settlingIndex, setSettlingIndex] = useState<number | null>(null);
+  const [venmoUsernames, setVenmoUsernames] = useState<Map<string, string>>(new Map());
 
   // Settlement modal state
   const [showSettlementModal, setShowSettlementModal] = useState(false);
@@ -92,7 +97,7 @@ export default function BalancesScreen() {
       if (membersError) throw membersError;
       setMembers(membersData || []);
 
-      // Fetch expenses with splits
+      // Fetch expenses with splits (including currency fields)
       const { data: expensesData, error: expensesError } = await supabase
         .from("expenses")
         .select(
@@ -100,10 +105,13 @@ export default function BalancesScreen() {
           id,
           paid_by,
           amount,
+          currency,
+          exchange_rate,
           splits(member_id, amount)
         `,
         )
-        .eq("group_id", id);
+        .eq("group_id", id)
+        .is("deleted_at", null);
 
       if (expensesError) throw expensesError;
 
@@ -123,7 +131,7 @@ export default function BalancesScreen() {
       if (settlementsError) throw settlementsError;
       setSettlementRecords(settlementsData || []);
 
-      // Prepare data for calculations
+      // Prepare data for calculations (including currency fields)
       const expensesForCalc: ExpenseWithSplits[] = (expensesData || []).map(
         (exp) => ({
           id: exp.id,
@@ -133,6 +141,8 @@ export default function BalancesScreen() {
             member_id: s.member_id,
             amount: parseFloat(String(s.amount)),
           })),
+          currency: exp.currency,
+          exchange_rate: exp.exchange_rate,
         }),
       );
 
@@ -142,17 +152,23 @@ export default function BalancesScreen() {
         amount: parseFloat(String(s.amount)),
       }));
 
-      // Calculate balances with settlements
+      // Calculate balances with settlements (pass group currency for multi-currency support)
       const calculatedBalances = calculateBalancesWithSettlements(
         expensesForCalc,
         settlementsForCalc,
         membersData || [],
+        groupData?.currency || "USD",
       );
       setBalances(calculatedBalances);
 
       // Calculate suggested settlements from current balances
       const suggested = simplifyDebts(calculatedBalances, membersData || []);
       setSuggestedSettlements(suggested);
+
+      // Fetch Venmo usernames for all members (for quick pay)
+      const memberIds = (membersData || []).map(m => m.id);
+      const venmoMap = await getVenmoUsernamesForMembers(memberIds);
+      setVenmoUsernames(venmoMap);
     } catch (error) {
       console.error("Error fetching balance data:", error);
     } finally {
@@ -260,9 +276,13 @@ export default function BalancesScreen() {
 
     const note = `${group?.name || 'Group'} - Payment from ${fromMember?.name} to ${toMember?.name}`;
 
+    // Get recipient's Venmo username if paying via Venmo
+    const recipientVenmo = toMember ? venmoUsernames.get(toMember.id) : undefined;
+
     await openPaymentApp(app, {
       amount: selectedSettlement.amount,
       note,
+      recipient: recipientVenmo,
     });
   };
 

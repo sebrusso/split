@@ -1,14 +1,11 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, typography } from "../../lib/theme";
+import { colors } from "../../lib/theme";
 
 /**
  * Bottom Tab Navigation Layout
- * Provides Splitwise-style tab navigation for main app sections:
- * - Groups (home)
- * - Balances (cross-group balance summary)
- * - Activity (recent updates)
- * - Profile (account settings)
+ * Two main tabs: Groups and Balances
+ * Profile is accessed via icon in each screen's header
  */
 export default function TabLayout() {
   return (
@@ -50,22 +47,17 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Activity and Profile tabs removed - Profile accessed via header icon */}
       <Tabs.Screen
         name="activity"
         options={{
-          title: "Activity",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time" size={size} color={color} />
-          ),
+          href: null, // Hide from tab bar but keep file for potential future use
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Account",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
-          ),
+          href: null, // Hide from tab bar - accessed via header icon
         }}
       />
     </Tabs>

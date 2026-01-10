@@ -21,6 +21,8 @@ import {
   borderRadius,
 } from "../../lib/theme";
 import { Button, Input, Avatar, Card } from "../../components/ui";
+import { useAuth } from "../../lib/auth-context";
+import { getVenmoUsername, updateVenmoUsername } from "../../lib/user-profile";
 
 /**
  * Edit Profile Screen
@@ -28,8 +30,11 @@ import { Button, Input, Avatar, Card } from "../../components/ui";
  */
 export default function EditProfileScreen() {
   const { user, isLoaded } = useUser();
+  const { userId } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [venmoUsername, setVenmoUsername] = useState("");
+  const [venmoLoading, setVenmoLoading] = useState(true);
 
   // Sync state with user data when it loads
   useEffect(() => {
@@ -38,19 +43,47 @@ export default function EditProfileScreen() {
       setLastName(user.lastName || "");
     }
   }, [isLoaded, user]);
+
+  // Load Venmo username from database
+  useEffect(() => {
+    async function loadVenmoUsername() {
+      if (userId) {
+        const username = await getVenmoUsername(userId);
+        setVenmoUsername(username || "");
+        setVenmoLoading(false);
+      }
+    }
+    loadVenmoUsername();
+  }, [userId]);
+
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || !userId) return;
 
     setSaving(true);
     try {
+      // Update Clerk profile
       await user.update({
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
       });
-      Alert.alert("Success", "Profile updated successfully");
+
+      // Update Venmo username in Supabase
+      const venmoUpdated = await updateVenmoUsername(
+        userId,
+        venmoUsername.trim() || null
+      );
+
+      if (!venmoUpdated && venmoUsername.trim()) {
+        Alert.alert(
+          "Partial Success",
+          "Profile updated but failed to save Venmo username. Please try again."
+        );
+      } else {
+        Alert.alert("Success", "Profile updated successfully");
+      }
       router.back();
     } catch (error: any) {
       console.error("Error updating profile:", error);
@@ -182,6 +215,27 @@ export default function EditProfileScreen() {
               />
             </Card>
 
+            {/* Payment Accounts */}
+            <Card style={styles.formCard}>
+              <Text style={styles.sectionTitle}>Payment Accounts</Text>
+              <Text style={styles.sectionHint}>
+                Link your payment accounts for faster settlements
+              </Text>
+
+              <Text style={[styles.label, styles.labelSpaced]}>Venmo Username</Text>
+              <Input
+                value={venmoUsername}
+                onChangeText={(text) => setVenmoUsername(text.replace(/^@/, ""))}
+                placeholder="your-venmo-username"
+                autoCapitalize="none"
+                autoCorrect={false}
+                prefix="@"
+              />
+              <Text style={styles.inputHint}>
+                Your friends will see this when settling up
+              </Text>
+            </Card>
+
             {/* Email (Read-only) */}
             <Card style={styles.infoCard}>
               <Text style={styles.infoLabel}>Email</Text>
@@ -267,6 +321,16 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+  sectionTitle: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  sectionHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
+  },
   label: {
     ...typography.small,
     color: colors.textSecondary,
@@ -274,6 +338,11 @@ const styles = StyleSheet.create({
   },
   labelSpaced: {
     marginTop: spacing.lg,
+  },
+  inputHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
   },
   infoCard: {
     padding: spacing.lg,

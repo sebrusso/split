@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import * as Linking from "expo-linking";
 import {
   colors,
   spacing,
@@ -277,6 +278,49 @@ export default function SettingsScreen() {
                 <Text style={styles.settingLabel}>Clear Local Data</Text>
                 <Text style={styles.settingDescription}>
                   Free up space on your device
+                </Text>
+              </View>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
+
+        {/* Support Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Support</Text>
+          <Card style={styles.settingCard}>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                Linking.openURL(
+                  "mailto:feedback@splitfree.app?subject=SplitFree%20Feedback"
+                );
+              }}
+            >
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Send Feedback</Text>
+                <Text style={styles.settingDescription}>
+                  Help us improve SplitFree
+                </Text>
+              </View>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
+
+            <View style={styles.settingDivider} />
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                Alert.alert(
+                  "Help & Support",
+                  "For questions or issues, email us at:\nsupport@splitfree.app"
+                );
+              }}
+            >
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Help Center</Text>
+                <Text style={styles.settingDescription}>
+                  Get help with common issues
                 </Text>
               </View>
               <Text style={styles.menuArrow}>→</Text>

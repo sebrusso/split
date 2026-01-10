@@ -72,11 +72,11 @@ export default function EditGroupScreen() {
     isFetching.current = true;
 
     try {
-      // Fetch group, members, expenses, and settlements in parallel
+      // Fetch group, members, expenses (with currency fields), and settlements in parallel
       const [groupResult, membersResult, expensesResult, settlementsResult] = await Promise.all([
         supabase.from("groups").select("*").eq("id", id).single(),
         supabase.from("members").select("*").eq("group_id", id),
-        supabase.from("expenses").select("*, splits(member_id, amount)").eq("group_id", id).is("deleted_at", null),
+        supabase.from("expenses").select("*, currency, exchange_rate, splits(member_id, amount)").eq("group_id", id).is("deleted_at", null),
         supabase.from("settlements").select("*").eq("group_id", id),
       ]);
 
@@ -98,7 +98,7 @@ export default function EditGroupScreen() {
         setUserMember(claimedMember);
       }
 
-      // Calculate user's balance if they have a claimed member
+      // Calculate user's balance if they have a claimed member (including multi-currency support)
       if (claimedMember) {
         const expensesForCalc = (expensesResult.data || []).map((exp) => ({
           paid_by: exp.paid_by,
@@ -107,6 +107,8 @@ export default function EditGroupScreen() {
             member_id: s.member_id,
             amount: parseFloat(String(s.amount)),
           })),
+          currency: exp.currency,
+          exchange_rate: exp.exchange_rate,
         }));
 
         const settlementsForCalc = (settlementsResult.data || []).map((s) => ({
@@ -115,7 +117,12 @@ export default function EditGroupScreen() {
           amount: parseFloat(String(s.amount)),
         }));
 
-        const balances = calculateBalancesWithSettlements(expensesForCalc, settlementsForCalc, membersData);
+        const balances = calculateBalancesWithSettlements(
+          expensesForCalc,
+          settlementsForCalc,
+          membersData,
+          groupData?.currency || "USD"
+        );
         const memberBalance = balances.get(claimedMember.id) || 0;
         setUserBalance(memberBalance);
       }

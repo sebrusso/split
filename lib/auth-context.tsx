@@ -52,6 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         "User",
       avatarUrl: clerkUser.imageUrl || null,
       defaultCurrency: "USD", // Default currency, can be updated in settings
+      venmoUsername: null, // Loaded from database separately
       createdAt: clerkUser.createdAt?.toISOString() || new Date().toISOString(),
     };
   }, [clerkUser]);

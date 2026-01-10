@@ -62,6 +62,7 @@ describe("UserProfile Type", () => {
       displayName: "Test User",
       avatarUrl: "https://example.com/avatar.png",
       defaultCurrency: "USD",
+      venmoUsername: "testuser",
       createdAt: new Date().toISOString(),
     };
 
@@ -81,6 +82,7 @@ describe("UserProfile Type", () => {
       displayName: "Another User",
       avatarUrl: null,
       defaultCurrency: "EUR",
+      venmoUsername: null,
       createdAt: new Date().toISOString(),
     };
 

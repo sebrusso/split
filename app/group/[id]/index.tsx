@@ -208,7 +208,7 @@ export default function GroupDetailScreen() {
 
     setExporting(true);
     try {
-      // Calculate balances for export
+      // Calculate balances for export (including multi-currency support)
       const expensesForCalc = expenses.map((exp) => ({
         paid_by: exp.paid_by,
         amount: parseFloat(String(exp.amount)),
@@ -216,6 +216,8 @@ export default function GroupDetailScreen() {
           member_id: s.member_id,
           amount: parseFloat(String(s.amount)),
         })),
+        currency: exp.currency,
+        exchange_rate: exp.exchange_rate,
       }));
 
       const settlementsForCalc = settlements.map((s) => ({
@@ -227,7 +229,8 @@ export default function GroupDetailScreen() {
       const balances = calculateBalancesWithSettlements(
         expensesForCalc,
         settlementsForCalc,
-        members
+        members,
+        group?.currency || "USD"
       );
 
       const success = await exportGroup(group, expenses, members, settlements, balances);

@@ -2,6 +2,7 @@
 
 import * as Crypto from "expo-crypto";
 import logger from "./logger";
+import { convertToGroupCurrency } from "./exchange-rates";
 
 // ============================================
 // Error Handling
@@ -206,8 +207,12 @@ export function calculateBalances(
     paid_by: string;
     amount: number;
     splits: Array<{ member_id: string; amount: number }>;
+    // Multi-currency fields
+    currency?: string | null;
+    exchange_rate?: number | null;
   }>,
   members: Array<{ id: string; name: string }>,
+  groupCurrency: string = "USD",
 ): Map<string, number> {
   const balances = new Map<string, number>();
 
@@ -215,14 +220,28 @@ export function calculateBalances(
   members.forEach((m) => balances.set(m.id, 0));
 
   expenses.forEach((exp) => {
-    // Payer gets credited full amount
-    const currentPayerBalance = balances.get(exp.paid_by) || 0;
-    balances.set(exp.paid_by, currentPayerBalance + exp.amount);
+    // Convert expense amount to group currency if needed
+    const convertedAmount = convertToGroupCurrency(
+      exp.amount,
+      exp.currency,
+      exp.exchange_rate,
+      groupCurrency
+    );
 
-    // Each person in split gets debited their share
+    // Payer gets credited full amount (in group currency)
+    const currentPayerBalance = balances.get(exp.paid_by) || 0;
+    balances.set(exp.paid_by, currentPayerBalance + convertedAmount);
+
+    // Each person in split gets debited their share (also converted)
     exp.splits.forEach((split) => {
+      const convertedSplit = convertToGroupCurrency(
+        split.amount,
+        exp.currency,
+        exp.exchange_rate,
+        groupCurrency
+      );
       const currentBalance = balances.get(split.member_id) || 0;
-      balances.set(split.member_id, currentBalance - split.amount);
+      balances.set(split.member_id, currentBalance - convertedSplit);
     });
   });
 
@@ -234,6 +253,9 @@ export function calculateBalancesWithSettlements(
     paid_by: string;
     amount: number;
     splits: Array<{ member_id: string; amount: number }>;
+    // Multi-currency fields
+    currency?: string | null;
+    exchange_rate?: number | null;
   }>,
   settlements: Array<{
     from_member_id: string;
@@ -241,11 +263,13 @@ export function calculateBalancesWithSettlements(
     amount: number;
   }>,
   members: Array<{ id: string; name: string }>,
+  groupCurrency: string = "USD",
 ): Map<string, number> {
-  // Start with expense-based balances
-  const balances = calculateBalances(expenses, members);
+  // Start with expense-based balances (now with currency conversion)
+  const balances = calculateBalances(expenses, members, groupCurrency);
 
   // Apply settlements: when A pays B, A's debt decreases and B's credit decreases
+  // Note: Settlements are always recorded in group currency
   settlements.forEach((settlement) => {
     const fromBalance = balances.get(settlement.from_member_id) || 0;
     const toBalance = balances.get(settlement.to_member_id) || 0;

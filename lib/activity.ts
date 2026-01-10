@@ -110,6 +110,7 @@ export async function getGroupActivity(
           displayName: p.display_name || "Unknown",
           avatarUrl: p.avatar_url,
           defaultCurrency: p.default_currency || "USD",
+          venmoUsername: p.venmo_username || null,
           createdAt: p.created_at,
         });
       });
@@ -179,6 +180,7 @@ export async function getGlobalActivity(
           displayName: p.display_name || "Unknown",
           avatarUrl: p.avatar_url,
           defaultCurrency: p.default_currency || "USD",
+          venmoUsername: p.venmo_username || null,
           createdAt: p.created_at,
         });
       });

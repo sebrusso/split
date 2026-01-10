@@ -111,10 +111,10 @@ export async function getGroupBalances(groupId: string): Promise<GroupBalance | 
 
     if (membersError) throw membersError;
 
-    // Fetch expenses with splits
+    // Fetch expenses with splits (including currency fields)
     const { data: expenses, error: expensesError } = await supabase
       .from("expenses")
-      .select("id, paid_by, amount, splits(member_id, amount)")
+      .select("id, paid_by, amount, currency, exchange_rate, splits(member_id, amount)")
       .eq("group_id", groupId)
       .is("deleted_at", null);
 
@@ -128,7 +128,7 @@ export async function getGroupBalances(groupId: string): Promise<GroupBalance | 
 
     if (settlementsError) throw settlementsError;
 
-    // Prepare data for calculation
+    // Prepare data for calculation (including currency fields)
     const expensesForCalc = (expenses || []).map((exp) => ({
       paid_by: exp.paid_by,
       amount: parseFloat(String(exp.amount)),
@@ -136,6 +136,8 @@ export async function getGroupBalances(groupId: string): Promise<GroupBalance | 
         member_id: s.member_id,
         amount: parseFloat(String(s.amount)),
       })),
+      currency: exp.currency,
+      exchange_rate: exp.exchange_rate,
     }));
 
     const settlementsForCalc = (settlements || []).map((s) => ({
@@ -144,11 +146,12 @@ export async function getGroupBalances(groupId: string): Promise<GroupBalance | 
       amount: parseFloat(String(s.amount)),
     }));
 
-    // Calculate balances
+    // Calculate balances (pass group currency for multi-currency support)
     const balances = calculateBalancesWithSettlements(
       expensesForCalc,
       settlementsForCalc,
-      members || []
+      members || [],
+      group?.currency || "USD"
     );
 
     // Build member balances
@@ -520,10 +523,10 @@ export async function getGlobalBalancesForUser(
 
       if (membersError) throw membersError;
 
-      // Fetch expenses with splits
+      // Fetch expenses with splits (including currency fields)
       const { data: expenses, error: expensesError } = await supabase
         .from("expenses")
-        .select("id, paid_by, amount, splits(member_id, amount)")
+        .select("id, paid_by, amount, currency, exchange_rate, splits(member_id, amount)")
         .eq("group_id", group.id)
         .is("deleted_at", null);
 
@@ -537,7 +540,7 @@ export async function getGlobalBalancesForUser(
 
       if (settlementsError) throw settlementsError;
 
-      // Calculate balances for this group
+      // Calculate balances for this group (including currency fields)
       const expensesForCalc = (expenses || []).map((exp) => ({
         paid_by: exp.paid_by,
         amount: parseFloat(String(exp.amount)),
@@ -545,6 +548,8 @@ export async function getGlobalBalancesForUser(
           member_id: s.member_id,
           amount: parseFloat(String(s.amount)),
         })),
+        currency: exp.currency,
+        exchange_rate: exp.exchange_rate,
       }));
 
       const settlementsForCalc = (settlements || []).map((s) => ({
@@ -556,7 +561,8 @@ export async function getGlobalBalancesForUser(
       const balances = calculateBalancesWithSettlements(
         expensesForCalc,
         settlementsForCalc,
-        members || []
+        members || [],
+        group?.currency || "USD"
       );
 
       // Get user's balance in this group

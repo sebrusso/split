@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,9 @@ import {
   AmountInput,
   ReceiptThumbnail,
   AddReceiptButton,
+  CurrencyPicker,
+  CurrencyPill,
+  ConversionPreview,
 } from "../../../components/ui";
 import { getDefaultCategory } from "../../../lib/categories";
 import {
@@ -36,6 +39,7 @@ import {
 import { uploadReceipt, validateReceiptImage } from "../../../lib/storage";
 import { notifyExpenseAdded } from "../../../lib/notifications";
 import { useAuth } from "../../../lib/auth-context";
+import { getExchangeRate } from "../../../lib/exchange-rates";
 
 export default function AddExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -51,6 +55,12 @@ export default function AddExpenseScreen() {
   // Category state
   const [category, setCategory] = useState(getDefaultCategory().id);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+
+  // Currency state
+  const [expenseCurrency, setExpenseCurrency] = useState<string | null>(null); // null = use group currency
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
 
   // Notes state
   const [notes, setNotes] = useState("");
@@ -110,6 +120,38 @@ export default function AddExpenseScreen() {
       }
     } catch (error) {
       console.error("Error fetching data:", error);
+    }
+  };
+
+  // Fetch exchange rate when currency changes
+  const fetchExchangeRate = useCallback(async (fromCurrency: string, toCurrency: string) => {
+    if (fromCurrency === toCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+
+    setExchangeRateLoading(true);
+    try {
+      const rate = await getExchangeRate(fromCurrency, toCurrency);
+      setExchangeRate(rate);
+    } catch (error) {
+      console.error("Error fetching exchange rate:", error);
+      setExchangeRate(1); // Fallback to 1:1
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  }, []);
+
+  // Handle currency selection
+  const handleCurrencySelect = (currency: string) => {
+    const groupCurrency = group?.currency || "USD";
+    if (currency === groupCurrency) {
+      // Reset to group currency
+      setExpenseCurrency(null);
+      setExchangeRate(1);
+    } else {
+      setExpenseCurrency(currency);
+      fetchExchangeRate(currency, groupCurrency);
     }
   };
 
@@ -220,6 +262,11 @@ export default function AddExpenseScreen() {
     setError("");
 
     try {
+      // Prepare currency data
+      const groupCurrency = group?.currency || "USD";
+      const actualCurrency = expenseCurrency || groupCurrency;
+      const needsConversion = actualCurrency !== groupCurrency;
+
       // Create expense
       const { data: expense, error: expenseError } = await supabase
         .from("expenses")
@@ -231,6 +278,10 @@ export default function AddExpenseScreen() {
           category,
           notes: notes.trim() || null,
           split_type: splitMethod,
+          // Multi-currency fields
+          currency: needsConversion ? actualCurrency : null,
+          exchange_rate: needsConversion ? exchangeRate : null,
+          exchange_rate_time: needsConversion ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -350,14 +401,32 @@ export default function AddExpenseScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Amount Input */}
+          {/* Amount Input with Currency Picker */}
           <View style={styles.amountContainer}>
-            <AmountInput
-              value={amount}
-              onChangeText={setAmount}
-              currency={group?.currency || "USD"}
-              autoFocus
-            />
+            <View style={styles.amountRow}>
+              <AmountInput
+                value={amount}
+                onChangeText={setAmount}
+                currency={expenseCurrency || group?.currency || "USD"}
+                autoFocus
+              />
+              <CurrencyPill
+                currencyCode={expenseCurrency || group?.currency || "USD"}
+                onPress={() => setShowCurrencyPicker(true)}
+                size="md"
+              />
+            </View>
+
+            {/* Conversion Preview */}
+            {expenseCurrency && expenseCurrency !== (group?.currency || "USD") && parseFloat(amount) > 0 && (
+              <ConversionPreview
+                fromAmount={parseFloat(amount)}
+                fromCurrency={expenseCurrency}
+                toCurrency={group?.currency || "USD"}
+                exchangeRate={exchangeRate}
+                loading={exchangeRateLoading}
+              />
+            )}
           </View>
 
           {/* Description */}
@@ -503,6 +572,15 @@ export default function AddExpenseScreen() {
         onSelect={setCategory}
         onClose={() => setShowCategoryPicker(false)}
       />
+
+      {/* Currency Picker Modal */}
+      <CurrencyPicker
+        visible={showCurrencyPicker}
+        selectedCurrency={expenseCurrency || group?.currency || "USD"}
+        onSelect={handleCurrencySelect}
+        onClose={() => setShowCurrencyPicker(false)}
+        title="Expense Currency"
+      />
     </SafeAreaView>
   );
 }
@@ -520,6 +598,12 @@ const styles = StyleSheet.create({
   },
   amountContainer: {
     marginVertical: spacing.xl,
+  },
+  amountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
   },
   inputContainer: {
     marginBottom: spacing.lg,

@@ -180,6 +180,13 @@ export default function GroupsScreen() {
             <Text style={styles.title}>SplitFree</Text>
             <Text style={styles.subtitle}>Split expenses, stay friends</Text>
           </View>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => router.push("/profile")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-circle-outline" size={32} color={colors.text} />
+          </TouchableOpacity>
         </View>
 
         {/* Search Bar */}
@@ -271,6 +278,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+  },
+  profileButton: {
+    padding: spacing.xs,
   },
   title: {
     ...typography.h1,

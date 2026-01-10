@@ -129,7 +129,16 @@ export default function BalancesTabScreen() {
 
     return (
       <View style={styles.header}>
-        <Text style={styles.title}>Balances</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Balances</Text>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => router.push("/profile")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-circle-outline" size={32} color={colors.text} />
+          </TouchableOpacity>
+        </View>
 
         {/* Overall Summary Card */}
         <View style={styles.summaryCard}>
@@ -236,9 +245,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.lg,
+  },
+  profileButton: {
+    padding: spacing.xs,
+  },
   title: {
     ...typography.h1,
-    marginBottom: spacing.lg,
   },
   summaryCard: {
     backgroundColor: colors.card,

@@ -7,6 +7,12 @@ export { CategoryPicker, CategoryButton } from "./CategoryPicker";
 export { SplitMethodPicker, SplitMethodButton } from "./SplitMethodPicker";
 export { SettlementMethodPicker, SettlementMethodButton } from "./SettlementMethodPicker";
 export { AmountInput, InlineAmountInput, getCurrencySymbol } from "./AmountInput";
+export {
+  CurrencyPicker,
+  CurrencyButton,
+  CurrencyPill,
+  ConversionPreview,
+} from "./CurrencyPicker";
 export { ReceiptViewer, ReceiptThumbnail, AddReceiptButton } from "./ReceiptViewer";
 export { FriendCard } from "./FriendCard";
 export { ActivityItemComponent, ActivityItemCompact } from "./ActivityItem";

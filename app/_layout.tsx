@@ -246,6 +246,15 @@ function RootNavigator() {
           headerBackTitle: "Groups",
         }}
       />
+
+      {/* Onboarding screens */}
+      <Stack.Screen
+        name="onboarding/venmo"
+        options={{
+          headerShown: false,
+          presentation: "fullScreenModal",
+        }}
+      />
     </Stack>
   );
 }

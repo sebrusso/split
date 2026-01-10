@@ -385,11 +385,12 @@ export async function exportAllUserData(userId: string): Promise<boolean> {
 
     if (membersError) throw membersError;
 
-    // Fetch all expenses for these groups
+    // Fetch all expenses for these groups (including currency fields)
     const { data: expenses, error: expensesError } = await supabase
       .from("expenses")
-      .select("*, payer:members!paid_by(id, name)")
+      .select("*, currency, exchange_rate, payer:members!paid_by(id, name), splits(member_id, amount)")
       .in("group_id", groupIds)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (expensesError) throw expensesError;
@@ -416,8 +417,18 @@ export async function exportAllUserData(userId: string): Promise<boolean> {
       const groupExpenses = (expenses || []).filter((e) => e.group_id === group.id);
       const groupSettlements = (settlements || []).filter((s) => s.group_id === group.id);
 
-      // Calculate balances
-      const balances = calculateBalances(groupExpenses, groupMembers);
+      // Calculate balances (including multi-currency support)
+      const expensesForCalc = groupExpenses.map((exp) => ({
+        paid_by: exp.paid_by,
+        amount: parseFloat(String(exp.amount)),
+        splits: (exp.splits || []).map((s: { member_id: string; amount: number }) => ({
+          member_id: s.member_id,
+          amount: parseFloat(String(s.amount)),
+        })),
+        currency: exp.currency,
+        exchange_rate: exp.exchange_rate,
+      }));
+      const balances = calculateBalances(expensesForCalc, groupMembers, group?.currency || "USD");
 
       sections.push(`## ${group.emoji} ${group.name}`);
       sections.push(`Currency: ${group.currency}`);

@@ -32,6 +32,7 @@ interface UserProfileRow {
   display_name: string | null;
   avatar_url: string | null;
   default_currency: string;
+  venmo_username: string | null;
   created_at: string;
 }
 
@@ -60,6 +61,7 @@ function transformUserProfile(row: UserProfileRow): UserProfile {
     displayName: row.display_name || "Unknown",
     avatarUrl: row.avatar_url,
     defaultCurrency: row.default_currency || "USD",
+    venmoUsername: row.venmo_username,
     createdAt: row.created_at,
   };
 }
