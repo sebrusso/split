@@ -510,35 +510,40 @@ export async function getGlobalBalancesForUser(
     let totalOwed = 0;
     let totalOwing = 0;
 
-    // Process each group
+    // Fetch ALL data in parallel (3 queries total instead of 3 per group)
+    const [membersResult, expensesResult, settlementsResult] = await Promise.all([
+      supabase
+        .from("members")
+        .select("*")
+        .in("group_id", groupIds),
+      supabase
+        .from("expenses")
+        .select("id, group_id, paid_by, amount, currency, exchange_rate, splits(member_id, amount)")
+        .in("group_id", groupIds)
+        .is("deleted_at", null),
+      supabase
+        .from("settlements")
+        .select("group_id, from_member_id, to_member_id, amount")
+        .in("group_id", groupIds),
+    ]);
+
+    if (membersResult.error) throw membersResult.error;
+    if (expensesResult.error) throw expensesResult.error;
+    if (settlementsResult.error) throw settlementsResult.error;
+
+    const allMembers = membersResult.data || [];
+    const allExpenses = expensesResult.data || [];
+    const allSettlements = settlementsResult.data || [];
+
+    // Process each group using pre-fetched data
     for (const group of groups || []) {
       const userMemberId = userMemberByGroup.get(group.id);
       if (!userMemberId) continue;
 
-      // Fetch members for this group
-      const { data: members, error: membersError } = await supabase
-        .from("members")
-        .select("*")
-        .eq("group_id", group.id);
-
-      if (membersError) throw membersError;
-
-      // Fetch expenses with splits (including currency fields)
-      const { data: expenses, error: expensesError } = await supabase
-        .from("expenses")
-        .select("id, paid_by, amount, currency, exchange_rate, splits(member_id, amount)")
-        .eq("group_id", group.id)
-        .is("deleted_at", null);
-
-      if (expensesError) throw expensesError;
-
-      // Fetch settlements
-      const { data: settlements, error: settlementsError } = await supabase
-        .from("settlements")
-        .select("from_member_id, to_member_id, amount")
-        .eq("group_id", group.id);
-
-      if (settlementsError) throw settlementsError;
+      // Filter data for this group
+      const members = allMembers.filter((m) => m.group_id === group.id);
+      const expenses = allExpenses.filter((e) => e.group_id === group.id);
+      const settlements = allSettlements.filter((s) => s.group_id === group.id);
 
       // Calculate balances for this group (including currency fields)
       const expensesForCalc = (expenses || []).map((exp) => ({

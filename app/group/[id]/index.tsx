@@ -40,7 +40,7 @@ interface MemberWithProfile extends Member {
 }
 
 export default function GroupDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, name: initialName } = useLocalSearchParams<{ id: string; name?: string }>();
   const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<MemberWithProfile[]>([]);
@@ -432,20 +432,24 @@ export default function GroupDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: group?.name || "Group",
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={showOptionsMenu}
-              style={styles.headerOptionsButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons
-                name="ellipsis-horizontal"
-                size={24}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          ),
+          title: group?.name || initialName || "Group",
+          headerBackTitle: "Groups",
+          headerBackVisible: !loading,
+          headerRight: loading
+            ? undefined
+            : () => (
+                <TouchableOpacity
+                  onPress={showOptionsMenu}
+                  style={styles.headerOptionsButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name="ellipsis-horizontal"
+                    size={24}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              ),
         }}
       />
       <SafeAreaView style={styles.container} edges={["bottom"]}>

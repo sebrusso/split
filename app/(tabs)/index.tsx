@@ -131,7 +131,7 @@ export default function GroupsScreen() {
   const renderGroup = ({ item }: { item: Group }) => (
     <Card
       style={styles.groupCard}
-      onPress={() => router.push(`/group/${item.id}`)}
+      onPress={() => router.push(`/group/${item.id}?name=${encodeURIComponent(item.name)}`)}
     >
       <View style={styles.groupHeader}>
         <Text style={styles.groupEmoji}>{item.emoji || "💰"}</Text>
