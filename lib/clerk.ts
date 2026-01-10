@@ -8,16 +8,18 @@
 import * as SecureStore from "expo-secure-store";
 
 // Clerk publishable key from environment variables
+// Falls back to a placeholder in test environment
 const clerkKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
-if (!clerkKey) {
+if (!clerkKey && !isTest) {
   throw new Error(
     "Missing Clerk environment variable. " +
       "Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env file."
   );
 }
 
-export const CLERK_PUBLISHABLE_KEY: string = clerkKey;
+export const CLERK_PUBLISHABLE_KEY: string = clerkKey || "pk_test_placeholder_for_testing";
 
 /**
  * Token cache configuration using expo-secure-store
