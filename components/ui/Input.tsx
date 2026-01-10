@@ -24,6 +24,8 @@ export function Input({
   prefix,
   suffix,
   style,
+  multiline,
+  numberOfLines,
   ...props
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
@@ -34,16 +36,24 @@ export function Input({
       <View
         style={[
           styles.inputContainer,
+          multiline && styles.inputContainerMultiline,
           isFocused && styles.inputFocused,
           error && styles.inputError,
         ]}
       >
         {prefix && <Text style={styles.prefix}>{prefix}</Text>}
         <TextInput
-          style={[styles.input, style]}
+          style={[
+            styles.input,
+            multiline && styles.inputMultiline,
+            style,
+          ]}
           placeholderTextColor={colors.textMuted}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          textAlignVertical={multiline ? "top" : "center"}
           {...props}
         />
         {suffix && <Text style={styles.suffix}>{suffix}</Text>}
@@ -71,6 +81,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     paddingHorizontal: spacing.lg,
   },
+  inputContainerMultiline: {
+    height: "auto",
+    minHeight: 80,
+    alignItems: "flex-start",
+    paddingVertical: spacing.md,
+  },
   inputFocused: {
     borderColor: colors.primary,
     borderWidth: 2,
@@ -83,6 +99,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_400Regular",
     color: colors.text,
+  },
+  inputMultiline: {
+    minHeight: 60,
+    paddingTop: 0,
   },
   prefix: {
     fontSize: 16,

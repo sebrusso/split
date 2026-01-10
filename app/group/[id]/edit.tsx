@@ -353,7 +353,6 @@ export default function EditGroupScreen() {
               placeholder="e.g., Vegas Trip 2025, Monthly Rent"
               multiline
               numberOfLines={3}
-              style={styles.notesInput}
             />
 
             <Text style={[styles.sectionTitle, styles.currencyTitle]}>
@@ -511,10 +510,6 @@ const styles = StyleSheet.create({
   },
   notesTitle: {
     marginTop: spacing.xl,
-  },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: "top",
   },
   currencyTitle: {
     marginTop: spacing.xl,
