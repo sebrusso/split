@@ -9,6 +9,25 @@ import { supabase } from "./supabase";
 import { Friendship, UserProfile, FriendshipStatus } from "./types";
 
 /**
+ * Validate Clerk user ID format to prevent query injection
+ * Clerk IDs follow the pattern: user_[alphanumeric]
+ */
+function validateClerkId(id: string): string {
+  if (!/^user_[a-zA-Z0-9]+$/.test(id)) {
+    throw new Error("Invalid user ID format");
+  }
+  return id;
+}
+
+/**
+ * Escape special characters in search terms for ILIKE queries
+ * Prevents users from manipulating query patterns
+ */
+function escapeSearchTerm(term: string): string {
+  return term.replace(/[%_\\]/g, "\\$&");
+}
+
+/**
  * Database row type for friendships table
  */
 interface FriendshipRow {
@@ -71,12 +90,16 @@ export async function sendFriendRequest(
   currentUserId: string,
   targetClerkId: string
 ): Promise<void> {
+  // Validate user IDs to prevent query injection
+  const validCurrentId = validateClerkId(currentUserId);
+  const validTargetId = validateClerkId(targetClerkId);
+
   // Check if friendship already exists (in either direction)
   const { data: existing } = await supabase
     .from("friendships")
     .select("id, status")
     .or(
-      `and(requester_id.eq.${currentUserId},addressee_id.eq.${targetClerkId}),and(requester_id.eq.${targetClerkId},addressee_id.eq.${currentUserId})`
+      `and(requester_id.eq.${validCurrentId},addressee_id.eq.${validTargetId}),and(requester_id.eq.${validTargetId},addressee_id.eq.${validCurrentId})`
     )
     .single();
 
@@ -93,13 +116,15 @@ export async function sendFriendRequest(
   }
 
   const { error } = await supabase.from("friendships").insert({
-    requester_id: currentUserId,
-    addressee_id: targetClerkId,
+    requester_id: validCurrentId,
+    addressee_id: validTargetId,
     status: "pending",
   });
 
   if (error) {
-    console.error("Error sending friend request:", error);
+    if (__DEV__) {
+      console.error("Error sending friend request:", error);
+    }
     throw new Error("Failed to send friend request");
   }
 }
@@ -119,7 +144,9 @@ export async function acceptFriendRequest(friendshipId: string): Promise<void> {
     .eq("status", "pending");
 
   if (error) {
-    console.error("Error accepting friend request:", error);
+    if (__DEV__) {
+      console.error("Error accepting friend request:", error);
+    }
     throw new Error("Failed to accept friend request");
   }
 }
@@ -136,7 +163,9 @@ export async function rejectFriendRequest(friendshipId: string): Promise<void> {
     .eq("status", "pending");
 
   if (error) {
-    console.error("Error rejecting friend request:", error);
+    if (__DEV__) {
+      console.error("Error rejecting friend request:", error);
+    }
     throw new Error("Failed to reject friend request");
   }
 }
@@ -152,7 +181,9 @@ export async function removeFriend(friendshipId: string): Promise<void> {
     .eq("id", friendshipId);
 
   if (error) {
-    console.error("Error removing friend:", error);
+    if (__DEV__) {
+      console.error("Error removing friend:", error);
+    }
     throw new Error("Failed to remove friend");
   }
 }
@@ -166,12 +197,16 @@ export async function blockUser(
   currentUserId: string,
   targetClerkId: string
 ): Promise<void> {
+  // Validate user IDs to prevent query injection
+  const validCurrentId = validateClerkId(currentUserId);
+  const validTargetId = validateClerkId(targetClerkId);
+
   // Check if friendship exists
   const { data: existing } = await supabase
     .from("friendships")
     .select("id")
     .or(
-      `and(requester_id.eq.${currentUserId},addressee_id.eq.${targetClerkId}),and(requester_id.eq.${targetClerkId},addressee_id.eq.${currentUserId})`
+      `and(requester_id.eq.${validCurrentId},addressee_id.eq.${validTargetId}),and(requester_id.eq.${validTargetId},addressee_id.eq.${validCurrentId})`
     )
     .single();
 
@@ -186,19 +221,23 @@ export async function blockUser(
       .eq("id", existing.id);
 
     if (error) {
-      console.error("Error blocking user:", error);
+      if (__DEV__) {
+        console.error("Error blocking user:", error);
+      }
       throw new Error("Failed to block user");
     }
   } else {
     // Create new blocked relationship
     const { error } = await supabase.from("friendships").insert({
-      requester_id: currentUserId,
-      addressee_id: targetClerkId,
+      requester_id: validCurrentId,
+      addressee_id: validTargetId,
       status: "blocked",
     });
 
     if (error) {
-      console.error("Error blocking user:", error);
+      if (__DEV__) {
+        console.error("Error blocking user:", error);
+      }
       throw new Error("Failed to block user");
     }
   }
@@ -216,7 +255,9 @@ export async function unblockUser(friendshipId: string): Promise<void> {
     .eq("status", "blocked");
 
   if (error) {
-    console.error("Error unblocking user:", error);
+    if (__DEV__) {
+      console.error("Error unblocking user:", error);
+    }
     throw new Error("Failed to unblock user");
   }
 }
@@ -235,7 +276,9 @@ export async function getFriends(userId: string): Promise<Friendship[]> {
     .eq("status", "accepted");
 
   if (error1) {
-    console.error("Error fetching friends (as requester):", error1);
+    if (__DEV__) {
+      console.error("Error fetching friends (as requester):", error1);
+    }
     throw new Error("Failed to fetch friends");
   }
 
@@ -247,7 +290,9 @@ export async function getFriends(userId: string): Promise<Friendship[]> {
     .eq("status", "accepted");
 
   if (error2) {
-    console.error("Error fetching friends (as addressee):", error2);
+    if (__DEV__) {
+      console.error("Error fetching friends (as addressee):", error2);
+    }
     throw new Error("Failed to fetch friends");
   }
 
@@ -290,7 +335,9 @@ export async function getPendingRequests(userId: string): Promise<Friendship[]> 
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching pending requests:", error);
+    if (__DEV__) {
+      console.error("Error fetching pending requests:", error);
+    }
     throw new Error("Failed to fetch pending requests");
   }
 
@@ -329,7 +376,9 @@ export async function getOutgoingRequests(userId: string): Promise<Friendship[]>
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching outgoing requests:", error);
+    if (__DEV__) {
+      console.error("Error fetching outgoing requests:", error);
+    }
     throw new Error("Failed to fetch outgoing requests");
   }
 
@@ -368,17 +417,24 @@ export async function searchUsers(
     return [];
   }
 
-  const searchTerm = query.toLowerCase().trim();
+  // Validate current user ID
+  const validCurrentId = validateClerkId(currentUserId);
+
+  // Escape special characters to prevent query manipulation
+  const escapedTerm = escapeSearchTerm(query.toLowerCase().trim());
+  const searchPattern = `%${escapedTerm}%`;
 
   const { data, error } = await supabase
     .from("user_profiles")
     .select("*")
-    .neq("clerk_id", currentUserId)
-    .or(`email.ilike.%${searchTerm}%,display_name.ilike.%${searchTerm}%`)
+    .neq("clerk_id", validCurrentId)
+    .or(`email.ilike.${searchPattern},display_name.ilike.${searchPattern}`)
     .limit(20);
 
   if (error) {
-    console.error("Error searching users:", error);
+    if (__DEV__) {
+      console.error("Error searching users:", error);
+    }
     throw new Error("Failed to search users");
   }
 
@@ -395,11 +451,15 @@ export async function getFriendshipStatus(
   currentUserId: string,
   otherUserId: string
 ): Promise<Friendship | null> {
+  // Validate user IDs to prevent query injection
+  const validCurrentId = validateClerkId(currentUserId);
+  const validOtherId = validateClerkId(otherUserId);
+
   const { data, error } = await supabase
     .from("friendships")
     .select("*")
     .or(
-      `and(requester_id.eq.${currentUserId},addressee_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},addressee_id.eq.${currentUserId})`
+      `and(requester_id.eq.${validCurrentId},addressee_id.eq.${validOtherId}),and(requester_id.eq.${validOtherId},addressee_id.eq.${validCurrentId})`
     )
     .single();
 
@@ -423,7 +483,9 @@ export async function getPendingRequestCount(userId: string): Promise<number> {
     .eq("status", "pending");
 
   if (error) {
-    console.error("Error fetching pending request count:", error);
+    if (__DEV__) {
+      console.error("Error fetching pending request count:", error);
+    }
     return 0;
   }
 

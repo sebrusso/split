@@ -1,7 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = "https://rzwuknfycyqitcbotsvx.supabase.co";
-const supabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6d3VrbmZ5Y3lxaXRjYm90c3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1Nzc0MTcsImV4cCI6MjA4MzE1MzQxN30.TKXVVOCaiV-wX--V4GEPNg2yupF-ERSZFMfekve2yt8";
+/**
+ * Supabase client configuration
+ *
+ * Credentials are loaded from environment variables.
+ * For development, create a .env file from .env.example
+ * For production, configure in EAS secrets or CI/CD
+ */
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Missing Supabase environment variables. " +
+      "Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file."
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

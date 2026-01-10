@@ -1,5 +1,7 @@
 // Test comment for /ship command
 
+import * as Crypto from "expo-crypto";
+
 // ============================================
 // Error Handling
 // ============================================
@@ -31,7 +33,9 @@ export async function handleAsync<T>(
     const data = await operation();
     return { data, error: null };
   } catch (error) {
-    console.error(errorMessage, error);
+    if (__DEV__) {
+      console.error(errorMessage, error);
+    }
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     return { data: null, error: `${errorMessage}: ${message}` };
@@ -150,10 +154,30 @@ export function validateName(
 // Code Generation
 // ============================================
 
-export function generateShareCode(): string {
+/**
+ * Generate a cryptographically secure share code
+ * Uses expo-crypto for secure random number generation
+ * Increased to 8 characters for better security against brute force
+ */
+export async function generateShareCode(): Promise<string> {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const randomBytes = await Crypto.getRandomBytesAsync(8);
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(randomBytes[i] % chars.length);
+  }
+  return code;
+}
+
+/**
+ * Synchronous fallback for share code generation
+ * Uses Math.random - only use when async is not possible
+ * @deprecated Prefer generateShareCode() for security
+ */
+export function generateShareCodeSync(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;

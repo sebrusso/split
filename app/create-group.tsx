@@ -46,7 +46,7 @@ export default function CreateGroupScreen() {
     setError("");
 
     try {
-      const shareCode = generateShareCode();
+      const shareCode = await generateShareCode();
 
       const { data: group, error: groupError } = await supabase
         .from("groups")
@@ -70,7 +70,9 @@ export default function CreateGroupScreen() {
 
       router.replace(`/group/${group.id}`);
     } catch (err) {
-      console.error("Error creating group:", err);
+      if (__DEV__) {
+        console.error("Error creating group:", err);
+      }
       setError("Failed to create group. Please try again.");
     } finally {
       setLoading(false);

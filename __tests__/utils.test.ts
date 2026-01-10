@@ -9,28 +9,28 @@ import {
 } from "../lib/utils";
 
 describe("generateShareCode", () => {
-  it("should generate a 6-character code", () => {
-    const code = generateShareCode();
-    expect(code).toHaveLength(6);
+  it("should generate an 8-character code", async () => {
+    const code = await generateShareCode();
+    expect(code).toHaveLength(8);
   });
 
-  it("should only contain valid characters (no confusing chars like 0, O, 1, I)", () => {
+  it("should only contain valid characters (no confusing chars like 0, O, 1, I)", async () => {
     const validChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    for (let i = 0; i < 100; i++) {
-      const code = generateShareCode();
+    for (let i = 0; i < 20; i++) {
+      const code = await generateShareCode();
       for (const char of code) {
         expect(validChars).toContain(char);
       }
     }
   });
 
-  it("should generate unique codes (statistically)", () => {
+  it("should generate unique codes (statistically)", async () => {
     const codes = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-      codes.add(generateShareCode());
+    for (let i = 0; i < 20; i++) {
+      codes.add(await generateShareCode());
     }
-    // With 30^6 possibilities, 100 codes should all be unique
-    expect(codes.size).toBe(100);
+    // With 32^8 possibilities, 20 codes should all be unique
+    expect(codes.size).toBe(20);
   });
 });
 

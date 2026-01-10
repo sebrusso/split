@@ -5,6 +5,14 @@
 import { supabase } from "./supabase";
 import { Expense, Group, Member } from "./types";
 
+/**
+ * Escape special characters in search terms for ILIKE queries
+ * Prevents users from manipulating query patterns
+ */
+function escapeSearchTerm(term: string): string {
+  return term.replace(/[%_\\]/g, "\\$&");
+}
+
 export interface SearchFilters {
   groupId?: string;
   category?: string;
@@ -47,7 +55,9 @@ export async function searchExpenses(
 
     // Apply text search if query exists
     if (query.trim()) {
-      const searchPattern = `%${query.trim()}%`;
+      // Escape special characters to prevent query manipulation
+      const escapedTerm = escapeSearchTerm(query.trim());
+      const searchPattern = `%${escapedTerm}%`;
       // Search in description, merchant, and notes
       queryBuilder = queryBuilder.or(
         `description.ilike.${searchPattern},merchant.ilike.${searchPattern},notes.ilike.${searchPattern}`
@@ -89,13 +99,17 @@ export async function searchExpenses(
     const { data, error } = await queryBuilder.limit(50);
 
     if (error) {
-      console.error("Error searching expenses:", error);
+      if (__DEV__) {
+        console.error("Error searching expenses:", error);
+      }
       throw error;
     }
 
     return (data || []) as ExpenseSearchResult[];
   } catch (error) {
-    console.error("searchExpenses error:", error);
+    if (__DEV__) {
+      console.error("searchExpenses error:", error);
+    }
     return [];
   }
 }
@@ -117,7 +131,9 @@ export async function searchGroups(query: string): Promise<Group[]> {
       return data || [];
     }
 
-    const searchPattern = `%${query.trim()}%`;
+    // Escape special characters to prevent query manipulation
+    const escapedTerm = escapeSearchTerm(query.trim());
+    const searchPattern = `%${escapedTerm}%`;
 
     const { data, error } = await supabase
       .from("groups")
@@ -127,13 +143,17 @@ export async function searchGroups(query: string): Promise<Group[]> {
       .limit(20);
 
     if (error) {
-      console.error("Error searching groups:", error);
+      if (__DEV__) {
+        console.error("Error searching groups:", error);
+      }
       throw error;
     }
 
     return data || [];
   } catch (error) {
-    console.error("searchGroups error:", error);
+    if (__DEV__) {
+      console.error("searchGroups error:", error);
+    }
     return [];
   }
 }
@@ -165,7 +185,9 @@ export async function getSearchSuggestions(
       return [];
     }
 
-    const searchPattern = `%${query.trim()}%`;
+    // Escape special characters to prevent query manipulation
+    const escapedTerm = escapeSearchTerm(query.trim());
+    const searchPattern = `%${escapedTerm}%`;
 
     const { data, error } = await supabase
       .from("expenses")
@@ -181,7 +203,9 @@ export async function getSearchSuggestions(
     const unique = [...new Set((data || []).map((d) => d.description))];
     return unique.slice(0, limit);
   } catch (error) {
-    console.error("getSearchSuggestions error:", error);
+    if (__DEV__) {
+      console.error("getSearchSuggestions error:", error);
+    }
     return [];
   }
 }
@@ -238,7 +262,9 @@ export async function getExpenseStats(groupId: string): Promise<{
 
     return { totalExpenses, totalAmount, byCategory, byMonth };
   } catch (error) {
-    console.error("getExpenseStats error:", error);
+    if (__DEV__) {
+      console.error("getExpenseStats error:", error);
+    }
     return { totalExpenses: 0, totalAmount: 0, byCategory: {}, byMonth: {} };
   }
 }
