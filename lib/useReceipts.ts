@@ -21,6 +21,7 @@ import {
   createClaim,
   getItemRemainingFraction,
 } from './receipts';
+import { prepareImageForUpload } from './imageUtils';
 
 /**
  * Hook to fetch a single receipt with all related data
@@ -323,6 +324,7 @@ export function useReceiptUpload(groupId: string | undefined) {
 
   /**
    * Upload a receipt image and create the receipt record
+   * Images are compressed before upload (max 1200x1600, 70% quality JPEG)
    */
   const uploadReceipt = useCallback(
     async (imageUri: string, uploaderId: string) => {
@@ -332,28 +334,49 @@ export function useReceiptUpload(groupId: string | undefined) {
         setUploading(true);
         setError(null);
 
-        // Generate unique filename
+        // Compress image and create thumbnail
+        const { compressed, thumbnail } = await prepareImageForUpload(imageUri);
+
+        // Generate unique filenames
         const timestamp = Date.now();
         const fileName = `receipt_${groupId}_${timestamp}.jpg`;
+        const thumbFileName = `receipt_${groupId}_${timestamp}_thumb.jpg`;
         const filePath = `receipts/${groupId}/${fileName}`;
+        const thumbPath = `receipts/${groupId}/${thumbFileName}`;
 
-        // Read and upload image
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
+        // Upload compressed image
+        const compressedResponse = await fetch(compressed.uri);
+        const compressedBlob = await compressedResponse.blob();
 
         const { error: uploadError } = await supabase.storage
           .from('receipts')
-          .upload(filePath, blob, {
+          .upload(filePath, compressedBlob, {
             contentType: 'image/jpeg',
             upsert: false,
           });
 
         if (uploadError) throw uploadError;
 
-        // Get public URL
+        // Upload thumbnail
+        const thumbResponse = await fetch(thumbnail.uri);
+        const thumbBlob = await thumbResponse.blob();
+
+        await supabase.storage
+          .from('receipts')
+          .upload(thumbPath, thumbBlob, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+        // Don't throw on thumbnail error - it's optional
+
+        // Get public URLs
         const {
           data: { publicUrl },
         } = supabase.storage.from('receipts').getPublicUrl(filePath);
+
+        const {
+          data: { publicUrl: thumbnailUrl },
+        } = supabase.storage.from('receipts').getPublicUrl(thumbPath);
 
         // Create receipt record
         const { data: receipt, error: insertError } = await supabase
@@ -362,6 +385,7 @@ export function useReceiptUpload(groupId: string | undefined) {
             group_id: groupId,
             uploaded_by: uploaderId,
             image_url: publicUrl,
+            image_thumbnail_url: thumbnailUrl,
             ocr_status: 'pending',
             status: 'draft',
           })
@@ -370,7 +394,7 @@ export function useReceiptUpload(groupId: string | undefined) {
 
         if (insertError) throw insertError;
 
-        return { success: true, receipt };
+        return { success: true, receipt, compressedUri: compressed.uri };
       } catch (err: any) {
         console.error('Error uploading receipt:', err);
         const errorMsg = err.message || 'Failed to upload receipt';
