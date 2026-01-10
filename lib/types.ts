@@ -229,3 +229,181 @@ export interface ExpenseBreakdownItem {
   yourShare: number;
   netEffect: number;
 }
+
+// ============================================
+// Receipt Scanning Types
+// ============================================
+
+export type ReceiptStatus = 'draft' | 'processing' | 'claiming' | 'settled' | 'archived';
+export type OCRStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type OCRProvider = 'gemini' | 'google_vision' | 'claude' | 'gpt4v' | 'textract';
+export type ClaimType = 'full' | 'split' | 'partial';
+export type ClaimSource = 'app' | 'imessage' | 'web' | 'assigned';
+
+export interface Receipt {
+  id: string;
+  group_id: string;
+  uploaded_by: string;
+
+  // Image
+  image_url: string;
+  image_thumbnail_url?: string | null;
+
+  // OCR results
+  ocr_status: OCRStatus;
+  ocr_provider?: OCRProvider | null;
+  ocr_raw_response?: Record<string, unknown> | null;
+  ocr_confidence?: number | null;
+
+  // Extracted metadata
+  merchant_name?: string | null;
+  merchant_address?: string | null;
+  receipt_date?: string | null;
+  subtotal?: number | null;
+  tax_amount?: number | null;
+  tip_amount?: number | null;
+  total_amount?: number | null;
+  currency: string;
+
+  // Status
+  status: ReceiptStatus;
+  claim_deadline?: string | null;
+  share_code?: string | null;
+
+  created_at: string;
+  updated_at: string;
+
+  // Joined fields
+  items?: ReceiptItem[];
+  uploader?: Member;
+}
+
+export interface ReceiptItem {
+  id: string;
+  receipt_id: string;
+
+  // Item details
+  description: string;
+  quantity: number;
+  unit_price?: number | null;
+  total_price: number;
+
+  // OCR metadata
+  original_text?: string | null;
+  confidence?: number | null;
+  bounding_box?: Record<string, number> | null;
+
+  // Ordering
+  line_number?: number | null;
+
+  // Flags for special items
+  is_tax: boolean;
+  is_tip: boolean;
+  is_discount: boolean;
+  is_subtotal: boolean;
+  is_total: boolean;
+
+  created_at: string;
+
+  // Joined fields
+  claims?: ItemClaim[];
+}
+
+export interface ItemClaim {
+  id: string;
+  receipt_item_id: string;
+  member_id: string;
+
+  // Claim type
+  claim_type: ClaimType;
+  share_fraction: number;
+  share_amount?: number | null;
+  split_count: number;
+
+  claimed_at: string;
+  claimed_via: ClaimSource;
+
+  // Joined fields
+  member?: Member;
+  receipt_item?: ReceiptItem;
+}
+
+export interface ReceiptMemberTotal {
+  id: string;
+  receipt_id: string;
+  member_id: string;
+
+  items_total: number;
+  tax_share: number;
+  tip_share: number;
+  grand_total: number;
+
+  is_settled: boolean;
+  settled_at?: string | null;
+  settlement_id?: string | null;
+
+  updated_at: string;
+
+  // Joined fields
+  member?: Member;
+}
+
+// OCR extraction result types
+export interface OCRExtractedItem {
+  description: string;
+  quantity: number;
+  unitPrice?: number;
+  totalPrice: number;
+  confidence?: number;
+  originalText?: string;
+  boundingBox?: { x: number; y: number; width: number; height: number };
+}
+
+export interface OCRExtractedMetadata {
+  merchantName?: string;
+  merchantAddress?: string;
+  date?: string;
+  subtotal?: number;
+  tax?: number;
+  tip?: number;
+  total?: number;
+  currency?: string;
+}
+
+export interface OCRResult {
+  items: OCRExtractedItem[];
+  metadata: OCRExtractedMetadata;
+  rawText?: string;
+  confidence: number;
+  provider: OCRProvider;
+}
+
+// Receipt calculation types
+export interface ReceiptMemberCalculation {
+  memberId: string;
+  memberName: string;
+  itemsTotal: number;
+  taxShare: number;
+  tipShare: number;
+  grandTotal: number;
+  claimedItems: Array<{
+    itemId: string;
+    description: string;
+    amount: number;
+    shareFraction: number;
+  }>;
+}
+
+export interface ReceiptSummary {
+  receiptId: string;
+  merchantName?: string;
+  receiptDate?: string;
+  itemCount: number;
+  claimedItemCount: number;
+  unclaimedItemCount: number;
+  subtotal: number;
+  tax: number;
+  tip: number;
+  total: number;
+  memberTotals: ReceiptMemberCalculation[];
+}

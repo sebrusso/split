@@ -192,6 +192,34 @@ function RootNavigator() {
         }}
       />
       <Stack.Screen
+        name="group/[id]/scan-receipt"
+        options={{
+          title: "Scan Receipt",
+          presentation: "fullScreenModal",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="group/[id]/receipt/[receiptId]/index"
+        options={{
+          title: "Claim Items",
+          headerBackTitle: "Back",
+        }}
+      />
+      <Stack.Screen
+        name="group/[id]/receipt/[receiptId]/edit"
+        options={{
+          title: "Edit Receipt",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="group/[id]/receipt/[receiptId]/settle"
+        options={{
+          title: "Settle Up",
+        }}
+      />
+      <Stack.Screen
         name="join/index"
         options={{
           title: "Join Group",
