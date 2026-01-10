@@ -22,7 +22,8 @@
       ],
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "SplitFree uses the camera to scan QR codes for joining groups.",
+        "NSCameraUsageDescription": "SplitFree uses the camera to scan QR codes for joining groups and to capture receipt photos for bill splitting.",
+        "NSPhotoLibraryUsageDescription": "SplitFree needs access to your photo library to select receipt images for bill splitting.",
         "NSUserNotificationsUsageDescription": "SplitFree sends you notifications when someone adds an expense, settles up, or joins your group.",
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false
@@ -91,7 +92,20 @@
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SplitFree uses the camera to capture receipt photos for bill splitting."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SplitFree needs access to your photos to select receipt images for bill splitting."
+        }
+      ],
+      "./plugins/withIMessageExtension"
     ],
     "extra": {
       "eas": {
