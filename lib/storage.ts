@@ -1,5 +1,7 @@
 /**
  * Supabase storage helpers for receipt images
+ *
+ * Uses signed URLs for security - receipts are not publicly accessible
  */
 
 import { supabase } from "./supabase";
@@ -8,11 +10,16 @@ import { handleAsync, AsyncResult } from "./utils";
 const RECEIPTS_BUCKET = "receipts";
 
 /**
+ * Default expiration time for signed URLs (1 hour)
+ */
+const SIGNED_URL_EXPIRY_SECONDS = 3600;
+
+/**
  * Upload a receipt image to Supabase storage
  * @param uri Local URI of the image
  * @param groupId Group ID for organizing receipts
  * @param expenseId Expense ID for unique filename
- * @returns Public URL of the uploaded image
+ * @returns Storage path (not URL) for the uploaded image
  */
 export async function uploadReceipt(
   uri: string,
@@ -43,31 +50,94 @@ export async function uploadReceipt(
       throw error;
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(RECEIPTS_BUCKET)
-      .getPublicUrl(filename);
-
-    return urlData.publicUrl;
+    // Return the storage path, not a public URL
+    // Use getReceiptSignedUrl to get a time-limited access URL
+    return filename;
   }, "Failed to upload receipt");
 }
 
 /**
+ * Get a signed URL for a receipt image
+ * URLs expire after the specified duration for security
+ * @param storagePath The storage path of the receipt
+ * @param expiresIn Expiration time in seconds (default: 1 hour)
+ * @returns Signed URL or null if error
+ */
+export async function getReceiptSignedUrl(
+  storagePath: string,
+  expiresIn: number = SIGNED_URL_EXPIRY_SECONDS
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from(RECEIPTS_BUCKET)
+      .createSignedUrl(storagePath, expiresIn);
+
+    if (error || !data) {
+      if (__DEV__) {
+        console.error("Error creating signed URL:", error);
+      }
+      return null;
+    }
+
+    return data.signedUrl;
+  } catch (error) {
+    if (__DEV__) {
+      console.error("Error creating signed URL:", error);
+    }
+    return null;
+  }
+}
+
+/**
+ * Get a signed thumbnail URL for a receipt
+ * Uses Supabase image transformation with signed URL
+ * @param storagePath The storage path of the receipt
+ * @param width Desired thumbnail width
+ * @param height Desired thumbnail height
+ * @param expiresIn Expiration time in seconds
+ * @returns Signed URL with transformation or null if error
+ */
+export async function getReceiptThumbnailSignedUrl(
+  storagePath: string,
+  width: number = 200,
+  height: number = 200,
+  expiresIn: number = SIGNED_URL_EXPIRY_SECONDS
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from(RECEIPTS_BUCKET)
+      .createSignedUrl(storagePath, expiresIn, {
+        transform: {
+          width,
+          height,
+          resize: "cover",
+        },
+      });
+
+    if (error || !data) {
+      if (__DEV__) {
+        console.error("Error creating signed thumbnail URL:", error);
+      }
+      return null;
+    }
+
+    return data.signedUrl;
+  } catch (error) {
+    if (__DEV__) {
+      console.error("Error creating signed thumbnail URL:", error);
+    }
+    return null;
+  }
+}
+
+/**
  * Delete a receipt image from Supabase storage
- * @param receiptUrl Full URL of the receipt image
+ * @param storagePath The storage path of the receipt
  * @returns Success result
  */
-export async function deleteReceipt(receiptUrl: string): Promise<AsyncResult<boolean>> {
+export async function deleteReceipt(storagePath: string): Promise<AsyncResult<boolean>> {
   return handleAsync(async () => {
-    // Extract path from URL
-    const url = new URL(receiptUrl);
-    const pathParts = url.pathname.split(`/${RECEIPTS_BUCKET}/`);
-    if (pathParts.length < 2) {
-      throw new Error("Invalid receipt URL");
-    }
-    const path = pathParts[1];
-
-    const { error } = await supabase.storage.from(RECEIPTS_BUCKET).remove([path]);
+    const { error } = await supabase.storage.from(RECEIPTS_BUCKET).remove([storagePath]);
 
     if (error) {
       throw error;
@@ -78,12 +148,27 @@ export async function deleteReceipt(receiptUrl: string): Promise<AsyncResult<boo
 }
 
 /**
- * Get the thumbnail URL for a receipt
- * Supabase can transform images on the fly
- * @param receiptUrl Original receipt URL
- * @param width Desired thumbnail width
- * @param height Desired thumbnail height
- * @returns Transformed image URL
+ * Extract storage path from a signed or public URL
+ * @param url The full URL
+ * @returns Storage path or null if invalid
+ */
+export function extractStoragePath(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split(`/${RECEIPTS_BUCKET}/`);
+    if (pathParts.length < 2) {
+      return null;
+    }
+    // Remove any query parameters from the path
+    return pathParts[1].split("?")[0];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @deprecated Use getReceiptSignedUrl or getReceiptThumbnailSignedUrl instead
+ * Get the thumbnail URL for a receipt (public URL - less secure)
  */
 export function getReceiptThumbnailUrl(
   receiptUrl: string,

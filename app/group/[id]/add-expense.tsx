@@ -106,7 +106,9 @@ export default function AddExpenseScreen() {
         setPercentages(initialPercentages);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      if (__DEV__) {
+        console.error("Error fetching data:", error);
+      }
     }
   };
 
@@ -268,7 +270,9 @@ export default function AddExpenseScreen() {
 
       router.back();
     } catch (err) {
-      console.error("Error creating expense:", err);
+      if (__DEV__) {
+        console.error("Error creating expense:", err);
+      }
       setError("Failed to add expense. Please try again.");
     } finally {
       setLoading(false);
