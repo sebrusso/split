@@ -33,7 +33,10 @@
     "test:coverage": "jest --coverage",
     "setup:token": "./scripts/setup-github-token.sh",
     "rotate:token": "./scripts/rotate-github-token.sh",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:testflight": "eas build --platform ios --profile testflight",
+    "submit:testflight": "eas submit --platform ios --profile testflight",
+    "deploy:testflight": "npm run build:testflight && npm run submit:testflight"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.0.0",
