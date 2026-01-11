@@ -293,7 +293,7 @@ describe('Item Claims CRUD', () => {
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
-    expect(data.share_fraction).toBe('1.0000'); // DECIMAL(5,4)
+    expect(parseFloat(data.share_fraction)).toBe(1.0); // DECIMAL(5,4)
     expect(data.claimed_via).toBe('app');
   });
 

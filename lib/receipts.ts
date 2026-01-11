@@ -405,10 +405,13 @@ export function canClaimItem(
 export function parseReceiptDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
 
-  // Try ISO format first
-  const isoDate = new Date(dateStr);
-  if (!isNaN(isoDate.getTime())) {
-    return isoDate;
+  // Try YYYY-MM-DD format first (parse as local time, not UTC)
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    return new Date(year, month, day);
   }
 
   // Try MM/DD/YYYY format
@@ -421,6 +424,12 @@ export function parseReceiptDate(dateStr: string | null | undefined): Date | nul
     if (!isNaN(date.getTime())) {
       return date;
     }
+  }
+
+  // Try generic Date parsing as fallback
+  const isoDate = new Date(dateStr);
+  if (!isNaN(isoDate.getTime())) {
+    return isoDate;
   }
 
   return null;
