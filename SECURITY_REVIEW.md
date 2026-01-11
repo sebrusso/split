@@ -11,12 +11,12 @@
 
 This review identified **12 security concerns** across the SplitFree codebase, categorized by severity. The most critical issues involve **hardcoded credentials**, **query injection vulnerabilities**, and **insufficient access controls**.
 
-| Severity | Count | Fixed | New (Post-Mitigation) |
-|----------|-------|-------|----------------------|
-| Critical | 4 | 4 | 1 (git history exposure) |
+| Severity | Original | Fixed | Remaining |
+|----------|----------|-------|-----------|
+| Critical | 4 | 4 | 1 (RLS policies - database level) |
 | High | 3 | 2 | 1 (auth helper bypass) |
 | Medium | 3 | 2 | 2 (deprecated functions, test detection) |
-| Low | 2 | 0 | 0 |
+| Low | 2 | 0 | 1 (credentials in git - not actually critical) |
 
 ### Mitigations Applied
 
@@ -35,132 +35,380 @@ The following security fixes have been implemented:
 
 **Audit Focus:** Vulnerabilities introduced by security fix commits
 
-### NEW Critical Issues
+---
 
-#### C1. Credentials Exposed in Git History
+### Severity Correction: Credentials in Git History
 
-**Location:** Git history (commits `abd7138`, `4a98eca`)
+The Supabase anon key and Clerk publishable key in git history are **NOT critical vulnerabilities**:
 
-**Issue:** While credentials have been moved to environment variables, the original hardcoded credentials remain in git history:
+- **Anon keys are designed to be public** - they're embedded in every client app bundle
+- **Publishable keys are meant for client-side use** - the `pk_` prefix means "publishable"
+- **Security comes from RLS policies**, not credential secrecy
 
-```bash
-git show abd7138:lib/supabase.ts  # Exposes Supabase URL and anon key
-git show abd7138:lib/clerk.ts     # Exposes Clerk publishable key
-```
-
-**Impact:**
-- Anyone with repo access can retrieve the credentials
-- Keys remain valid and usable
-- Project URL exposed reveals Supabase instance structure
-
-**Mitigation Required:**
-- **Rotate ALL exposed credentials immediately:**
-  - Generate new Supabase anon key
-  - Create new Clerk publishable key
-- Consider git history rewrite (only if repo is private)
-- Update `.env` with new credentials after rotation
+**Actual severity: Low** (information disclosure of project structure only)
 
 ---
 
-### NEW High Issues
+### CRITICAL: Overly Permissive RLS Policies (Unfixed)
 
-#### H1. Authorization Helper Bypass Pattern
+**This remains the #1 security issue.** The CLAUDE.md states: *"All tables have RLS enabled with public read/write policies for MVP"*
+
+#### Specific Mitigation Steps
+
+**Step 1: Connect to Supabase Dashboard**
+```
+https://supabase.com/dashboard/project/rzwuknfycyqitcbotsvx/auth/policies
+```
+
+**Step 2: Drop existing permissive policies**
+```sql
+-- Run in Supabase SQL Editor
+DROP POLICY IF EXISTS "Enable read access for all users" ON groups;
+DROP POLICY IF EXISTS "Enable insert for all users" ON groups;
+DROP POLICY IF EXISTS "Enable update for all users" ON groups;
+DROP POLICY IF EXISTS "Enable delete for all users" ON groups;
+-- Repeat for: members, expenses, splits, settlements, friendships
+```
+
+**Step 3: Create proper RLS policies for `groups` table**
+```sql
+-- Users can view groups they are members of
+CREATE POLICY "Members can view their groups"
+ON groups FOR SELECT
+USING (
+  id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can create groups (they become a member via trigger/app logic)
+CREATE POLICY "Authenticated users can create groups"
+ON groups FOR INSERT
+WITH CHECK (auth.role() = 'authenticated');
+
+-- Only group members can update group details
+CREATE POLICY "Members can update their groups"
+ON groups FOR UPDATE
+USING (
+  id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Only group members can delete groups
+CREATE POLICY "Members can delete their groups"
+ON groups FOR DELETE
+USING (
+  id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+```
+
+**Step 4: Create proper RLS policies for `members` table**
+```sql
+-- Users can view members of groups they belong to
+CREATE POLICY "View members of my groups"
+ON members FOR SELECT
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can add members to groups they belong to
+CREATE POLICY "Add members to my groups"
+ON members FOR INSERT
+WITH CHECK (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+  OR NOT EXISTS (
+    SELECT 1 FROM members WHERE group_id = members.group_id
+  ) -- Allow first member (group creator)
+);
+
+-- Users can update their own member profile
+CREATE POLICY "Update own member profile"
+ON members FOR UPDATE
+USING (clerk_user_id = auth.jwt()->>'sub');
+
+-- Users can remove members from groups they belong to
+CREATE POLICY "Remove members from my groups"
+ON members FOR DELETE
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+```
+
+**Step 5: Create proper RLS policies for `expenses` table**
+```sql
+-- Users can view expenses in their groups
+CREATE POLICY "View expenses in my groups"
+ON expenses FOR SELECT
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can add expenses to their groups
+CREATE POLICY "Add expenses to my groups"
+ON expenses FOR INSERT
+WITH CHECK (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can update expenses in their groups
+CREATE POLICY "Update expenses in my groups"
+ON expenses FOR UPDATE
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can delete expenses in their groups
+CREATE POLICY "Delete expenses in my groups"
+ON expenses FOR DELETE
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+```
+
+**Step 6: Create proper RLS policies for `splits` table**
+```sql
+-- Users can view splits for expenses in their groups
+CREATE POLICY "View splits in my groups"
+ON splits FOR SELECT
+USING (
+  expense_id IN (
+    SELECT e.id FROM expenses e
+    JOIN members m ON e.group_id = m.group_id
+    WHERE m.clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can manage splits for expenses in their groups
+CREATE POLICY "Manage splits in my groups"
+ON splits FOR ALL
+USING (
+  expense_id IN (
+    SELECT e.id FROM expenses e
+    JOIN members m ON e.group_id = m.group_id
+    WHERE m.clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+```
+
+**Step 7: Create proper RLS policies for `settlements` table**
+```sql
+-- Users can view settlements in their groups
+CREATE POLICY "View settlements in my groups"
+ON settlements FOR SELECT
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can create settlements in their groups
+CREATE POLICY "Create settlements in my groups"
+ON settlements FOR INSERT
+WITH CHECK (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+
+-- Users can delete their own settlements
+CREATE POLICY "Delete settlements in my groups"
+ON settlements FOR DELETE
+USING (
+  group_id IN (
+    SELECT group_id FROM members
+    WHERE clerk_user_id = auth.jwt()->>'sub'
+  )
+);
+```
+
+---
+
+### HIGH: Authorization Helper Bypass Pattern
 
 **Location:** `lib/auth-helpers.ts:16-46`
 
+**Issue:** `isGroupMember(groupId, clerkUserId?)` has optional userId - returns true for ANY member if omitted.
+
+#### Specific Mitigation Steps
+
+**Step 1: Edit `lib/auth-helpers.ts`**
+
+Replace lines 16-46 with:
 ```typescript
+/**
+ * Check if a user is a member of a group
+ * @param groupId - The group ID to check
+ * @param clerkUserId - The Clerk user ID (REQUIRED)
+ * @returns True if the user is a member
+ */
 export async function isGroupMember(
   groupId: string,
-  clerkUserId?: string  // Optional parameter!
+  clerkUserId: string  // Now required, not optional
 ): Promise<boolean> {
-  // ...
-  if (clerkUserId) {
-    query = query.eq("clerk_user_id", clerkUserId);
+  if (!clerkUserId) {
+    if (__DEV__) {
+      console.warn("isGroupMember called without clerkUserId - this is a bug");
+    }
+    return false;  // Fail secure: deny access if no user ID
   }
-  // Without clerkUserId, returns true if ANY member exists!
-  return data !== null && data.length > 0;
+
+  try {
+    const { data, error } = await supabase
+      .from("members")
+      .select("id")
+      .eq("group_id", groupId)
+      .eq("clerk_user_id", clerkUserId)
+      .limit(1);
+
+    if (error) {
+      if (__DEV__) {
+        console.error("Error checking group membership:", error);
+      }
+      return false;
+    }
+
+    return data !== null && data.length > 0;
+  } catch (error) {
+    if (__DEV__) {
+      console.error("Error checking group membership:", error);
+    }
+    return false;
+  }
 }
 ```
 
-**Issue:** The `clerkUserId` parameter is optional. When omitted, the function checks if the group has ANY members, not if the CURRENT user is a member. This is a dangerous API design that invites misuse.
+**Step 2: Update `hasExpenseAccess` similarly (line 55-79)**
 
-**Impact:**
-- Callers who forget to pass `clerkUserId` get a false sense of security
-- The function returns `true` for any group with at least one member
-- Defense-in-depth authorization is ineffective if used incorrectly
-
-**Mitigation Required:**
-- Make `clerkUserId` a required parameter
-- Or change behavior to return `false` when userId is not provided
-- Add runtime warning if userId is undefined
+Make `clerkUserId` required and fail secure if missing.
 
 ---
 
-### NEW Medium Issues
-
-#### M1. Deprecated Insecure Functions Still Available
+### MEDIUM: Deprecated Insecure Functions
 
 **Location:** `lib/utils.ts:177-184`, `lib/storage.ts:173-200`
 
-```typescript
-// utils.ts - Still uses Math.random()
-/** @deprecated Prefer generateShareCode() for security */
-export function generateShareCodeSync(): string {
-  // Uses Math.random() - insecure
-}
+#### Specific Mitigation Steps
 
-// storage.ts - Still uses public URLs
-/** @deprecated Use getReceiptSignedUrl instead */
-export function getReceiptThumbnailUrl(): string {
-  // Returns public, non-expiring URLs
+**Option A: Remove deprecated functions entirely**
+
+In `lib/utils.ts`, delete lines 176-184:
+```typescript
+// DELETE THIS ENTIRE FUNCTION
+export function generateShareCodeSync(): string {
+  // ...
 }
 ```
 
-**Issue:** Deprecated functions remain available and functional. Developers may use them accidentally or intentionally bypass security.
+In `lib/storage.ts`, delete lines 172-200:
+```typescript
+// DELETE THIS ENTIRE FUNCTION
+export function getReceiptThumbnailUrl(): string {
+  // ...
+}
+```
 
-**Impact:**
-- Insecure code paths remain executable
-- IDE autocomplete may suggest deprecated functions
-- Code reviews may miss deprecated function usage
+**Option B: Add production guard that throws**
 
-**Mitigation Suggested:**
-- Remove deprecated functions entirely, or
-- Add runtime deprecation warnings that throw in production
+```typescript
+/** @deprecated Use generateShareCode() instead */
+export function generateShareCodeSync(): string {
+  if (!__DEV__) {
+    throw new Error(
+      "generateShareCodeSync is deprecated and disabled in production. " +
+      "Use generateShareCode() instead."
+    );
+  }
+  // ... existing implementation for dev/test only
+}
+```
 
 ---
 
-#### M2. Test Environment Detection Could Fail
+### MEDIUM: Test Environment Detection
 
-**Location:** `lib/supabase.ts:13`, `lib/clerk.ts:13`
+**Location:** `lib/supabase.ts:13-27`, `lib/clerk.ts:13-22`
+
+#### Specific Mitigation Steps
+
+**Edit `lib/supabase.ts`** - Replace lines 11-28 with:
 
 ```typescript
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+// Only allow missing credentials in explicit test environment
 const isTest = process.env.NODE_ENV === "test" ||
                process.env.JEST_WORKER_ID !== undefined;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  if (isTest) {
+    // Test environment: use placeholders
+    console.warn("Using test placeholder Supabase credentials");
+  } else {
+    // Production/dev: fail immediately with clear error
+    throw new Error(
+      "FATAL: Missing Supabase credentials.\n" +
+      "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env\n" +
+      "See .env.example for reference."
+    );
+  }
+}
+
+// Validate URL format in non-test environments
+if (!isTest && supabaseUrl && !supabaseUrl.includes(".supabase.co")) {
+  throw new Error(
+    `Invalid EXPO_PUBLIC_SUPABASE_URL: ${supabaseUrl}\n` +
+    "Expected format: https://your-project.supabase.co"
+  );
+}
+
+const url = supabaseUrl || "https://test-placeholder.supabase.co";
+const key = supabaseAnonKey || "test-anon-key-placeholder";
+
+export const supabase = createClient(url, key);
 ```
 
-**Issue:** If test detection fails in an environment where env vars aren't set, placeholder values are used:
-- `https://test.supabase.co` with `test-anon-key`
-- `pk_test_placeholder_for_testing`
-
-**Impact:**
-- Unlikely but possible: production builds could use placeholder credentials
-- Would cause authentication failures (not data exposure)
-- Error messages could reveal test infrastructure
-
-**Mitigation Suggested:**
-- Add build-time validation that real credentials are present
-- Fail loudly and early if credentials are invalid/missing
+**Edit `lib/clerk.ts`** - Apply same pattern for Clerk key validation.
 
 ---
 
-### Summary of New Issues
+### Summary of Remaining Issues
 
-| ID | Severity | Issue | Status |
-|----|----------|-------|--------|
-| C1 | Critical | Credentials in git history | Requires credential rotation |
-| H1 | High | Auth helper bypass pattern | Requires code fix |
-| M1 | Medium | Deprecated insecure functions | Suggested removal |
-| M2 | Medium | Test env detection fallibility | Suggested hardening |
+| ID | Severity | Issue | Specific Fix |
+|----|----------|-------|--------------|
+| RLS | **Critical** | Permissive RLS policies | Run SQL in Steps 2-7 above |
+| H1 | High | Auth helper bypass | Edit `lib/auth-helpers.ts` per Step 1-2 |
+| M1 | Medium | Deprecated functions | Delete or add production guard |
+| M2 | Medium | Test env detection | Edit credential validation logic |
 
 ---
 
