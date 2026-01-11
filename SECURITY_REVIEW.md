@@ -11,12 +11,12 @@
 
 This review identified **12 security concerns** across the SplitFree codebase, categorized by severity. The most critical issues involve **hardcoded credentials**, **query injection vulnerabilities**, and **insufficient access controls**.
 
-| Severity | Count | Fixed |
-|----------|-------|-------|
-| Critical | 4 | 4 |
-| High | 3 | 2 |
-| Medium | 3 | 2 |
-| Low | 2 | 0 |
+| Severity | Count | Fixed | New (Post-Mitigation) |
+|----------|-------|-------|----------------------|
+| Critical | 4 | 4 | 1 (git history exposure) |
+| High | 3 | 2 | 1 (auth helper bypass) |
+| Medium | 3 | 2 | 2 (deprecated functions, test detection) |
+| Low | 2 | 0 | 0 |
 
 ### Mitigations Applied
 
@@ -28,6 +28,139 @@ The following security fixes have been implemented:
 4. **Signed URLs for receipts** - Receipt storage now uses time-limited signed URLs
 5. **Authorization helpers created** - `lib/auth-helpers.ts` provides membership verification functions
 6. **Production logging guards** - Console.error calls wrapped with `__DEV__` checks
+
+---
+
+## Post-Mitigation Audit (2026-01-11)
+
+**Audit Focus:** Vulnerabilities introduced by security fix commits
+
+### NEW Critical Issues
+
+#### C1. Credentials Exposed in Git History
+
+**Location:** Git history (commits `abd7138`, `4a98eca`)
+
+**Issue:** While credentials have been moved to environment variables, the original hardcoded credentials remain in git history:
+
+```bash
+git show abd7138:lib/supabase.ts  # Exposes Supabase URL and anon key
+git show abd7138:lib/clerk.ts     # Exposes Clerk publishable key
+```
+
+**Impact:**
+- Anyone with repo access can retrieve the credentials
+- Keys remain valid and usable
+- Project URL exposed reveals Supabase instance structure
+
+**Mitigation Required:**
+- **Rotate ALL exposed credentials immediately:**
+  - Generate new Supabase anon key
+  - Create new Clerk publishable key
+- Consider git history rewrite (only if repo is private)
+- Update `.env` with new credentials after rotation
+
+---
+
+### NEW High Issues
+
+#### H1. Authorization Helper Bypass Pattern
+
+**Location:** `lib/auth-helpers.ts:16-46`
+
+```typescript
+export async function isGroupMember(
+  groupId: string,
+  clerkUserId?: string  // Optional parameter!
+): Promise<boolean> {
+  // ...
+  if (clerkUserId) {
+    query = query.eq("clerk_user_id", clerkUserId);
+  }
+  // Without clerkUserId, returns true if ANY member exists!
+  return data !== null && data.length > 0;
+}
+```
+
+**Issue:** The `clerkUserId` parameter is optional. When omitted, the function checks if the group has ANY members, not if the CURRENT user is a member. This is a dangerous API design that invites misuse.
+
+**Impact:**
+- Callers who forget to pass `clerkUserId` get a false sense of security
+- The function returns `true` for any group with at least one member
+- Defense-in-depth authorization is ineffective if used incorrectly
+
+**Mitigation Required:**
+- Make `clerkUserId` a required parameter
+- Or change behavior to return `false` when userId is not provided
+- Add runtime warning if userId is undefined
+
+---
+
+### NEW Medium Issues
+
+#### M1. Deprecated Insecure Functions Still Available
+
+**Location:** `lib/utils.ts:177-184`, `lib/storage.ts:173-200`
+
+```typescript
+// utils.ts - Still uses Math.random()
+/** @deprecated Prefer generateShareCode() for security */
+export function generateShareCodeSync(): string {
+  // Uses Math.random() - insecure
+}
+
+// storage.ts - Still uses public URLs
+/** @deprecated Use getReceiptSignedUrl instead */
+export function getReceiptThumbnailUrl(): string {
+  // Returns public, non-expiring URLs
+}
+```
+
+**Issue:** Deprecated functions remain available and functional. Developers may use them accidentally or intentionally bypass security.
+
+**Impact:**
+- Insecure code paths remain executable
+- IDE autocomplete may suggest deprecated functions
+- Code reviews may miss deprecated function usage
+
+**Mitigation Suggested:**
+- Remove deprecated functions entirely, or
+- Add runtime deprecation warnings that throw in production
+
+---
+
+#### M2. Test Environment Detection Could Fail
+
+**Location:** `lib/supabase.ts:13`, `lib/clerk.ts:13`
+
+```typescript
+const isTest = process.env.NODE_ENV === "test" ||
+               process.env.JEST_WORKER_ID !== undefined;
+```
+
+**Issue:** If test detection fails in an environment where env vars aren't set, placeholder values are used:
+- `https://test.supabase.co` with `test-anon-key`
+- `pk_test_placeholder_for_testing`
+
+**Impact:**
+- Unlikely but possible: production builds could use placeholder credentials
+- Would cause authentication failures (not data exposure)
+- Error messages could reveal test infrastructure
+
+**Mitigation Suggested:**
+- Add build-time validation that real credentials are present
+- Fail loudly and early if credentials are invalid/missing
+
+---
+
+### Summary of New Issues
+
+| ID | Severity | Issue | Status |
+|----|----------|-------|--------|
+| C1 | Critical | Credentials in git history | Requires credential rotation |
+| H1 | High | Auth helper bypass pattern | Requires code fix |
+| M1 | Medium | Deprecated insecure functions | Suggested removal |
+| M2 | Medium | Test env detection fallibility | Suggested hardening |
 
 ---
 
