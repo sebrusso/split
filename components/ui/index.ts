@@ -28,3 +28,11 @@ export {
   BalanceIndicator,
   BalanceEmptyState,
 } from "./BalanceCard";
+
+// Payment components
+export { PaymentConfirmationModal } from "./PaymentConfirmationModal";
+export { SettlementQRCodeModal } from "./SettlementQRCodeModal";
+
+// Group components
+export { GroupPicker, GroupPickerButton } from "./GroupPicker";
+export { QuickCreateGroup } from "./QuickCreateGroup";

@@ -50,3 +50,6 @@ coverage/
 .vscode/
 .idea/
 supabase/.temp/
+
+# GCP Service Account (sensitive)
+.gcp-service-account.json

@@ -203,6 +203,8 @@ export function useItemClaims(receiptId: string | undefined) {
         claimedVia?: ClaimSource;
       } = {}
     ) => {
+      console.log('claimItem hook called:', { receiptId, itemId, memberId, options });
+
       if (!receiptId) return { success: false, error: 'No receipt ID' };
 
       try {
@@ -210,12 +212,16 @@ export function useItemClaims(receiptId: string | undefined) {
         setError(null);
 
         const claimData = createClaim(itemId, memberId, options);
+        console.log('Created claim data:', claimData);
 
-        const { error: insertError } = await supabase
+        const { data, error: insertError } = await supabase
           .from('item_claims')
           .upsert(claimData, {
             onConflict: 'receipt_item_id,member_id',
-          });
+          })
+          .select();
+
+        console.log('Upsert result:', { data, error: insertError });
 
         if (insertError) throw insertError;
 
@@ -237,15 +243,19 @@ export function useItemClaims(receiptId: string | undefined) {
    */
   const unclaimItem = useCallback(
     async (itemId: string, memberId: string) => {
+      console.log('unclaimItem called:', { itemId, memberId });
+
       try {
         setClaiming(true);
         setError(null);
 
-        const { error: deleteError } = await supabase
+        const { error: deleteError, count } = await supabase
           .from('item_claims')
           .delete()
           .eq('receipt_item_id', itemId)
           .eq('member_id', memberId);
+
+        console.log('unclaimItem delete result:', { deleteError, count });
 
         if (deleteError) throw deleteError;
 
@@ -708,4 +718,313 @@ export function useReceiptUpdate() {
     updating,
     error,
   };
+}
+
+/**
+ * Hook to upload a receipt without requiring a group ID
+ * Used for the group-agnostic scanning flow where users scan first, assign group later
+ */
+export function useReceiptUploadNoGroup() {
+  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Upload a receipt image without a group
+   * Creates receipt with group_id: null and uploaded_by_clerk_id for ownership tracking
+   */
+  const uploadReceipt = useCallback(
+    async (imageUri: string, clerkUserId: string) => {
+      try {
+        setUploading(true);
+        setError(null);
+
+        // Compress image and create thumbnail
+        const { compressed, thumbnail } = await prepareImageForUpload(imageUri);
+
+        // Generate unique filenames using clerk user ID
+        const timestamp = Date.now();
+        const fileName = `receipt_${clerkUserId}_${timestamp}.jpg`;
+        const thumbFileName = `receipt_${clerkUserId}_${timestamp}_thumb.jpg`;
+        const filePath = `receipts/unassigned/${clerkUserId}/${fileName}`;
+        const thumbPath = `receipts/unassigned/${clerkUserId}/${thumbFileName}`;
+
+        // Upload compressed image
+        const compressedResponse = await fetch(compressed.uri);
+        const compressedBlob = await compressedResponse.blob();
+
+        const { error: uploadError } = await supabase.storage
+          .from('receipts')
+          .upload(filePath, compressedBlob, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Upload thumbnail
+        const thumbResponse = await fetch(thumbnail.uri);
+        const thumbBlob = await thumbResponse.blob();
+
+        await supabase.storage
+          .from('receipts')
+          .upload(thumbPath, thumbBlob, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+
+        // Get public URLs
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('receipts').getPublicUrl(filePath);
+
+        const {
+          data: { publicUrl: thumbnailUrl },
+        } = supabase.storage.from('receipts').getPublicUrl(thumbPath);
+
+        // Create receipt record without group
+        const { data: receipt, error: insertError } = await supabase
+          .from('receipts')
+          .insert({
+            group_id: null,
+            uploaded_by: null,
+            uploaded_by_clerk_id: clerkUserId,
+            image_url: publicUrl,
+            image_thumbnail_url: thumbnailUrl,
+            ocr_status: 'pending',
+            status: 'draft',
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        return { success: true, receipt, receiptId: receipt.id, compressedUri: compressed.uri };
+      } catch (err: any) {
+        console.error('Error uploading receipt:', err);
+        const errorMsg = err.message || 'Failed to upload receipt';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      } finally {
+        setUploading(false);
+      }
+    },
+    []
+  );
+
+  /**
+   * Process a receipt with OCR (same as original, works without group)
+   */
+  const processReceipt = useCallback(
+    async (receiptId: string, imageUri: string) => {
+      try {
+        setProcessing(true);
+        setError(null);
+
+        // Import OCR dynamically
+        const { processReceiptImage, validateOCRResult } = await import('./ocr');
+
+        // Update status to processing
+        await supabase
+          .from('receipts')
+          .update({ ocr_status: 'processing' })
+          .eq('id', receiptId);
+
+        // Process the image
+        const ocrResult = await processReceiptImage(imageUri);
+
+        // Validate the result
+        const validation = validateOCRResult(ocrResult);
+
+        if (!validation.isValid) {
+          await supabase
+            .from('receipts')
+            .update({ ocr_status: 'failed' })
+            .eq('id', receiptId);
+
+          return {
+            success: false,
+            error: validation.errors.join(', '),
+            warnings: validation.warnings,
+          };
+        }
+
+        // Update receipt with metadata (keep status as draft until group assigned)
+        await supabase
+          .from('receipts')
+          .update({
+            ocr_status: 'completed',
+            ocr_provider: ocrResult.provider,
+            ocr_confidence: ocrResult.confidence,
+            ocr_raw_response: ocrResult,
+            merchant_name: ocrResult.metadata.merchantName,
+            merchant_address: ocrResult.metadata.merchantAddress,
+            receipt_date: ocrResult.metadata.date,
+            subtotal: ocrResult.metadata.subtotal,
+            tax_amount: ocrResult.metadata.tax,
+            tip_amount: ocrResult.metadata.tip,
+            total_amount: ocrResult.metadata.total,
+            currency: ocrResult.metadata.currency || 'USD',
+            // Don't change status to 'claiming' yet - will be set when group is assigned
+          })
+          .eq('id', receiptId);
+
+        // Insert receipt items
+        const items = ocrResult.items.map((item, index) => ({
+          receipt_id: receiptId,
+          description: item.description,
+          quantity: item.quantity || 1,
+          unit_price: item.unitPrice,
+          total_price: item.totalPrice,
+          line_number: index + 1,
+          confidence: item.confidence,
+          is_tax: false,
+          is_tip: false,
+          is_discount: item.totalPrice < 0,
+          is_subtotal: false,
+          is_total: false,
+        }));
+
+        if (items.length > 0) {
+          await supabase.from('receipt_items').insert(items);
+        }
+
+        return {
+          success: true,
+          warnings: validation.warnings,
+          itemCount: items.length,
+        };
+      } catch (err: any) {
+        console.error('Error processing receipt:', err);
+        const errorMsg = err.message || 'Failed to process receipt';
+        setError(errorMsg);
+
+        // Mark as failed
+        await supabase
+          .from('receipts')
+          .update({ ocr_status: 'failed' })
+          .eq('id', receiptId);
+
+        return { success: false, error: errorMsg };
+      } finally {
+        setProcessing(false);
+      }
+    },
+    []
+  );
+
+  return { uploadReceipt, processReceipt, uploading, processing, error };
+}
+
+/**
+ * Hook to assign a group to an existing receipt
+ * Used after scanning and reviewing OCR results
+ */
+export function useReceiptGroupAssignment() {
+  const [assigning, setAssigning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Assign a group to a receipt and set it ready for claiming
+   */
+  const assignGroup = useCallback(
+    async (receiptId: string, groupId: string, clerkUserId: string) => {
+      try {
+        setAssigning(true);
+        setError(null);
+
+        // Find or create member record for user in this group
+        let { data: member } = await supabase
+          .from('members')
+          .select('id')
+          .eq('group_id', groupId)
+          .eq('clerk_user_id', clerkUserId)
+          .single();
+
+        // If no member record exists, we can't assign (user must be a member)
+        if (!member) {
+          throw new Error('You must be a member of this group to assign a receipt');
+        }
+
+        // Generate share code for the receipt
+        const { generateReceiptShareCode } = await import('./receipts');
+        const shareCode = generateReceiptShareCode();
+
+        // Update receipt with group assignment
+        const { data: receipt, error: updateError } = await supabase
+          .from('receipts')
+          .update({
+            group_id: groupId,
+            uploaded_by: member.id,
+            status: 'claiming',
+            share_code: shareCode,
+          })
+          .eq('id', receiptId)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        return {
+          success: true,
+          receipt,
+          memberId: member.id,
+          shareCode,
+        };
+      } catch (err: any) {
+        console.error('Error assigning group:', err);
+        const errorMsg = err.message || 'Failed to assign group';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      } finally {
+        setAssigning(false);
+      }
+    },
+    []
+  );
+
+  return { assignGroup, assigning, error };
+}
+
+/**
+ * Hook to fetch unassigned receipts for a user
+ */
+export function useUnassignedReceipts(clerkUserId: string | undefined) {
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchReceipts = useCallback(async () => {
+    if (!clerkUserId) {
+      setReceipts([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('receipts')
+        .select('*')
+        .eq('uploaded_by_clerk_id', clerkUserId)
+        .is('group_id', null)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+      setReceipts(data || []);
+    } catch (err: any) {
+      console.error('Error fetching unassigned receipts:', err);
+      setError(err.message || 'Failed to fetch receipts');
+    } finally {
+      setLoading(false);
+    }
+  }, [clerkUserId]);
+
+  useEffect(() => {
+    fetchReceipts();
+  }, [fetchReceipts]);
+
+  return { receipts, loading, error, refetch: fetchReceipts };
 }

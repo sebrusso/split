@@ -216,7 +216,7 @@ function RootNavigator() {
       <Stack.Screen
         name="group/[id]/receipt/[receiptId]/settle"
         options={{
-          title: "Settle Up",
+          title: "Receipt",
         }}
       />
       <Stack.Screen

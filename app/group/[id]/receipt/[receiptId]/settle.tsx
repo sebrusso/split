@@ -100,7 +100,7 @@ export default function ReceiptSettleScreen() {
     if (!uploaderVenmo) {
       Alert.alert(
         'Venmo Not Set Up',
-        'The person who paid hasn\'t added their Venmo username yet. Ask them to set it up in their profile.',
+        "The person who paid hasn't added their Venmo username yet. Ask them to set it up in their profile.",
         [{ text: 'OK' }]
       );
       return;
@@ -182,30 +182,78 @@ export default function ReceiptSettleScreen() {
   };
 
   const handleFinish = async () => {
-    if (!receiptId) return;
+    if (!receiptId || !receipt || !summary || !uploaderId) return;
 
     try {
-      // Update receipt status to settled
-      const { error } = await supabase
+      setSettling(true);
+
+      // Check if an expense already exists for this receipt (prevent duplicates)
+      // Use receipt ID in notes field as a reliable identifier
+      const receiptMarker = `[receipt:${receiptId}]`;
+      const { data: existingExpenses } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('group_id', id)
+        .ilike('notes', `%${receiptMarker}%`)
+        .is('deleted_at', null)
+        .limit(1);
+
+      let expenseCreated = false;
+
+      if (!existingExpenses || existingExpenses.length === 0) {
+        // Create an expense from the receipt
+        const expenseDescription = receipt.merchant_name || 'Receipt';
+        const expenseAmount = summary.total;
+        const notesText = `From receipt scan${receipt.merchant_address ? ` at ${receipt.merchant_address}` : ''} ${receiptMarker}`;
+
+        const { data: expense, error: expenseError } = await supabase
+          .from('expenses')
+          .insert({
+            group_id: id,
+            description: expenseDescription,
+            amount: expenseAmount,
+            paid_by: uploaderId,
+            category: 'food',  // Most receipts are food/restaurant
+            expense_date: receipt.receipt_date || new Date().toISOString().split('T')[0],
+            notes: notesText,
+            receipt_url: receipt.image_url,
+            split_type: 'exact',
+            currency: receipt.currency,
+          })
+          .select()
+          .single();
+
+        if (expenseError) throw expenseError;
+
+        // Create splits for each member based on their claimed totals
+        const splits = summary.memberTotals.map((memberTotal) => ({
+          expense_id: expense.id,
+          member_id: memberTotal.memberId,
+          amount: memberTotal.grandTotal,
+        }));
+
+        if (splits.length > 0) {
+          const { error: splitsError } = await supabase.from('splits').insert(splits);
+          if (splitsError) throw splitsError;
+        }
+
+        expenseCreated = true;
+      }
+
+      // Once expense is created, mark receipt as settled so it doesn't show as duplicate
+      // The expense now represents this receipt in the expenses list
+      await supabase
         .from('receipts')
         .update({ status: 'settled' })
         .eq('id', receiptId);
 
-      if (error) {
-        console.error('Error settling receipt:', error);
-        Alert.alert('Error', 'Failed to mark receipt as settled. Please try again.');
-        return;
-      }
-
-      Alert.alert('Receipt Settled', 'All payments have been recorded.', [
-        {
-          text: 'Done',
-          onPress: () => router.replace(`/group/${id}`),
-        },
-      ]);
-    } catch (err) {
-      console.error('Error settling receipt:', err);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      // Navigate directly back to group
+      router.replace(`/group/${id}`);
+    } catch (err: any) {
+      console.error('Error finalizing receipt:', err);
+      Alert.alert('Error', err.message || 'Failed to save receipt');
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -239,7 +287,7 @@ export default function ReceiptSettleScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Header */}
         <Card style={styles.headerCard}>
-          <Text style={styles.headerTitle}>Settlement Summary</Text>
+          <Text style={styles.headerTitle}>Receipt Summary</Text>
           <Text style={styles.headerSubtitle}>
             {receipt.merchant_name || 'Receipt'}
           </Text>

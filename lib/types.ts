@@ -242,8 +242,9 @@ export type ClaimSource = 'app' | 'imessage' | 'web' | 'assigned';
 
 export interface Receipt {
   id: string;
-  group_id: string;
-  uploaded_by: string;
+  group_id?: string | null; // Nullable for unassigned receipts
+  uploaded_by?: string | null; // Member ID, nullable for unassigned receipts
+  uploaded_by_clerk_id?: string | null; // Clerk user ID for tracking ownership of unassigned receipts
 
   // Image
   image_url: string;
