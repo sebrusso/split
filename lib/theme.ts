@@ -20,6 +20,7 @@ export const colors = {
   dangerLight: "#FEE2E2",
 
   success: "#10B981",
+  successLight: "#D1FAE5",
   warning: "#F59E0B",
 };
 

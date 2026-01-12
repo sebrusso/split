@@ -1,7 +1,8 @@
 /**
  * Receipt Settlement Screen
  *
- * Shows final amounts for each member and provides payment options.
+ * A simplified summary showing what YOU owe or are owed.
+ * Clear separation between your share and the group's total.
  */
 
 import { useState, useCallback } from 'react';
@@ -23,8 +24,6 @@ import { useReceiptSummary } from '../../../../../lib/useReceipts';
 import {
   formatReceiptAmount,
   generateVenmoLink,
-  generatePayPalLink,
-  generateCashAppLink,
 } from '../../../../../lib/receipts';
 import { useAuth } from '../../../../../lib/auth-context';
 import { supabase } from '../../../../../lib/supabase';
@@ -38,11 +37,10 @@ export default function ReceiptSettleScreen() {
   const { receipt, summary, loading, error } = useReceiptSummary(receiptId);
 
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  const [settledMembers, setSettledMembers] = useState<Set<string>>(new Set());
   const [settling, setSettling] = useState(false);
   const [uploaderVenmo, setUploaderVenmo] = useState<string | null>(null);
 
-  // Fetch current user's member record and uploader's payment info
+  // Fetch current user's member record
   useFocusEffect(
     useCallback(() => {
       const fetchMember = async () => {
@@ -91,93 +89,44 @@ export default function ReceiptSettleScreen() {
 
   // Find the uploader (person who paid)
   const uploaderId = receipt?.uploaded_by;
-  const uploaderTotal = summary?.memberTotals.find((t) => t.memberId === uploaderId);
+  const isCurrentUserPayer = currentMember?.id === uploaderId;
 
-  // Others who owe money
-  const othersOwing = summary?.memberTotals.filter((t) => t.memberId !== uploaderId) || [];
+  // Get current user's total
+  const myTotal = summary?.memberTotals.find((t) => t.memberId === currentMember?.id);
 
-  const handlePayVenmo = async (memberTotal: ReceiptMemberCalculation) => {
-    if (!uploaderVenmo) {
+  // Get payer's name
+  const payerTotal = summary?.memberTotals.find((t) => t.memberId === uploaderId);
+  const payerName = payerTotal?.memberName || 'Someone';
+
+  // Calculate what's owed to the payer (everyone except the payer)
+  const totalOwedToPayer = summary?.memberTotals
+    .filter((t) => t.memberId !== uploaderId)
+    .reduce((sum, t) => sum + t.grandTotal, 0) || 0;
+
+  const handlePayVenmo = async () => {
+    if (!myTotal || !uploaderVenmo) {
       Alert.alert(
         'Venmo Not Set Up',
-        "The person who paid hasn't added their Venmo username yet. Ask them to set it up in their profile.",
+        "The person who paid hasn't added their Venmo username yet.",
         [{ text: 'OK' }]
       );
       return;
     }
 
-    const note = `${receipt?.merchant_name || 'Receipt'} - ${memberTotal.claimedItems.map((i) => i.description).join(', ')}`;
-    const url = generateVenmoLink(uploaderVenmo, memberTotal.grandTotal, note);
+    const note = `${receipt?.merchant_name || 'Receipt'} - ${myTotal.claimedItems.map((i) => i.description).join(', ')}`;
+    const url = generateVenmoLink(uploaderVenmo, myTotal.grandTotal, note);
 
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) {
         await Linking.openURL(url);
       } else {
-        // Fallback to web
         await Linking.openURL(
-          `https://venmo.com/${uploaderVenmo}?txn=pay&amount=${memberTotal.grandTotal}&note=${encodeURIComponent(note)}`
+          `https://venmo.com/${uploaderVenmo}?txn=pay&amount=${myTotal.grandTotal}&note=${encodeURIComponent(note)}`
         );
       }
     } catch (err) {
       Alert.alert('Error', 'Unable to open Venmo');
-    }
-  };
-
-  const handlePayPayPal = async (memberTotal: ReceiptMemberCalculation) => {
-    // PayPal username not yet implemented - show placeholder message
-    Alert.alert(
-      'PayPal Not Set Up',
-      'PayPal payment integration is coming soon. For now, please use Venmo or settle manually.',
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handlePayCashApp = async (memberTotal: ReceiptMemberCalculation) => {
-    // CashApp tag not yet implemented - show placeholder message
-    Alert.alert(
-      'Cash App Not Set Up',
-      'Cash App payment integration is coming soon. For now, please use Venmo or settle manually.',
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handleMarkSettled = async (memberTotal: ReceiptMemberCalculation) => {
-    if (!receipt || !uploaderId) return;
-
-    try {
-      setSettling(true);
-
-      // Create settlement record
-      const { error: settlementError } = await supabase.from('settlements').insert({
-        group_id: id,
-        from_member_id: memberTotal.memberId,
-        to_member_id: uploaderId,
-        amount: memberTotal.grandTotal,
-        method: 'other',
-        notes: `Receipt: ${receipt.merchant_name || 'Unknown'}`,
-      });
-
-      if (settlementError) throw settlementError;
-
-      // Update receipt_member_totals
-      await supabase
-        .from('receipt_member_totals')
-        .update({
-          is_settled: true,
-          settled_at: new Date().toISOString(),
-        })
-        .eq('receipt_id', receiptId)
-        .eq('member_id', memberTotal.memberId);
-
-      setSettledMembers((prev) => new Set(prev).add(memberTotal.memberId));
-
-      Alert.alert('Success', `${memberTotal.memberName}'s portion has been marked as settled`);
-    } catch (err: any) {
-      console.error('Error marking settled:', err);
-      Alert.alert('Error', err.message || 'Failed to mark as settled');
-    } finally {
-      setSettling(false);
     }
   };
 
@@ -187,8 +136,6 @@ export default function ReceiptSettleScreen() {
     try {
       setSettling(true);
 
-      // Check if an expense already exists for this receipt (prevent duplicates)
-      // Use receipt ID in notes field as a reliable identifier
       const receiptMarker = `[receipt:${receiptId}]`;
       const { data: existingExpenses } = await supabase
         .from('expenses')
@@ -198,10 +145,7 @@ export default function ReceiptSettleScreen() {
         .is('deleted_at', null)
         .limit(1);
 
-      let expenseCreated = false;
-
       if (!existingExpenses || existingExpenses.length === 0) {
-        // Create an expense from the receipt
         const expenseDescription = receipt.merchant_name || 'Receipt';
         const expenseAmount = summary.total;
         const notesText = `From receipt scan${receipt.merchant_address ? ` at ${receipt.merchant_address}` : ''} ${receiptMarker}`;
@@ -213,7 +157,7 @@ export default function ReceiptSettleScreen() {
             description: expenseDescription,
             amount: expenseAmount,
             paid_by: uploaderId,
-            category: 'food',  // Most receipts are food/restaurant
+            category: 'food',
             expense_date: receipt.receipt_date || new Date().toISOString().split('T')[0],
             notes: notesText,
             receipt_url: receipt.image_url,
@@ -225,7 +169,6 @@ export default function ReceiptSettleScreen() {
 
         if (expenseError) throw expenseError;
 
-        // Create splits for each member based on their claimed totals
         const splits = summary.memberTotals.map((memberTotal) => ({
           expense_id: expense.id,
           member_id: memberTotal.memberId,
@@ -236,18 +179,13 @@ export default function ReceiptSettleScreen() {
           const { error: splitsError } = await supabase.from('splits').insert(splits);
           if (splitsError) throw splitsError;
         }
-
-        expenseCreated = true;
       }
 
-      // Once expense is created, mark receipt as settled so it doesn't show as duplicate
-      // The expense now represents this receipt in the expenses list
       await supabase
         .from('receipts')
         .update({ status: 'settled' })
         .eq('id', receiptId);
 
-      // Navigate directly back to group
       router.replace(`/group/${id}`);
     } catch (err: any) {
       console.error('Error finalizing receipt:', err);
@@ -279,223 +217,115 @@ export default function ReceiptSettleScreen() {
     );
   }
 
-  // Check if current user is the payer
-  const isCurrentUserPayer = currentMember?.id === uploaderId;
-
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {/* Header */}
-        <Card style={styles.headerCard}>
-          <Text style={styles.headerTitle}>Receipt Summary</Text>
-          <Text style={styles.headerSubtitle}>
-            {receipt.merchant_name || 'Receipt'}
-          </Text>
-          <Text style={styles.headerTotal}>
-            Total: {formatReceiptAmount(summary.total, receipt.currency)}
-          </Text>
-        </Card>
+        {/* Main Summary Card - What You're Paying */}
+        <Card style={styles.mainCard}>
+          <View style={styles.mainCardHeader}>
+            <Text style={styles.mainCardLabel}>
+              {isCurrentUserPayer ? 'You paid' : 'Your share'}
+            </Text>
+            <Text style={styles.mainCardAmount}>
+              {formatReceiptAmount(myTotal?.grandTotal || 0, receipt.currency)}
+            </Text>
+          </View>
 
-        {/* Payer Info */}
-        {uploaderTotal && (
-          <Card style={styles.payerCard}>
-            <View style={styles.payerHeader}>
-              <Avatar
-                name={uploaderTotal.memberName}
-                size="md"
-                color={colors.primary}
-              />
-              <View style={styles.payerInfo}>
-                <Text style={styles.payerName}>
-                  {uploaderTotal.memberName}
-                  {isCurrentUserPayer && ' (You)'}
-                </Text>
-                <Text style={styles.payerLabel}>Paid the bill</Text>
-              </View>
-            </View>
-
-            <View style={styles.payerItems}>
-              <Text style={styles.payerItemsLabel}>Their share:</Text>
-              {uploaderTotal.claimedItems.map((item, index) => (
-                <View key={index} style={styles.itemRow}>
-                  <Text style={styles.itemName} numberOfLines={1}>
-                    {item.description}
+          {/* Your items breakdown */}
+          {myTotal && myTotal.claimedItems.length > 0 && (
+            <View style={styles.itemsBreakdown}>
+              {myTotal.claimedItems.map((item, index) => (
+                <View key={index} style={styles.breakdownRow}>
+                  <Text style={styles.breakdownItemName} numberOfLines={1}>
+                    {item.shareFraction < 1
+                      ? `${item.description} (${Math.round(item.shareFraction * 100)}%)`
+                      : item.description}
                   </Text>
-                  <Text style={styles.itemAmount}>
+                  <Text style={styles.breakdownItemAmount}>
                     {formatReceiptAmount(item.amount, receipt.currency)}
                   </Text>
                 </View>
               ))}
-              {(uploaderTotal.taxShare > 0 || uploaderTotal.tipShare > 0) && (
-                <View style={styles.itemRow}>
-                  <Text style={styles.itemName}>Tax + Tip</Text>
-                  <Text style={styles.itemAmount}>
-                    {formatReceiptAmount(
-                      uploaderTotal.taxShare + uploaderTotal.tipShare,
-                      receipt.currency
-                    )}
+              {(myTotal.taxShare > 0 || myTotal.tipShare > 0) && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownItemName}>Tax & Tip</Text>
+                  <Text style={styles.breakdownItemAmount}>
+                    {formatReceiptAmount(myTotal.taxShare + myTotal.tipShare, receipt.currency)}
                   </Text>
                 </View>
               )}
-              <View style={[styles.itemRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Their total</Text>
-                <Text style={styles.totalAmount}>
-                  {formatReceiptAmount(uploaderTotal.grandTotal, receipt.currency)}
+            </View>
+          )}
+
+          {/* Pay button if you owe money */}
+          {!isCurrentUserPayer && myTotal && myTotal.grandTotal > 0 && (
+            <View style={styles.paySection}>
+              <Text style={styles.payToLabel}>
+                Pay {payerName}
+              </Text>
+              <TouchableOpacity
+                style={[styles.venmoButton, !uploaderVenmo && styles.venmoButtonDisabled]}
+                onPress={handlePayVenmo}
+              >
+                <Text style={[styles.venmoButtonText, !uploaderVenmo && styles.venmoButtonTextDisabled]}>
+                  {uploaderVenmo ? 'Pay with Venmo' : 'Venmo not set up'}
                 </Text>
-              </View>
-            </View>
-          </Card>
-        )}
-
-        {/* Others Owing */}
-        {othersOwing.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>
-              {isCurrentUserPayer ? 'Money Coming to You' : 'Who Owes What'}
-            </Text>
-
-            {othersOwing.map((memberTotal) => {
-              const isSettled = settledMembers.has(memberTotal.memberId);
-              const isMe = memberTotal.memberId === currentMember?.id;
-
-              return (
-                <Card
-                  key={memberTotal.memberId}
-                  style={[styles.owingCard, isSettled && styles.owingCardSettled]}
-                >
-                  <View style={styles.owingHeader}>
-                    <Avatar name={memberTotal.memberName} size="sm" />
-                    <View style={styles.owingInfo}>
-                      <Text style={styles.owingName}>
-                        {memberTotal.memberName}
-                        {isMe && ' (You)'}
-                      </Text>
-                      <Text style={styles.owingAmount}>
-                        Owes{' '}
-                        {formatReceiptAmount(memberTotal.grandTotal, receipt.currency)}
-                      </Text>
-                    </View>
-                    {isSettled && (
-                      <View style={styles.settledBadge}>
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color={colors.success}
-                        />
-                        <Text style={styles.settledText}>Settled</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Item breakdown */}
-                  <View style={styles.owingItems}>
-                    {memberTotal.claimedItems.map((item, index) => (
-                      <Text key={index} style={styles.owingItem} numberOfLines={1}>
-                        {item.description} -{' '}
-                        {formatReceiptAmount(item.amount, receipt.currency)}
-                      </Text>
-                    ))}
-                    {(memberTotal.taxShare > 0 || memberTotal.tipShare > 0) && (
-                      <Text style={styles.owingItem}>
-                        Tax + Tip:{' '}
-                        {formatReceiptAmount(
-                          memberTotal.taxShare + memberTotal.tipShare,
-                          receipt.currency
-                        )}
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* Actions */}
-                  {!isSettled && (
-                    <View style={styles.owingActions}>
-                      {isMe ? (
-                        // Current user needs to pay
-                        <>
-                          <TouchableOpacity
-                            style={[styles.payButton, !uploaderVenmo && styles.payButtonDisabled]}
-                            onPress={() => handlePayVenmo(memberTotal)}
-                          >
-                            <Text style={[styles.payButtonText, !uploaderVenmo && styles.payButtonTextDisabled]}>
-                              Venmo{uploaderVenmo ? '' : ' (Not Set)'}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.payButton, styles.payButtonDisabled]}
-                            onPress={() => handlePayPayPal(memberTotal)}
-                          >
-                            <Text style={[styles.payButtonText, styles.payButtonTextDisabled]}>PayPal</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.payButton, styles.payButtonDisabled]}
-                            onPress={() => handlePayCashApp(memberTotal)}
-                          >
-                            <Text style={[styles.payButtonText, styles.payButtonTextDisabled]}>Cash App</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : isCurrentUserPayer ? (
-                        // Payer can mark as settled
-                        <Button
-                          title="Mark as Settled"
-                          variant="secondary"
-                          onPress={() => handleMarkSettled(memberTotal)}
-                          loading={settling}
-                          style={styles.settleButton}
-                        />
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.remindButton}
-                          onPress={() => Alert.alert('Reminder', 'Reminder feature coming soon!')}
-                        >
-                          <Ionicons name="notifications" size={16} color={colors.primary} />
-                          <Text style={styles.remindButtonText}>Send Reminder</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )}
-                </Card>
-              );
-            })}
-          </>
-        )}
-
-        {/* Summary */}
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Total Breakdown</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>
-              {formatReceiptAmount(summary.subtotal, receipt.currency)}
-            </Text>
-          </View>
-          {summary.tax > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tax</Text>
-              <Text style={styles.summaryValue}>
-                {formatReceiptAmount(summary.tax, receipt.currency)}
-              </Text>
+              </TouchableOpacity>
             </View>
           )}
-          {summary.tip > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tip</Text>
-              <Text style={styles.summaryValue}>
-                {formatReceiptAmount(summary.tip, receipt.currency)}
-              </Text>
-            </View>
-          )}
-          <View style={[styles.summaryRow, styles.summaryTotalRow]}>
-            <Text style={styles.summaryTotalLabel}>Grand Total</Text>
-            <Text style={styles.summaryTotalValue}>
+        </Card>
+
+        {/* Group Total Card */}
+        <Card style={styles.groupCard}>
+          <Text style={styles.groupCardTitle}>Group Total</Text>
+
+          <View style={styles.groupTotalRow}>
+            <Text style={styles.groupTotalLabel}>Bill Total</Text>
+            <Text style={styles.groupTotalAmount}>
               {formatReceiptAmount(summary.total, receipt.currency)}
             </Text>
+          </View>
+
+          {isCurrentUserPayer && totalOwedToPayer > 0 && (
+            <View style={styles.owedToYouSection}>
+              <View style={styles.owedToYouHeader}>
+                <Ionicons name="arrow-down-circle" size={20} color={colors.success} />
+                <Text style={styles.owedToYouLabel}>Owed to you</Text>
+              </View>
+              <Text style={styles.owedToYouAmount}>
+                {formatReceiptAmount(totalOwedToPayer, receipt.currency)}
+              </Text>
+            </View>
+          )}
+
+          {/* Simple member breakdown */}
+          <View style={styles.membersList}>
+            {summary.memberTotals.map((memberTotal) => (
+              <View key={memberTotal.memberId} style={styles.memberRow}>
+                <View style={styles.memberInfo}>
+                  <Avatar name={memberTotal.memberName} size="sm" />
+                  <Text style={styles.memberName}>
+                    {memberTotal.memberName}
+                    {memberTotal.memberId === currentMember?.id && ' (You)'}
+                    {memberTotal.memberId === uploaderId && ' - Paid'}
+                  </Text>
+                </View>
+                <Text style={styles.memberAmount}>
+                  {formatReceiptAmount(memberTotal.grandTotal, receipt.currency)}
+                </Text>
+              </View>
+            ))}
           </View>
         </Card>
       </ScrollView>
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Button title="Done" onPress={handleFinish} />
+        <Button
+          title="Done"
+          onPress={handleFinish}
+          loading={settling}
+        />
       </View>
     </SafeAreaView>
   );
@@ -538,190 +368,144 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
-  headerCard: {
-    alignItems: 'center',
+  // Main card - Your share
+  mainCard: {
     marginBottom: spacing.lg,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
-  headerTitle: {
-    ...typography.h2,
-  },
-  headerSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  headerTotal: {
-    ...typography.h3,
-    color: colors.primary,
-    marginTop: spacing.sm,
-  },
-  payerCard: {
-    marginBottom: spacing.lg,
-  },
-  payerHeader: {
-    flexDirection: 'row',
+  mainCardHeader: {
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  payerInfo: {
-    marginLeft: spacing.md,
-  },
-  payerName: {
+  mainCardLabel: {
     ...typography.bodyMedium,
+    color: colors.primary,
+    marginBottom: spacing.xs,
   },
-  payerLabel: {
-    ...typography.caption,
+  mainCardAmount: {
+    fontSize: 36,
+    fontFamily: 'Inter_700Bold',
     color: colors.primary,
   },
-  payerItems: {
+  itemsBreakdown: {
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: colors.primary,
     paddingTop: spacing.md,
+    opacity: 0.9,
   },
-  payerItemsLabel: {
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
+  breakdownItemName: {
+    ...typography.small,
+    color: colors.text,
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  breakdownItemAmount: {
+    ...typography.small,
+    color: colors.text,
+  },
+  paySection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.primary,
+    alignItems: 'center',
+  },
+  payToLabel: {
     ...typography.small,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
+  venmoButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
   },
-  itemName: {
-    ...typography.caption,
-    flex: 1,
-    marginRight: spacing.md,
+  venmoButtonDisabled: {
+    backgroundColor: colors.textSecondary,
   },
-  itemAmount: {
-    ...typography.caption,
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-  },
-  totalLabel: {
+  venmoButtonText: {
     ...typography.bodyMedium,
+    color: colors.white,
   },
-  totalAmount: {
-    ...typography.bodyMedium,
-    color: colors.primary,
+  venmoButtonTextDisabled: {
+    color: colors.borderLight,
   },
-  sectionTitle: {
+  // Group total card
+  groupCard: {
+    marginBottom: spacing.lg,
+  },
+  groupCardTitle: {
     ...typography.h3,
     marginBottom: spacing.md,
   },
-  owingCard: {
-    marginBottom: spacing.md,
-  },
-  owingCardSettled: {
-    opacity: 0.7,
-  },
-  owingHeader: {
+  groupTotalRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
-  owingInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  owingName: {
+  groupTotalLabel: {
     ...typography.bodyMedium,
   },
-  owingAmount: {
-    ...typography.caption,
-    color: colors.textSecondary,
+  groupTotalAmount: {
+    ...typography.h3,
+    color: colors.text,
   },
-  settledBadge: {
+  owedToYouSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    backgroundColor: colors.successLight,
+    marginHorizontal: -spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  owedToYouHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  settledText: {
-    ...typography.small,
+  owedToYouLabel: {
+    ...typography.bodyMedium,
     color: colors.success,
   },
-  owingItems: {
+  owedToYouAmount: {
+    ...typography.h3,
+    color: colors.success,
+  },
+  membersList: {
     marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
   },
-  owingItem: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  owingActions: {
-    flexDirection: 'row',
-    marginTop: spacing.md,
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  payButton: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-  },
-  payButtonDisabled: {
-    backgroundColor: colors.borderLight,
-  },
-  payButtonText: {
-    ...typography.small,
-    color: colors.primary,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  payButtonTextDisabled: {
-    color: colors.textSecondary,
-  },
-  settleButton: {
-    flex: 1,
-  },
-  remindButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    padding: spacing.sm,
-  },
-  remindButtonText: {
-    ...typography.small,
-    color: colors.primary,
-  },
-  summaryCard: {
-    marginTop: spacing.lg,
-  },
-  summaryTitle: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  summaryRow: {
+  memberRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
-  summaryLabel: {
+  memberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  memberName: {
     ...typography.body,
+    flex: 1,
+  },
+  memberAmount: {
+    ...typography.bodyMedium,
     color: colors.textSecondary,
-  },
-  summaryValue: {
-    ...typography.body,
-  },
-  summaryTotalRow: {
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    marginTop: spacing.sm,
-    paddingTop: spacing.md,
-  },
-  summaryTotalLabel: {
-    ...typography.h3,
-  },
-  summaryTotalValue: {
-    ...typography.h3,
-    color: colors.primary,
   },
   footer: {
     padding: spacing.lg,

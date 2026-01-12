@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../../lib/supabase";
 import { Member, Group, SplitMethod } from "../../../lib/types";
@@ -401,6 +402,29 @@ export default function AddExpenseScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Scan Receipt Option */}
+          <TouchableOpacity
+            style={styles.scanReceiptButton}
+            onPress={() => router.push(`/group/${id}/scan-receipt`)}
+          >
+            <View style={styles.scanReceiptContent}>
+              <Ionicons name="scan" size={24} color={colors.primary} />
+              <View style={styles.scanReceiptText}>
+                <Text style={styles.scanReceiptTitle}>Scan a Receipt</Text>
+                <Text style={styles.scanReceiptSubtitle}>
+                  Auto-extract items and split with your group
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or enter manually</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           {/* Amount Input with Currency Picker */}
           <View style={styles.amountContainer}>
             <View style={styles.amountRow}>
@@ -595,6 +619,51 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
+  },
+  scanReceiptButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: "dashed",
+    marginBottom: spacing.lg,
+  },
+  scanReceiptContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    flex: 1,
+  },
+  scanReceiptText: {
+    flex: 1,
+  },
+  scanReceiptTitle: {
+    ...typography.bodyMedium,
+    color: colors.primary,
+  },
+  scanReceiptSubtitle: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.borderLight,
+  },
+  dividerText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.md,
   },
   amountContainer: {
     marginVertical: spacing.xl,
