@@ -252,6 +252,28 @@ export default function ProfileTabScreen() {
           </Card>
         </View>
 
+        {/* Developer Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Developer</Text>
+          <Card style={styles.menuCard}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push("/admin/test-data")}
+            >
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuIcon}>🔧</Text>
+                <View style={styles.menuItemText}>
+                  <Text style={styles.menuItemTitle}>Test Data Manager</Text>
+                  <Text style={styles.menuItemSubtitle}>
+                    Link test members to your account
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
+
         {/* Sign Out Button */}
         <View style={styles.signOutContainer}>
           <Button
