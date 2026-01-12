@@ -28,3 +28,7 @@ export {
   BalanceIndicator,
   BalanceEmptyState,
 } from "./BalanceCard";
+
+// Payment components
+export { PaymentConfirmationModal } from "./PaymentConfirmationModal";
+export { SettlementQRCodeModal } from "./SettlementQRCodeModal";
