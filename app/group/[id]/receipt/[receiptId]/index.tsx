@@ -419,21 +419,44 @@ export default function ReceiptClaimingScreen() {
 
                 // Handle tap based on current state
                 if (isPendingUnclaim) {
-                  // Cancel the pending unclaim
-                  setPendingUnclaims((prev) => {
-                    const next = new Set(prev);
-                    next.delete(item.id);
-                    return next;
-                  });
-                  successfulUnclaimsRef.current.delete(item.id);
+                  // Re-claim: cancel the pending unclaim (will reclaim via DB when cleared)
+                  // Since unclaim was successful, we need to re-claim
+                  if (successfulUnclaimsRef.current.has(item.id)) {
+                    // Unclaim already succeeded in DB, need to re-claim
+                    successfulUnclaimsRef.current.delete(item.id);
+                    setPendingUnclaims((prev) => {
+                      const next = new Set(prev);
+                      next.delete(item.id);
+                      return next;
+                    });
+                    handleClaimItem(item);
+                  } else {
+                    // Unclaim still pending, just cancel the UI state
+                    setPendingUnclaims((prev) => {
+                      const next = new Set(prev);
+                      next.delete(item.id);
+                      return next;
+                    });
+                  }
                 } else if (isPendingClaim) {
-                  // Cancel the pending claim
-                  setPendingClaims((prev) => {
-                    const next = new Set(prev);
-                    next.delete(item.id);
-                    return next;
-                  });
-                  successfulClaimsRef.current.delete(item.id);
+                  // Unclaim: if claim already succeeded in DB, need to unclaim from DB
+                  if (successfulClaimsRef.current.has(item.id)) {
+                    // Claim already succeeded in DB, need to actually unclaim
+                    successfulClaimsRef.current.delete(item.id);
+                    setPendingClaims((prev) => {
+                      const next = new Set(prev);
+                      next.delete(item.id);
+                      return next;
+                    });
+                    handleUnclaimItem(item);
+                  } else {
+                    // Claim still pending (not yet in DB), just cancel the UI state
+                    setPendingClaims((prev) => {
+                      const next = new Set(prev);
+                      next.delete(item.id);
+                      return next;
+                    });
+                  }
                 } else if (hasCurrentMemberClaim) {
                   // Unclaim existing claim (use fresh check, not stale render-time value)
                   handleUnclaimItem(item);
