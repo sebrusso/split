@@ -29,6 +29,7 @@ import {
 import { useAuth } from '../../../../../lib/auth-context';
 import { supabase } from '../../../../../lib/supabase';
 import { Member, ReceiptMemberCalculation } from '../../../../../lib/types';
+import { getVenmoUsernameForMember } from '../../../../../lib/user-profile';
 
 export default function ReceiptSettleScreen() {
   const { id, receiptId } = useLocalSearchParams<{ id: string; receiptId: string }>();
@@ -39,25 +40,53 @@ export default function ReceiptSettleScreen() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [settledMembers, setSettledMembers] = useState<Set<string>>(new Set());
   const [settling, setSettling] = useState(false);
+  const [uploaderVenmo, setUploaderVenmo] = useState<string | null>(null);
 
-  // Fetch current user's member record
+  // Fetch current user's member record and uploader's payment info
   useFocusEffect(
     useCallback(() => {
       const fetchMember = async () => {
         if (!id || !userId) return;
 
-        const { data: member } = await supabase
-          .from('members')
-          .select('*')
-          .eq('group_id', id)
-          .eq('clerk_user_id', userId)
-          .single();
+        try {
+          const { data: member, error } = await supabase
+            .from('members')
+            .select('*')
+            .eq('group_id', id)
+            .eq('clerk_user_id', userId)
+            .single();
 
-        setCurrentMember(member);
+          if (error) {
+            console.error('Error fetching member:', error);
+            return;
+          }
+
+          setCurrentMember(member);
+        } catch (err) {
+          console.error('Error fetching member:', err);
+        }
       };
 
       fetchMember();
     }, [id, userId])
+  );
+
+  // Fetch uploader's Venmo username when receipt loads
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUploaderPaymentInfo = async () => {
+        if (!receipt?.uploaded_by) return;
+
+        try {
+          const venmoUsername = await getVenmoUsernameForMember(receipt.uploaded_by);
+          setUploaderVenmo(venmoUsername);
+        } catch (err) {
+          console.error('Error fetching uploader payment info:', err);
+        }
+      };
+
+      fetchUploaderPaymentInfo();
+    }, [receipt?.uploaded_by])
   );
 
   // Find the uploader (person who paid)
@@ -67,9 +96,18 @@ export default function ReceiptSettleScreen() {
   // Others who owe money
   const othersOwing = summary?.memberTotals.filter((t) => t.memberId !== uploaderId) || [];
 
-  const handlePayVenmo = async (memberTotal: ReceiptMemberCalculation, payeeUsername: string) => {
+  const handlePayVenmo = async (memberTotal: ReceiptMemberCalculation) => {
+    if (!uploaderVenmo) {
+      Alert.alert(
+        'Venmo Not Set Up',
+        'The person who paid hasn\'t added their Venmo username yet. Ask them to set it up in their profile.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     const note = `${receipt?.merchant_name || 'Receipt'} - ${memberTotal.claimedItems.map((i) => i.description).join(', ')}`;
-    const url = generateVenmoLink(payeeUsername, memberTotal.grandTotal, note);
+    const url = generateVenmoLink(uploaderVenmo, memberTotal.grandTotal, note);
 
     try {
       const canOpen = await Linking.canOpenURL(url);
@@ -78,7 +116,7 @@ export default function ReceiptSettleScreen() {
       } else {
         // Fallback to web
         await Linking.openURL(
-          `https://venmo.com/${payeeUsername}?txn=pay&amount=${memberTotal.grandTotal}&note=${encodeURIComponent(note)}`
+          `https://venmo.com/${uploaderVenmo}?txn=pay&amount=${memberTotal.grandTotal}&note=${encodeURIComponent(note)}`
         );
       }
     } catch (err) {
@@ -86,24 +124,22 @@ export default function ReceiptSettleScreen() {
     }
   };
 
-  const handlePayPayPal = async (memberTotal: ReceiptMemberCalculation, payeeUsername: string) => {
-    const url = generatePayPalLink(payeeUsername, memberTotal.grandTotal);
-
-    try {
-      await Linking.openURL(url);
-    } catch (err) {
-      Alert.alert('Error', 'Unable to open PayPal');
-    }
+  const handlePayPayPal = async (memberTotal: ReceiptMemberCalculation) => {
+    // PayPal username not yet implemented - show placeholder message
+    Alert.alert(
+      'PayPal Not Set Up',
+      'PayPal payment integration is coming soon. For now, please use Venmo or settle manually.',
+      [{ text: 'OK' }]
+    );
   };
 
-  const handlePayCashApp = async (memberTotal: ReceiptMemberCalculation, cashtag: string) => {
-    const url = generateCashAppLink(cashtag, memberTotal.grandTotal);
-
-    try {
-      await Linking.openURL(url);
-    } catch (err) {
-      Alert.alert('Error', 'Unable to open Cash App');
-    }
+  const handlePayCashApp = async (memberTotal: ReceiptMemberCalculation) => {
+    // CashApp tag not yet implemented - show placeholder message
+    Alert.alert(
+      'Cash App Not Set Up',
+      'Cash App payment integration is coming soon. For now, please use Venmo or settle manually.',
+      [{ text: 'OK' }]
+    );
   };
 
   const handleMarkSettled = async (memberTotal: ReceiptMemberCalculation) => {
@@ -148,18 +184,29 @@ export default function ReceiptSettleScreen() {
   const handleFinish = async () => {
     if (!receiptId) return;
 
-    // Update receipt status to settled
-    await supabase
-      .from('receipts')
-      .update({ status: 'settled' })
-      .eq('id', receiptId);
+    try {
+      // Update receipt status to settled
+      const { error } = await supabase
+        .from('receipts')
+        .update({ status: 'settled' })
+        .eq('id', receiptId);
 
-    Alert.alert('Receipt Settled', 'All payments have been recorded.', [
-      {
-        text: 'Done',
-        onPress: () => router.replace(`/group/${id}`),
-      },
-    ]);
+      if (error) {
+        console.error('Error settling receipt:', error);
+        Alert.alert('Error', 'Failed to mark receipt as settled. Please try again.');
+        return;
+      }
+
+      Alert.alert('Receipt Settled', 'All payments have been recorded.', [
+        {
+          text: 'Done',
+          onPress: () => router.replace(`/group/${id}`),
+        },
+      ]);
+    } catch (err) {
+      console.error('Error settling receipt:', err);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    }
   };
 
   if (loading) {
@@ -318,22 +365,24 @@ export default function ReceiptSettleScreen() {
                         // Current user needs to pay
                         <>
                           <TouchableOpacity
-                            style={styles.payButton}
-                            onPress={() => handlePayVenmo(memberTotal, 'username')}
+                            style={[styles.payButton, !uploaderVenmo && styles.payButtonDisabled]}
+                            onPress={() => handlePayVenmo(memberTotal)}
                           >
-                            <Text style={styles.payButtonText}>Venmo</Text>
+                            <Text style={[styles.payButtonText, !uploaderVenmo && styles.payButtonTextDisabled]}>
+                              Venmo{uploaderVenmo ? '' : ' (Not Set)'}
+                            </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={styles.payButton}
-                            onPress={() => handlePayPayPal(memberTotal, 'username')}
+                            style={[styles.payButton, styles.payButtonDisabled]}
+                            onPress={() => handlePayPayPal(memberTotal)}
                           >
-                            <Text style={styles.payButtonText}>PayPal</Text>
+                            <Text style={[styles.payButtonText, styles.payButtonTextDisabled]}>PayPal</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={styles.payButton}
-                            onPress={() => handlePayCashApp(memberTotal, 'cashtag')}
+                            style={[styles.payButton, styles.payButtonDisabled]}
+                            onPress={() => handlePayCashApp(memberTotal)}
                           >
-                            <Text style={styles.payButtonText}>Cash App</Text>
+                            <Text style={[styles.payButtonText, styles.payButtonTextDisabled]}>Cash App</Text>
                           </TouchableOpacity>
                         </>
                       ) : isCurrentUserPayer ? (
@@ -569,10 +618,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.sm,
   },
+  payButtonDisabled: {
+    backgroundColor: colors.borderLight,
+  },
   payButtonText: {
     ...typography.small,
     color: colors.primary,
     fontFamily: 'Inter_600SemiBold',
+  },
+  payButtonTextDisabled: {
+    color: colors.textSecondary,
   },
   settleButton: {
     flex: 1,

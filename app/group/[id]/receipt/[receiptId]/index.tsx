@@ -46,20 +46,34 @@ export default function ReceiptClaimingScreen() {
   const [selectedItem, setSelectedItem] = useState<ReceiptItem | null>(null);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
 
+  const [memberError, setMemberError] = useState<string | null>(null);
+
   // Fetch current user's member record
   useFocusEffect(
     useCallback(() => {
       const fetchMember = async () => {
         if (!id || !userId) return;
 
-        const { data: member } = await supabase
-          .from('members')
-          .select('*')
-          .eq('group_id', id)
-          .eq('clerk_user_id', userId)
-          .single();
+        try {
+          const { data: member, error } = await supabase
+            .from('members')
+            .select('*')
+            .eq('group_id', id)
+            .eq('clerk_user_id', userId)
+            .single();
 
-        setCurrentMember(member);
+          if (error) {
+            console.error('Error fetching member:', error);
+            setMemberError('You are not a member of this group');
+            return;
+          }
+
+          setCurrentMember(member);
+          setMemberError(null);
+        } catch (err) {
+          console.error('Error fetching member:', err);
+          setMemberError('Failed to load member data');
+        }
       };
 
       fetchMember();
@@ -184,6 +198,19 @@ export default function ReceiptClaimingScreen() {
           <Ionicons name="alert-circle" size={64} color={colors.danger} />
           <Text style={styles.errorTitle}>Error Loading Receipt</Text>
           <Text style={styles.errorText}>{error || 'Receipt not found'}</Text>
+          <Button title="Go Back" onPress={() => router.back()} variant="secondary" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (memberError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="person-remove" size={64} color={colors.danger} />
+          <Text style={styles.errorTitle}>Cannot Claim Items</Text>
+          <Text style={styles.errorText}>{memberError}</Text>
           <Button title="Go Back" onPress={() => router.back()} variant="secondary" />
         </View>
       </SafeAreaView>

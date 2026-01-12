@@ -98,6 +98,10 @@ export function useReceipt(receiptId: string | undefined) {
   }, [fetchReceipt]);
 
   // Subscribe to real-time updates for claims
+  // NOTE: This subscription listens to all item_claims changes, not just those for the current receipt.
+  // This is a known limitation since Supabase postgres_changes can't filter on joined fields.
+  // The refetch is idempotent and claims are low-frequency events, so this is acceptable for now.
+  // Future optimization: Add receipt_id column to item_claims for direct filtering.
   useEffect(() => {
     if (!receiptId) return;
 
