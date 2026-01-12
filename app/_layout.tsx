@@ -19,6 +19,7 @@ import {
   registerPushToken,
   removePushToken,
 } from "../lib/notifications";
+import { logger } from "../lib/logger";
 
 // Note: Offline support requires native modules (development build)
 // It's disabled in Expo Go - will be enabled when building for production
@@ -54,12 +55,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (isSignedIn && userId) {
       // Register push token in the background
       registerPushToken(userId).catch((error) => {
-        console.error("Failed to register push token:", error);
+        logger.error("Failed to register push token:", error);
       });
     } else if (!isSignedIn && userId) {
       // Remove push token when user signs out
       removePushToken(userId).catch((error) => {
-        console.error("Failed to remove push token:", error);
+        logger.error("Failed to remove push token:", error);
       });
     }
   }, [isSignedIn, userId]);
@@ -314,12 +315,18 @@ export default function RootLayout() {
     );
   }
 
-  // Check if Clerk is configured
+  // Verify Clerk is properly configured for production
   if (!isClerkConfigured()) {
-    console.warn(
-      "Clerk is not configured. Please update CLERK_PUBLISHABLE_KEY in lib/clerk.ts"
-    );
-    // Continue without auth for development - remove this in production
+    if (__DEV__) {
+      console.warn(
+        "Clerk is not configured. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your environment."
+      );
+    } else {
+      // In production, throw an error if Clerk is not configured
+      throw new Error(
+        "Authentication is not configured. Please contact support."
+      );
+    }
   }
 
   return (
