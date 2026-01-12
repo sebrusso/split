@@ -48,6 +48,7 @@ export function getItemClaimedAmount(item: ReceiptItem): number {
 
 /**
  * Check if an item is fully claimed (100% of it is assigned)
+ * Uses a tolerance of 0.002 to handle floating point rounding (e.g., 3-way splits, 0.999 edge cases)
  */
 export function isItemFullyClaimed(item: ReceiptItem): boolean {
   if (!item.claims || item.claims.length === 0) return false;
@@ -57,7 +58,9 @@ export function isItemFullyClaimed(item: ReceiptItem): boolean {
     0
   );
 
-  return Math.abs(totalFraction - 1) < 0.001;
+  // Use tolerance of 0.002 to handle JS floating point issues
+  // (e.g., 1 - 0.999 = 0.0010000000000000009, not exactly 0.001)
+  return Math.abs(totalFraction - 1) < 0.002;
 }
 
 /**
@@ -350,6 +353,14 @@ export function validateAllItemsClaimed(
 
 /**
  * Create initial claim for an item
+ *
+ * @param itemId - The receipt item ID
+ * @param memberId - The member ID claiming the item
+ * @param options - Options for the claim
+ * @param options.splitCount - Number of ways to split (calculates shareFraction as 1/splitCount)
+ * @param options.shareFraction - Explicit share fraction (overrides splitCount calculation)
+ * @param options.maxFraction - Maximum allowed fraction (used to prevent over-claiming)
+ * @param options.claimedVia - Source of the claim (app, web, imessage, assigned)
  */
 export function createClaim(
   itemId: string,
@@ -357,16 +368,25 @@ export function createClaim(
   options: {
     splitCount?: number;
     shareFraction?: number;
+    maxFraction?: number;
     claimedVia?: ClaimSource;
   } = {}
 ): Omit<ItemClaim, 'id' | 'claimed_at' | 'share_amount' | 'member' | 'receipt_item'> {
   const splitCount = options.splitCount || 1;
-  const shareFraction = options.shareFraction ?? 1 / splitCount;
+  let shareFraction = options.shareFraction ?? 1 / splitCount;
+
+  // If maxFraction is provided, cap the share fraction to prevent over-claiming
+  if (options.maxFraction !== undefined && shareFraction > options.maxFraction) {
+    shareFraction = options.maxFraction;
+  }
+
+  // Determine claim type based on final share fraction
+  const claimType = shareFraction < 1 ? 'split' : 'full';
 
   return {
     receipt_item_id: itemId,
     member_id: memberId,
-    claim_type: splitCount > 1 ? 'split' : 'full',
+    claim_type: claimType,
     share_fraction: shareFraction,
     split_count: splitCount,
     claimed_via: options.claimedVia || 'app',
@@ -379,9 +399,9 @@ export function createClaim(
 export function canClaimItem(
   item: ReceiptItem,
   memberId: string
-): { canClaim: boolean; reason?: string } {
-  // Check if item is a special item
-  if (item.is_tax || item.is_tip || item.is_subtotal || item.is_total) {
+): { canClaim: boolean; reason?: string; remainingFraction?: number } {
+  // Check if item is a special item (tax, tip, subtotal, total, or discount)
+  if (item.is_tax || item.is_tip || item.is_subtotal || item.is_total || item.is_discount) {
     return { canClaim: false, reason: 'This item cannot be claimed' };
   }
 
@@ -396,7 +416,9 @@ export function canClaimItem(
     return { canClaim: false, reason: 'Item is fully claimed' };
   }
 
-  return { canClaim: true };
+  // Return remaining fraction for informational purposes
+  const remainingFraction = getItemRemainingFraction(item);
+  return { canClaim: true, remainingFraction };
 }
 
 /**

@@ -192,6 +192,13 @@ export function useItemClaims(receiptId: string | undefined) {
 
   /**
    * Claim an item for a member
+   * @param itemId - The receipt item ID
+   * @param memberId - The member ID claiming the item
+   * @param options - Claiming options
+   * @param options.splitCount - Number of ways to split
+   * @param options.shareFraction - Explicit share fraction
+   * @param options.maxFraction - Maximum allowed fraction (to prevent over-claiming)
+   * @param options.claimedVia - Source of claim
    */
   const claimItem = useCallback(
     async (
@@ -200,6 +207,7 @@ export function useItemClaims(receiptId: string | undefined) {
       options: {
         splitCount?: number;
         shareFraction?: number;
+        maxFraction?: number;
         claimedVia?: ClaimSource;
       } = {}
     ) => {

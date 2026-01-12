@@ -132,7 +132,7 @@ export default function ReceiptClaimingScreen() {
       return;
     }
 
-    const { canClaim, reason } = canClaimItem(item, currentMember.id);
+    const { canClaim, reason, remainingFraction } = canClaimItem(item, currentMember.id);
 
     if (!canClaim) {
       Alert.alert('Cannot Claim', reason || 'Unable to claim this item');
@@ -142,7 +142,10 @@ export default function ReceiptClaimingScreen() {
     // Optimistic update - show claimed immediately
     setPendingClaims((prev) => new Set(prev).add(item.id));
 
-    const result = await claimItem(item.id, currentMember.id);
+    // Pass maxFraction to prevent over-claiming when item is partially claimed
+    const result = await claimItem(item.id, currentMember.id, {
+      maxFraction: remainingFraction,
+    });
 
     if (!result.success) {
       // Rollback optimistic update on failure

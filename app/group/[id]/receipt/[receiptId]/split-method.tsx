@@ -48,6 +48,20 @@ export default function SplitMethodScreen() {
     try {
       setSplitting(true);
 
+      // First, delete any existing claims for these items to avoid duplicates
+      const itemIds = regularItems.map((item) => item.id);
+      if (itemIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('item_claims')
+          .delete()
+          .in('receipt_item_id', itemIds);
+
+        if (deleteError) {
+          console.error('Error deleting existing claims:', deleteError);
+          // Continue anyway - the upsert below will handle conflicts
+        }
+      }
+
       // Calculate share fraction for each member
       const shareFraction = 1 / members.length;
 
