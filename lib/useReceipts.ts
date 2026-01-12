@@ -319,10 +319,47 @@ export function useItemClaims(receiptId: string | undefined) {
     []
   );
 
+  /**
+   * Clear all claims for all items in a receipt
+   * Used when switching split modes (e.g., from item claiming to split evenly)
+   */
+  const clearAllClaims = useCallback(
+    async (items: { id: string }[]) => {
+      try {
+        setClaiming(true);
+        setError(null);
+
+        if (items.length === 0) {
+          return { success: true };
+        }
+
+        const itemIds = items.map((i) => i.id);
+
+        const { error: deleteError } = await supabase
+          .from('item_claims')
+          .delete()
+          .in('receipt_item_id', itemIds);
+
+        if (deleteError) throw deleteError;
+
+        return { success: true };
+      } catch (err: any) {
+        console.error('Error clearing claims:', err);
+        const errorMsg = err.message || 'Failed to clear claims';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      } finally {
+        setClaiming(false);
+      }
+    },
+    []
+  );
+
   return {
     claimItem,
     unclaimItem,
     splitItem,
+    clearAllClaims,
     claiming,
     error,
   };

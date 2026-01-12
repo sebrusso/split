@@ -39,46 +39,9 @@ export default function SplitMethodScreen() {
       !item.is_tax && !item.is_tip && !item.is_subtotal && !item.is_total && !item.is_discount
   );
 
-  const handleSplitEvenly = async () => {
-    if (!receipt || members.length === 0) {
-      Alert.alert('Error', 'No members found in this group');
-      return;
-    }
-
-    try {
-      setSplitting(true);
-
-      // Calculate share fraction for each member
-      const shareFraction = 1 / members.length;
-
-      // Create claims for all regular items, split evenly among all members
-      const claims = regularItems.flatMap((item) =>
-        members.map((member) => ({
-          receipt_item_id: item.id,
-          member_id: member.id,
-          claim_type: 'split',
-          share_fraction: shareFraction,
-          split_count: members.length,
-          claimed_via: 'app',
-        }))
-      );
-
-      if (claims.length > 0) {
-        const { error: claimError } = await supabase
-          .from('item_claims')
-          .insert(claims);
-
-        if (claimError) throw claimError;
-      }
-
-      // Navigate to settlement screen
-      router.replace(`/group/${id}/receipt/${receiptId}/settle`);
-    } catch (err: any) {
-      console.error('Error splitting evenly:', err);
-      Alert.alert('Error', err.message || 'Failed to split items');
-    } finally {
-      setSplitting(false);
-    }
+  const handleSplitEvenly = () => {
+    // Navigate to split evenly screen where user can select members and confirm
+    router.replace(`/group/${id}/receipt/${receiptId}/split-evenly`);
   };
 
   const handleClaimItems = () => {

@@ -45,7 +45,7 @@ export default function ReceiptClaimingScreen() {
 
   const { receipt, items, claims, members, summary, loading, error, refetch } =
     useReceiptSummary(receiptId);
-  const { claimItem, unclaimItem, splitItem, claiming } = useItemClaims(receiptId);
+  const { claimItem, unclaimItem, splitItem, clearAllClaims, claiming } = useItemClaims(receiptId);
 
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [showReceiptImage, setShowReceiptImage] = useState(false);
@@ -143,7 +143,7 @@ export default function ReceiptClaimingScreen() {
       return;
     }
 
-    const { canClaim, reason } = canClaimItem(item, currentMember.id);
+    const { canClaim, reason, remainingFraction } = canClaimItem(item, currentMember.id);
 
     if (!canClaim) {
       Alert.alert('Cannot Claim', reason || 'Unable to claim this item');
@@ -153,7 +153,10 @@ export default function ReceiptClaimingScreen() {
     // Optimistic update - show claimed immediately
     setPendingClaims((prev) => new Set(prev).add(item.id));
 
-    const result = await claimItem(item.id, currentMember.id);
+    // Pass maxFraction to prevent over-claiming when item is partially claimed
+    const result = await claimItem(item.id, currentMember.id, {
+      maxFraction: remainingFraction,
+    });
 
     if (!result.success) {
       // Rollback optimistic update on failure
@@ -248,6 +251,25 @@ export default function ReceiptClaimingScreen() {
     // Use replace so the claiming screen is removed from the stack
     // This way, back button from settle goes to group, not back to claiming
     router.replace(`/group/${id}/receipt/${receiptId}/settle`);
+  };
+
+  const handleSwitchToSplitEvenly = () => {
+    Alert.alert(
+      'Switch Mode',
+      'This will clear all current claims. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch',
+          onPress: async () => {
+            // Clear all claims for this receipt
+            await clearAllClaims(items);
+            // Navigate to split evenly screen
+            router.replace(`/group/${id}/receipt/${receiptId}/split-evenly`);
+          },
+        },
+      ]
+    );
   };
 
   const getMemberClaim = (item: ReceiptItem) => {
@@ -376,6 +398,15 @@ export default function ReceiptClaimingScreen() {
           )}
         </Card>
 
+        {/* Mode Switcher */}
+        <TouchableOpacity
+          style={styles.modeSwitcher}
+          onPress={handleSwitchToSplitEvenly}
+        >
+          <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+          <Text style={styles.modeSwitcherText}>Switch to Split Evenly</Text>
+        </TouchableOpacity>
+
         {/* Instructions */}
         <Text style={styles.instructions}>
           Tap to claim items. Tap claimed items to split them.
@@ -416,6 +447,7 @@ export default function ReceiptClaimingScreen() {
                   ? item.claims?.find((c) => c.member_id === currentMember.id)
                   : null;
                 const hasCurrentMemberClaim = !!currentMemberClaim;
+                const isAlreadySplit = (item.claims?.length || 0) > 1;
 
                 // Handle tap based on current state
                 if (isPendingUnclaim) {
@@ -457,14 +489,17 @@ export default function ReceiptClaimingScreen() {
                       return next;
                     });
                   }
+                } else if (isAlreadySplit) {
+                  // Item is being split by multiple people - go to split screen to edit
+                  handleSplitItem(item);
                 } else if (hasCurrentMemberClaim) {
-                  // Unclaim existing claim (use fresh check, not stale render-time value)
+                  // Unclaim existing solo claim (use fresh check, not stale render-time value)
                   handleUnclaimItem(item);
                 } else if (!isClaimed) {
                   // Claim unclaimed item
                   handleClaimItem(item);
                 } else {
-                  // Item is claimed by someone else - offer to join the split
+                  // Item is claimed by someone else (solo) - offer to join the split
                   handleJoinSplit(item);
                 }
               }}
@@ -786,6 +821,19 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  modeSwitcher: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  modeSwitcherText: {
+    ...typography.body,
+    color: colors.primary,
+    fontFamily: 'Inter_500Medium',
   },
   instructions: {
     ...typography.caption,
