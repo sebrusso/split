@@ -5,7 +5,7 @@
  * Supports real-time updates as others claim items.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,10 @@ import {
   RefreshControl,
   Alert,
   Share,
+  Modal,
+  Image,
+  Dimensions,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -45,19 +49,72 @@ export default function ReceiptClaimingScreen() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [selectedItem, setSelectedItem] = useState<ReceiptItem | null>(null);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const [showReceiptImage, setShowReceiptImage] = useState(false);
+
+  // Optimistic UI state for instant feedback
+  const [pendingClaims, setPendingClaims] = useState<Set<string>>(new Set());
+  const [pendingUnclaims, setPendingUnclaims] = useState<Set<string>>(new Set());
+
+  // Track successful claims that are waiting for real-time data
+  const successfulClaimsRef = useRef<Set<string>>(new Set());
+  const successfulUnclaimsRef = useRef<Set<string>>(new Set());
+
+  // Clear pending state when actual claims appear in the data
+  useEffect(() => {
+    if (!currentMember) return;
+
+    // Check for successful claims that now appear in the data
+    for (const itemId of successfulClaimsRef.current) {
+      const item = items.find(i => i.id === itemId);
+      const hasActualClaim = item?.claims?.some(c => c.member_id === currentMember.id);
+      if (hasActualClaim) {
+        successfulClaimsRef.current.delete(itemId);
+        setPendingClaims(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }
+    }
+
+    // Check for successful unclaims that are now removed from data
+    for (const itemId of successfulUnclaimsRef.current) {
+      const item = items.find(i => i.id === itemId);
+      const stillHasClaim = item?.claims?.some(c => c.member_id === currentMember.id);
+      if (!stillHasClaim) {
+        successfulUnclaimsRef.current.delete(itemId);
+        setPendingUnclaims(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }
+    }
+  }, [items, currentMember]);
 
   // Fetch current user's member record
   useFocusEffect(
     useCallback(() => {
       const fetchMember = async () => {
-        if (!id || !userId) return;
+        if (!id || !userId) {
+          console.log('fetchMember skipped - missing id or userId:', { id, userId });
+          return;
+        }
 
-        const { data: member } = await supabase
+        console.log('Fetching member for group/user:', { groupId: id, userId });
+
+        const { data: member, error } = await supabase
           .from('members')
           .select('*')
           .eq('group_id', id)
           .eq('clerk_user_id', userId)
           .single();
+
+        console.log('Member fetch result:', { member, error });
+
+        if (error) {
+          console.warn('Error fetching member:', error.message);
+        }
 
         setCurrentMember(member);
       };
@@ -68,31 +125,80 @@ export default function ReceiptClaimingScreen() {
 
   const handleClaimItem = async (item: ReceiptItem) => {
     if (!currentMember) {
-      Alert.alert('Error', 'Unable to claim item. Please try again.');
+      Alert.alert(
+        'Error',
+        'Unable to identify you as a group member. Please make sure you are a member of this group.'
+      );
       return;
     }
 
     const { canClaim, reason } = canClaimItem(item, currentMember.id);
+
     if (!canClaim) {
-      Alert.alert('Cannot Claim', reason);
+      Alert.alert('Cannot Claim', reason || 'Unable to claim this item');
       return;
     }
 
+    // Optimistic update - show claimed immediately
+    setPendingClaims((prev) => new Set(prev).add(item.id));
+
     const result = await claimItem(item.id, currentMember.id);
+
     if (!result.success) {
+      // Rollback optimistic update on failure
+      setPendingClaims((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
       Alert.alert('Error', result.error || 'Failed to claim item');
+    } else {
+      // Mark as successful - pending state will be cleared when real data arrives
+      successfulClaimsRef.current.add(item.id);
     }
   };
 
   const handleUnclaimItem = async (item: ReceiptItem) => {
-    if (!currentMember) return;
+    console.log('handleUnclaimItem called:', {
+      itemId: item.id,
+      itemDescription: item.description,
+      currentMemberId: currentMember?.id,
+      claims: item.claims,
+      claimMemberIds: item.claims?.map(c => c.member_id),
+    });
 
-    const memberClaim = item.claims?.find((c) => c.member_id === currentMember.id);
-    if (!memberClaim) return;
+    if (!currentMember) {
+      console.log('handleUnclaimItem: no currentMember, returning');
+      Alert.alert('Error', 'Please wait while we load your membership info');
+      return;
+    }
+
+    // Use fresh items data to find the claim (item param might have stale claims)
+    const freshItem = items.find(i => i.id === item.id);
+    const memberClaim = freshItem?.claims?.find((c) => c.member_id === currentMember.id);
+    console.log('handleUnclaimItem: memberClaim lookup result:', memberClaim, 'freshItem claims:', freshItem?.claims);
+
+    if (!memberClaim) {
+      console.log('handleUnclaimItem: no memberClaim found, returning');
+      return;
+    }
+
+    // Optimistic update - show unclaimed immediately
+    setPendingUnclaims((prev) => new Set(prev).add(item.id));
 
     const result = await unclaimItem(item.id, currentMember.id);
+
     if (!result.success) {
+      // Rollback optimistic update on failure
+      setPendingUnclaims((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
       Alert.alert('Error', result.error || 'Failed to unclaim item');
+    } else {
+      // Mark as successful - pending state will be cleared when real data arrives
+      successfulUnclaimsRef.current.add(item.id);
     }
   };
 
@@ -136,29 +242,25 @@ export default function ReceiptClaimingScreen() {
   };
 
   const handleFinalize = () => {
-    if (!summary) return;
-
-    if (summary.unclaimedItemCount > 0) {
-      Alert.alert(
-        'Unclaimed Items',
-        `There are ${summary.unclaimedItemCount} unclaimed items. Do you want to continue anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Continue',
-            onPress: () => router.push(`/group/${id}/receipt/${receiptId}/settle`),
-          },
-        ]
-      );
-      return;
-    }
-
-    router.push(`/group/${id}/receipt/${receiptId}/settle`);
+    // Use replace so the claiming screen is removed from the stack
+    // This way, back button from settle goes to group, not back to claiming
+    router.replace(`/group/${id}/receipt/${receiptId}/settle`);
   };
 
   const getMemberClaim = (item: ReceiptItem) => {
-    if (!currentMember) return null;
-    return item.claims?.find((c) => c.member_id === currentMember.id);
+    if (!currentMember) {
+      console.log('getMemberClaim: no currentMember');
+      return null;
+    }
+    const claim = item.claims?.find((c) => c.member_id === currentMember.id);
+    if (!claim && item.claims && item.claims.length > 0) {
+      console.log('getMemberClaim: no match found', {
+        itemId: item.id,
+        currentMemberId: currentMember.id,
+        claimMemberIds: item.claims.map(c => c.member_id),
+      });
+    }
+    return claim;
   };
 
   // Filter to regular items only (not tax/tip/etc)
@@ -221,7 +323,7 @@ export default function ReceiptClaimingScreen() {
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalAmount}>
               {formatReceiptAmount(
-                receipt.total_amount || summary?.total || 0,
+                summary?.total || receipt.total_amount || 0,
                 receipt.currency
               )}
             </Text>
@@ -245,6 +347,17 @@ export default function ReceiptClaimingScreen() {
               </Text>
             </View>
           )}
+
+          {/* View Receipt Image Button */}
+          {receipt.image_url && (
+            <TouchableOpacity
+              style={styles.viewReceiptButton}
+              onPress={() => setShowReceiptImage(true)}
+            >
+              <Ionicons name="image-outline" size={18} color={colors.primary} />
+              <Text style={styles.viewReceiptButtonText}>View Original Receipt</Text>
+            </TouchableOpacity>
+          )}
         </Card>
 
         {/* Instructions */}
@@ -253,42 +366,92 @@ export default function ReceiptClaimingScreen() {
         </Text>
 
         {/* Items List */}
+        {regularItems.length === 0 && (
+          <Text style={styles.instructions}>No items found on this receipt.</Text>
+        )}
         {regularItems.map((item) => {
           const memberClaim = getMemberClaim(item);
           const isClaimed = isItemFullyClaimed(item);
-          const isClaimedByMe = !!memberClaim;
+
+          // Use optimistic state for instant feedback
+          const isPendingClaim = pendingClaims.has(item.id);
+          const isPendingUnclaim = pendingUnclaims.has(item.id);
+
+          // Determine actual claimed state (from database or optimistic)
+          const hasDbClaim = !!memberClaim;
+          const isClaimedByMe = hasDbClaim || isPendingClaim;
+          const showAsClaimedByMe = isPendingUnclaim ? false : isClaimedByMe;
+          const showAsClaimed = isPendingUnclaim ? false : (isClaimed || isPendingClaim);
+
+          const isProcessing = isPendingClaim || isPendingUnclaim;
 
           return (
             <TouchableOpacity
               key={item.id}
               style={[
                 styles.itemCard,
-                isClaimedByMe && styles.itemCardClaimed,
-                isClaimed && !isClaimedByMe && styles.itemCardClaimedOther,
+                showAsClaimedByMe && styles.itemCardClaimed,
+                showAsClaimed && !showAsClaimedByMe && styles.itemCardClaimedOther,
               ]}
               onPress={() => {
-                if (isClaimedByMe) {
+                // Fresh check for current member's claim at tap time
+                // This handles race conditions where render happened before currentMember was set
+                const currentMemberClaim = currentMember
+                  ? item.claims?.find((c) => c.member_id === currentMember.id)
+                  : null;
+                const hasCurrentMemberClaim = !!currentMemberClaim;
+
+                // Debug logging
+                console.log('Item tapped:', {
+                  itemId: item.id,
+                  itemDescription: item.description,
+                  isPendingUnclaim,
+                  isPendingClaim,
+                  hasDbClaim,
+                  hasCurrentMemberClaim,
+                  isClaimed,
+                  claims: item.claims,
+                  currentMemberId: currentMember?.id,
+                });
+
+                // Handle tap based on current state
+                if (isPendingUnclaim) {
+                  // Cancel the pending unclaim
+                  setPendingUnclaims((prev) => {
+                    const next = new Set(prev);
+                    next.delete(item.id);
+                    return next;
+                  });
+                  successfulUnclaimsRef.current.delete(item.id);
+                } else if (isPendingClaim) {
+                  // Cancel the pending claim
+                  setPendingClaims((prev) => {
+                    const next = new Set(prev);
+                    next.delete(item.id);
+                    return next;
+                  });
+                  successfulClaimsRef.current.delete(item.id);
+                } else if (hasCurrentMemberClaim) {
+                  // Unclaim existing claim (use fresh check, not stale render-time value)
                   handleUnclaimItem(item);
                 } else if (!isClaimed) {
+                  // Claim unclaimed item
                   handleClaimItem(item);
                 }
               }}
               onLongPress={() => handleSplitItem(item)}
-              disabled={claiming}
+              disabled={claiming || isProcessing}
             >
               <View style={styles.itemContent}>
                 <View style={styles.itemMain}>
                   <Text
                     style={[
                       styles.itemDescription,
-                      isClaimed && styles.itemDescriptionClaimed,
+                      showAsClaimed && styles.itemDescriptionClaimed,
                     ]}
                     numberOfLines={2}
                   >
                     {item.description}
-                  </Text>
-                  <Text style={styles.itemStatus}>
-                    {getItemClaimStatus(item)}
                   </Text>
                 </View>
                 <Text
@@ -406,7 +569,7 @@ export default function ReceiptClaimingScreen() {
           style={styles.footerButton}
         />
         <Button
-          title="Finalize & Pay"
+          title="Confirm"
           onPress={handleFinalize}
           style={styles.footerButton}
         />
@@ -426,6 +589,43 @@ export default function ReceiptClaimingScreen() {
           currency={receipt.currency}
         />
       )}
+
+      {/* Receipt Image Viewer Modal */}
+      <Modal
+        visible={showReceiptImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReceiptImage(false)}
+      >
+        <View style={styles.imageModalOverlay}>
+          <TouchableOpacity
+            style={styles.imageModalClose}
+            onPress={() => setShowReceiptImage(false)}
+          >
+            <Ionicons name="close-circle" size={32} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.imageModalContent}>
+            {receipt.image_url ? (
+              <Image
+                source={{ uri: receipt.image_url }}
+                style={styles.receiptImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.noImageContainer}>
+                <Ionicons name="image-outline" size={64} color={colors.white} />
+                <Text style={styles.noImageText}>No receipt image available</Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.imageModalCloseBottom}
+            onPress={() => setShowReceiptImage(false)}
+          >
+            <Text style={styles.imageModalCloseText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -640,6 +840,9 @@ const styles = StyleSheet.create({
   itemCardClaimedOther: {
     backgroundColor: colors.borderLight,
   },
+  itemCardProcessing: {
+    opacity: 0.7,
+  },
   itemContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -828,5 +1031,67 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+  },
+  // View Receipt Button
+  viewReceiptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+  },
+  viewReceiptButtonText: {
+    ...typography.small,
+    color: colors.primary,
+    fontFamily: 'Inter_500Medium',
+  },
+  // Receipt Image Modal
+  imageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalContent: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 80,
+    paddingBottom: 80,
+  },
+  imageModalClose: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+  },
+  imageModalCloseBottom: {
+    position: 'absolute',
+    bottom: 40,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.md,
+  },
+  imageModalCloseText: {
+    color: colors.white,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+  },
+  receiptImage: {
+    width: Dimensions.get('window').width - 40,
+    height: Dimensions.get('window').height - 200,
+  },
+  noImageContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noImageText: {
+    color: colors.white,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    marginTop: spacing.md,
   },
 });

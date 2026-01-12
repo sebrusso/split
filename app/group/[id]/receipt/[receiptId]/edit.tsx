@@ -58,10 +58,10 @@ export default function ReceiptEditScreen() {
     }
   }, [receipt]);
 
-  // Filter to regular items only
+  // Filter to regular items only (exclude tax, tip, subtotal, total, and discount flags)
   const regularItems = items.filter(
     (item) =>
-      !item.is_tax && !item.is_tip && !item.is_subtotal && !item.is_total
+      !item.is_tax && !item.is_tip && !item.is_subtotal && !item.is_total && !item.is_discount
   );
 
   const handleSaveMetadata = async () => {

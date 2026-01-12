@@ -34,6 +34,27 @@ export default function ProfileLayout() {
           title: "Settings",
         }}
       />
+      <Stack.Screen
+        name="edit"
+        options={{
+          title: "Edit Profile",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="change-email"
+        options={{
+          title: "Change Email",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="change-password"
+        options={{
+          title: "Change Password",
+          presentation: "modal",
+        }}
+      />
     </Stack>
   );
 }

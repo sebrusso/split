@@ -18,7 +18,7 @@ import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase";
-import { Group, Member, Expense, SettlementRecord } from "../../../lib/types";
+import { Group, Member, Expense, SettlementRecord, Receipt } from "../../../lib/types";
 import logger from "../../../lib/logger";
 import { formatCurrency, formatRelativeDate, calculateBalancesWithSettlements } from "../../../lib/utils";
 import {
@@ -39,12 +39,18 @@ interface MemberWithProfile extends Member {
   avatar_url?: string | null;
 }
 
+// Combined list item type for expenses and receipts
+type ListItem =
+  | { type: "expense"; data: Expense }
+  | { type: "receipt"; data: Receipt };
+
 export default function GroupDetailScreen() {
   const { id, name: initialName } = useLocalSearchParams<{ id: string; name?: string }>();
   const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<MemberWithProfile[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
   const [userClaimedMember, setUserClaimedMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,6 +123,26 @@ export default function GroupDetailScreen() {
 
       if (expensesError) throw expensesError;
       setExpenses(expensesData || []);
+
+      // Fetch receipts that are still being claimed (not settled)
+      // Once settled, an expense is created and we show that instead
+      const { data: receiptsData, error: receiptsError } = await supabase
+        .from("receipts")
+        .select(
+          `
+          *,
+          uploader:members!uploaded_by(id, name)
+        `,
+        )
+        .eq("group_id", id)
+        .eq("status", "claiming")
+        .order("created_at", { ascending: false });
+
+      if (receiptsError) {
+        logger.warn("Error fetching receipts:", receiptsError);
+      } else {
+        setReceipts(receiptsData || []);
+      }
 
       // Fetch settlements
       const { data: settlementsData, error: settlementsError } = await supabase
@@ -290,29 +316,115 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const renderExpense = ({ item }: { item: Expense }) => {
+  // Combine expenses and receipts into a single sorted list
+  const combinedItems: ListItem[] = [
+    ...expenses.map((e) => ({ type: "expense" as const, data: e })),
+    ...receipts.map((r) => ({ type: "receipt" as const, data: r })),
+  ].sort((a, b) => {
+    const dateA = new Date(a.data.created_at).getTime();
+    const dateB = new Date(b.data.created_at).getTime();
+    return dateB - dateA; // Most recent first
+  });
+
+  const renderExpense = (item: Expense) => {
     const category = item.category ? getCategoryById(item.category) : null;
+
+    // Check if this expense is from a receipt (has [receipt:xxx] in notes)
+    const receiptMatch = item.notes?.match(/\[receipt:([^\]]+)\]/);
+    const receiptId = receiptMatch ? receiptMatch[1] : null;
+    const isFromReceipt = !!receiptId;
+
+    const handlePress = () => {
+      if (receiptId) {
+        // Navigate to receipt claiming screen for receipt-based expenses
+        router.push(`/group/${id}/receipt/${receiptId}`);
+      } else {
+        // Navigate to expense detail for regular expenses
+        router.push(`/group/${id}/expense/${item.id}`);
+      }
+    };
+
     return (
-      <Card style={styles.expenseCard}>
-        <View style={styles.expenseHeader}>
-          {category && (
-            <View style={styles.categoryIcon}>
-              <Text style={styles.categoryIconText}>{category.icon}</Text>
+      <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
+        <Card style={[styles.expenseCard, isFromReceipt && styles.receiptCard]}>
+          <View style={styles.expenseHeader}>
+            {category && (
+              <View style={styles.categoryIcon}>
+                <Text style={styles.categoryIconText}>{isFromReceipt ? "🧾" : category.icon}</Text>
+              </View>
+            )}
+            {!category && isFromReceipt && (
+              <View style={styles.categoryIcon}>
+                <Text style={styles.categoryIconText}>🧾</Text>
+              </View>
+            )}
+            <View style={styles.expenseInfo}>
+              <Text style={styles.expenseDescription}>{item.description}</Text>
+              <Text style={styles.expenseMeta}>
+                Paid by {item.payer?.name || "Unknown"} •{" "}
+                {formatRelativeDate(item.created_at)}
+              </Text>
+              {isFromReceipt && (
+                <View style={[styles.receiptBadge, styles.receiptBadgeComplete]}>
+                  <Text style={[styles.receiptBadgeText, styles.receiptBadgeTextComplete]}>
+                    Receipt
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
-          <View style={styles.expenseInfo}>
-            <Text style={styles.expenseDescription}>{item.description}</Text>
-            <Text style={styles.expenseMeta}>
-              Paid by {item.payer?.name || "Unknown"} •{" "}
-              {formatRelativeDate(item.created_at)}
+            <Text style={styles.expenseAmount}>
+              {formatCurrency(item.amount, item.currency || group?.currency)}
             </Text>
           </View>
-          <Text style={styles.expenseAmount}>
-            {formatCurrency(item.amount, group?.currency)}
-          </Text>
-        </View>
-      </Card>
+        </Card>
+      </TouchableOpacity>
     );
+  };
+
+  const renderReceipt = (item: Receipt) => {
+    // Show clearer status: "Claiming" for in-progress, "Complete" for fully settled
+    const badgeText = item.status === "settled" ? "Complete" : "Claiming";
+    const isComplete = item.status === "settled";
+
+    return (
+      <TouchableOpacity
+        onPress={() => router.push(`/group/${id}/receipt/${item.id}`)}
+        activeOpacity={0.7}
+      >
+        <Card style={[styles.expenseCard, styles.receiptCard]}>
+          <View style={styles.expenseHeader}>
+            <View style={styles.categoryIcon}>
+              <Text style={styles.categoryIconText}>🧾</Text>
+            </View>
+            <View style={styles.expenseInfo}>
+              <Text style={styles.expenseDescription}>
+                {item.merchant_name || "Receipt"}
+              </Text>
+              <Text style={styles.expenseMeta}>
+                {item.uploader?.name ? `Added by ${item.uploader.name}` : ""}
+                {item.uploader?.name && " • "}
+                {formatRelativeDate(item.created_at)}
+              </Text>
+              <View style={[styles.receiptBadge, isComplete && styles.receiptBadgeComplete]}>
+                <Text style={[styles.receiptBadgeText, isComplete && styles.receiptBadgeTextComplete]}>
+                  {badgeText}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.expenseAmount}>
+              {formatCurrency(item.total_amount || 0, item.currency)}
+            </Text>
+          </View>
+        </Card>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderItem = ({ item }: { item: ListItem }) => {
+    if (item.type === "expense") {
+      return renderExpense(item.data);
+    }
+    return renderReceipt(item.data);
   };
 
   const ListHeader = () => (
@@ -454,9 +566,9 @@ export default function GroupDetailScreen() {
       />
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <FlatList
-          data={expenses}
-          renderItem={renderExpense}
-          keyExtractor={(item) => item.id}
+          data={combinedItems}
+          renderItem={renderItem}
+          keyExtractor={(item) => `${item.type}-${item.data.id}`}
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={EmptyExpenses}
           contentContainerStyle={styles.list}
@@ -709,6 +821,29 @@ const styles = StyleSheet.create({
   },
   expenseCard: {
     marginBottom: spacing.md,
+  },
+  receiptCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  receiptBadge: {
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+    alignSelf: "flex-start",
+    marginTop: spacing.xs,
+  },
+  receiptBadgeText: {
+    ...typography.small,
+    color: colors.primaryDark,
+    fontFamily: "Inter_600SemiBold",
+  },
+  receiptBadgeComplete: {
+    backgroundColor: colors.successLight || "#D1FAE5",
+  },
+  receiptBadgeTextComplete: {
+    color: colors.success || "#059669",
   },
   expenseHeader: {
     flexDirection: "row",
