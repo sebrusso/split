@@ -120,14 +120,26 @@ export default function AssignReceiptScreen() {
   // Navigate to split method picker screen
   const handleStartClaiming = () => {
     if (selectedGroup && receiptId) {
-      router.replace(`/group/${selectedGroup.id}/receipt/${receiptId}/split-method`);
+      // Reset navigation to Groups tab, then navigate to the group's claiming flow
+      // This ensures back navigation goes to Groups tab, not Scan tab
+      router.replace("/(tabs)");
+      // Use setTimeout to ensure the tab switch completes before pushing
+      setTimeout(() => {
+        router.push(`/group/${selectedGroup.id}/receipt/${receiptId}/split-method`);
+      }, 0);
     }
   };
 
   // Navigate to group
   const handleDone = () => {
     if (selectedGroup) {
-      router.replace(`/group/${selectedGroup.id}`);
+      // Reset navigation to Groups tab, then navigate to the group
+      // This ensures back navigation goes to Groups tab, not Scan tab
+      router.replace("/(tabs)");
+      // Use setTimeout to ensure the tab switch completes before pushing
+      setTimeout(() => {
+        router.push(`/group/${selectedGroup.id}`);
+      }, 0);
     } else {
       router.replace("/(tabs)");
     }

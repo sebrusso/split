@@ -123,7 +123,7 @@ function RootNavigator() {
         name="group/[id]/index"
         options={{
           title: "",
-          headerBackTitle: "Groups",
+          headerBackTitle: "Back",
         }}
       />
       <Stack.Screen
@@ -250,28 +250,11 @@ function RootNavigator() {
         }}
       />
 
-      {/* Standalone Activity screen (deprecated - use tabs) */}
-      <Stack.Screen
-        name="activity"
-        options={{
-          headerShown: false,
-        }}
-      />
-
       {/* Search screen */}
       <Stack.Screen
         name="search"
         options={{
           headerShown: false,
-        }}
-      />
-
-      {/* Standalone Global balances screen (deprecated - use tabs) */}
-      <Stack.Screen
-        name="balances"
-        options={{
-          title: "All Balances",
-          headerBackTitle: "Groups",
         }}
       />
 

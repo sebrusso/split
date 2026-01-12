@@ -178,7 +178,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => router.push("/activity")}
+              onPress={() => router.push("/(tabs)/activity")}
             >
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuIcon}>📋</Text>
