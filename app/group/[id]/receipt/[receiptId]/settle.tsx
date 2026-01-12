@@ -5,7 +5,7 @@
  * Clear separation between your share and the group's total.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,10 @@ import {
   TouchableOpacity,
   Alert,
   Linking,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +28,8 @@ import {
   formatReceiptAmount,
   generateVenmoLink,
 } from '../../../../../lib/receipts';
-import { getVenmoQRCodeUrl } from '../../../../../lib/payment-links';
+import { getVenmoQRCodeUrl, getVenmoRequestLink } from '../../../../../lib/payment-links';
+import { getVenmoUsernamesForMembers } from '../../../../../lib/user-profile';
 import { useAuth } from '../../../../../lib/auth-context';
 import { supabase } from '../../../../../lib/supabase';
 import { Member, ReceiptMemberCalculation } from '../../../../../lib/types';
@@ -40,6 +44,15 @@ export default function ReceiptSettleScreen() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [settling, setSettling] = useState(false);
   const [uploaderVenmo, setUploaderVenmo] = useState<string | null>(null);
+  const [memberVenmoUsernames, setMemberVenmoUsernames] = useState<Map<string, string>>(new Map());
+  const [pendingPayment, setPendingPayment] = useState<{
+    type: 'pay' | 'request';
+    memberId: string;
+    memberName: string;
+    amount: number;
+    openedAt: number;
+  } | null>(null);
+  const appState = useRef(AppState.currentState);
 
   // Fetch current user's member record
   useFocusEffect(
@@ -88,6 +101,90 @@ export default function ReceiptSettleScreen() {
     }, [receipt?.uploaded_by])
   );
 
+  // Fetch all members' Venmo usernames for request functionality
+  useFocusEffect(
+    useCallback(() => {
+      const fetchMemberVenmoUsernames = async () => {
+        if (!summary?.memberTotals) return;
+
+        try {
+          const memberIds = summary.memberTotals.map((t) => t.memberId);
+          const usernames = await getVenmoUsernamesForMembers(memberIds);
+          setMemberVenmoUsernames(usernames);
+        } catch (err) {
+          console.error('Error fetching member Venmo usernames:', err);
+        }
+      };
+
+      fetchMemberVenmoUsernames();
+    }, [summary?.memberTotals])
+  );
+
+  // Listen for app state changes to show payment confirmation prompt
+  useFocusEffect(
+    useCallback(() => {
+      const handleAppStateChange = (nextAppState: AppStateStatus) => {
+        // User returned to app from background
+        if (
+          appState.current.match(/inactive|background/) &&
+          nextAppState === 'active' &&
+          pendingPayment
+        ) {
+          // Check if reasonable time has passed (at least 3 seconds)
+          const timeInPaymentApp = Date.now() - pendingPayment.openedAt;
+          if (timeInPaymentApp >= 3000) {
+            const actionText = pendingPayment.type === 'pay' ? 'send the payment' : 'send the request';
+            Alert.alert(
+              'Payment Status',
+              `Did you ${actionText} to ${pendingPayment.memberName}?`,
+              [
+                {
+                  text: 'No',
+                  style: 'cancel',
+                  onPress: () => setPendingPayment(null),
+                },
+                {
+                  text: 'Yes',
+                  style: 'default',
+                  onPress: async () => {
+                    // Record payment method for tracking/analytics
+                    try {
+                      await supabase.from('payment_events').insert({
+                        receipt_id: receiptId,
+                        group_id: id,
+                        from_member_id: pendingPayment.type === 'pay' ? currentMember?.id : pendingPayment.memberId,
+                        to_member_id: pendingPayment.type === 'pay' ? pendingPayment.memberId : currentMember?.id,
+                        amount: pendingPayment.amount,
+                        payment_method: 'venmo',
+                        event_type: pendingPayment.type === 'pay' ? 'payment_sent' : 'request_sent',
+                      });
+                    } catch (err) {
+                      // Silently fail - this is optional analytics tracking
+                      console.log('Payment event tracking failed (table may not exist yet):', err);
+                    }
+                    setPendingPayment(null);
+                    Alert.alert(
+                      pendingPayment.type === 'pay' ? 'Payment Recorded' : 'Request Sent',
+                      pendingPayment.type === 'pay'
+                        ? `Your payment to ${pendingPayment.memberName} has been noted.`
+                        : `Your request to ${pendingPayment.memberName} has been sent.`
+                    );
+                  },
+                },
+              ]
+            );
+          } else {
+            setPendingPayment(null);
+          }
+        }
+        appState.current = nextAppState;
+      };
+
+      const subscription = AppState.addEventListener('change', handleAppStateChange);
+      return () => subscription.remove();
+    }, [pendingPayment])
+  );
+
   // Find the uploader (person who paid)
   const uploaderId = receipt?.uploaded_by;
   const isCurrentUserPayer = currentMember?.id === uploaderId;
@@ -104,6 +201,24 @@ export default function ReceiptSettleScreen() {
     .filter((t) => t.memberId !== uploaderId)
     .reduce((sum, t) => sum + t.grandTotal, 0) || 0;
 
+  // Build payment note with receipt details
+  const buildPaymentNote = (items: string[], includeReceiptUrl = true) => {
+    const merchantName = receipt?.merchant_name || 'Receipt';
+    const itemsList = items.join(', ');
+    let note = `${merchantName} - ${itemsList}`;
+
+    // Include receipt image URL for reference (truncate if too long)
+    if (includeReceiptUrl && receipt?.image_url) {
+      const maxNoteLength = 200; // Venmo has note length limits
+      const receiptRef = ` | Receipt: ${receipt.image_url}`;
+      if (note.length + receiptRef.length <= maxNoteLength) {
+        note += receiptRef;
+      }
+    }
+
+    return note;
+  };
+
   const handlePayVenmo = async () => {
     if (!myTotal || !uploaderVenmo) {
       Alert.alert(
@@ -114,11 +229,21 @@ export default function ReceiptSettleScreen() {
       return;
     }
 
-    const note = `${receipt?.merchant_name || 'Receipt'} - ${myTotal.claimedItems.map((i) => i.description).join(', ')}`;
+    const note = buildPaymentNote(myTotal.claimedItems.map((i) => i.description));
     const url = generateVenmoLink(uploaderVenmo, myTotal.grandTotal, note);
 
     try {
       const canOpen = await Linking.canOpenURL(url);
+
+      // Track pending payment for confirmation prompt
+      setPendingPayment({
+        type: 'pay',
+        memberId: uploaderId!,
+        memberName: payerName,
+        amount: myTotal.grandTotal,
+        openedAt: Date.now(),
+      });
+
       if (canOpen) {
         await Linking.openURL(url);
       } else {
@@ -127,7 +252,80 @@ export default function ReceiptSettleScreen() {
         await Linking.openURL(webUrl);
       }
     } catch (err) {
+      setPendingPayment(null);
       Alert.alert('Error', 'Unable to open Venmo');
+    }
+  };
+
+  // Request money from a member who owes you (for payer)
+  const handleRequestVenmo = async (memberTotal: typeof summary.memberTotals[0]) => {
+    const memberVenmo = memberVenmoUsernames.get(memberTotal.memberId);
+
+    if (!memberVenmo) {
+      Alert.alert(
+        'Venmo Not Set Up',
+        `${memberTotal.memberName} hasn't added their Venmo username yet.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    const note = buildPaymentNote(memberTotal.claimedItems.map((i) => i.description));
+    const url = getVenmoRequestLink(memberTotal.grandTotal, note, memberVenmo);
+
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+
+      // Track pending payment for confirmation prompt
+      setPendingPayment({
+        type: 'request',
+        memberId: memberTotal.memberId,
+        memberName: memberTotal.memberName,
+        amount: memberTotal.grandTotal,
+        openedAt: Date.now(),
+      });
+
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        // Web fallback for request
+        const webUrl = `https://venmo.com/paycharge?txn=charge&recipients=${memberVenmo}&amount=${memberTotal.grandTotal.toFixed(2)}&note=${encodeURIComponent(note)}`;
+        await Linking.openURL(webUrl);
+      }
+    } catch (err) {
+      setPendingPayment(null);
+      Alert.alert('Error', 'Unable to open Venmo');
+    }
+  };
+
+  // Copy payment link to clipboard (for sharing via other apps)
+  const handleCopyPaymentLink = async () => {
+    if (!myTotal || !uploaderVenmo) return;
+
+    const note = buildPaymentNote(myTotal.claimedItems.map((i) => i.description), false);
+    const webUrl = getVenmoQRCodeUrl(uploaderVenmo, myTotal.grandTotal, note);
+
+    try {
+      await Clipboard.setStringAsync(webUrl);
+      Alert.alert('Copied', 'Payment link copied to clipboard');
+    } catch (err) {
+      Alert.alert('Error', 'Unable to copy link');
+    }
+  };
+
+  // Copy request link for a specific member (for payer)
+  const handleCopyRequestLink = async (memberTotal: typeof summary.memberTotals[0]) => {
+    const memberVenmo = memberVenmoUsernames.get(memberTotal.memberId);
+    if (!memberVenmo) return;
+
+    const note = buildPaymentNote(memberTotal.claimedItems.map((i) => i.description), false);
+    const webUrl = `https://venmo.com/paycharge?txn=charge&recipients=${memberVenmo}&amount=${memberTotal.grandTotal.toFixed(2)}&note=${encodeURIComponent(note)}`;
+
+    try {
+      await Clipboard.setStringAsync(webUrl);
+      Alert.alert('Copied', 'Request link copied to clipboard');
+    } catch (err) {
+      Alert.alert('Error', 'Unable to copy link');
     }
   };
 
@@ -267,11 +465,16 @@ export default function ReceiptSettleScreen() {
               <TouchableOpacity
                 style={[styles.venmoButton, !uploaderVenmo && styles.venmoButtonDisabled]}
                 onPress={handlePayVenmo}
+                onLongPress={uploaderVenmo ? handleCopyPaymentLink : undefined}
+                delayLongPress={500}
               >
                 <Text style={[styles.venmoButtonText, !uploaderVenmo && styles.venmoButtonTextDisabled]}>
                   {uploaderVenmo ? 'Pay with Venmo' : 'Venmo not set up'}
                 </Text>
               </TouchableOpacity>
+              {uploaderVenmo && (
+                <Text style={styles.longPressHint}>Long press to copy link</Text>
+              )}
             </View>
           )}
         </Card>
@@ -301,21 +504,55 @@ export default function ReceiptSettleScreen() {
 
           {/* Simple member breakdown */}
           <View style={styles.membersList}>
-            {summary.memberTotals.map((memberTotal) => (
-              <View key={memberTotal.memberId} style={styles.memberRow}>
-                <View style={styles.memberInfo}>
-                  <Avatar name={memberTotal.memberName} size="sm" />
-                  <Text style={styles.memberName}>
-                    {memberTotal.memberName}
-                    {memberTotal.memberId === currentMember?.id && ' (You)'}
-                    {memberTotal.memberId === uploaderId && ' - Paid'}
+            {summary.memberTotals.map((memberTotal) => {
+              const isThisMemberPayer = memberTotal.memberId === uploaderId;
+              const isThisMemberYou = memberTotal.memberId === currentMember?.id;
+              const memberHasVenmo = memberVenmoUsernames.has(memberTotal.memberId);
+              const canRequest = isCurrentUserPayer && !isThisMemberPayer && memberTotal.grandTotal > 0;
+
+              return (
+                <View key={memberTotal.memberId} style={styles.memberRow}>
+                  <View style={styles.memberInfo}>
+                    <Avatar name={memberTotal.memberName} size="sm" />
+                    <View style={styles.memberNameContainer}>
+                      <Text style={styles.memberName}>
+                        {memberTotal.memberName}
+                        {isThisMemberYou && ' (You)'}
+                        {isThisMemberPayer && ' - Paid'}
+                      </Text>
+                      {canRequest && (
+                        <TouchableOpacity
+                          style={[
+                            styles.requestButton,
+                            !memberHasVenmo && styles.requestButtonDisabled,
+                          ]}
+                          onPress={() => handleRequestVenmo(memberTotal)}
+                          onLongPress={memberHasVenmo ? () => handleCopyRequestLink(memberTotal) : undefined}
+                          delayLongPress={500}
+                        >
+                          <Ionicons
+                            name="send"
+                            size={12}
+                            color={memberHasVenmo ? colors.white : colors.textMuted}
+                          />
+                          <Text
+                            style={[
+                              styles.requestButtonText,
+                              !memberHasVenmo && styles.requestButtonTextDisabled,
+                            ]}
+                          >
+                            Request
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={styles.memberAmount}>
+                    {formatReceiptAmount(memberTotal.grandTotal, receipt.currency)}
                   </Text>
                 </View>
-                <Text style={styles.memberAmount}>
-                  {formatReceiptAmount(memberTotal.grandTotal, receipt.currency)}
-                </Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </Card>
       </ScrollView>
@@ -423,6 +660,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
+  longPressHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
   venmoButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl,
@@ -500,9 +742,33 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flex: 1,
   },
+  memberNameContainer: {
+    flex: 1,
+  },
   memberName: {
     ...typography.body,
-    flex: 1,
+  },
+  requestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.xs,
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  requestButtonDisabled: {
+    backgroundColor: colors.border,
+  },
+  requestButtonText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  requestButtonTextDisabled: {
+    color: colors.textMuted,
   },
   memberAmount: {
     ...typography.bodyMedium,
