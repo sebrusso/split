@@ -19,6 +19,7 @@ import {
   Image,
   Dimensions,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -47,9 +48,9 @@ export default function ReceiptClaimingScreen() {
   const { claimItem, unclaimItem, splitItem, claiming } = useItemClaims(receiptId);
 
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  const [selectedItem, setSelectedItem] = useState<ReceiptItem | null>(null);
-  const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [showReceiptImage, setShowReceiptImage] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
 
   // Optimistic UI state for instant feedback
   const [pendingClaims, setPendingClaims] = useState<Set<string>>(new Set());
@@ -213,21 +214,13 @@ export default function ReceiptClaimingScreen() {
   };
 
   const handleSplitItem = (item: ReceiptItem) => {
-    setSelectedItem(item);
-    setShowMemberPicker(true);
+    // Navigate to the split-item screen for advanced splitting options
+    router.push(`/group/${id}/receipt/${receiptId}/split-item?itemId=${item.id}`);
   };
 
-  const handleSplitConfirm = async (selectedMemberIds: string[]) => {
-    if (!selectedItem) return;
-
-    setShowMemberPicker(false);
-    const result = await splitItem(selectedItem.id, selectedMemberIds);
-
-    if (!result.success) {
-      Alert.alert('Error', result.error || 'Failed to split item');
-    }
-
-    setSelectedItem(null);
+  const handleJoinSplit = (item: ReceiptItem) => {
+    // Navigate to the split-item screen to join an existing split
+    router.push(`/group/${id}/receipt/${receiptId}/split-item?itemId=${item.id}`);
   };
 
   const handleShare = async () => {
@@ -385,7 +378,7 @@ export default function ReceiptClaimingScreen() {
 
         {/* Instructions */}
         <Text style={styles.instructions}>
-          Tap items you ordered to claim them
+          Tap to claim items. Tap claimed items to split them.
         </Text>
 
         {/* Items List */}
@@ -424,19 +417,6 @@ export default function ReceiptClaimingScreen() {
                   : null;
                 const hasCurrentMemberClaim = !!currentMemberClaim;
 
-                // Debug logging
-                console.log('Item tapped:', {
-                  itemId: item.id,
-                  itemDescription: item.description,
-                  isPendingUnclaim,
-                  isPendingClaim,
-                  hasDbClaim,
-                  hasCurrentMemberClaim,
-                  isClaimed,
-                  claims: item.claims,
-                  currentMemberId: currentMember?.id,
-                });
-
                 // Handle tap based on current state
                 if (isPendingUnclaim) {
                   // Cancel the pending unclaim
@@ -460,6 +440,9 @@ export default function ReceiptClaimingScreen() {
                 } else if (!isClaimed) {
                   // Claim unclaimed item
                   handleClaimItem(item);
+                } else {
+                  // Item is claimed by someone else - offer to join the split
+                  handleJoinSplit(item);
                 }
               }}
               onLongPress={() => handleSplitItem(item)}
@@ -598,21 +581,6 @@ export default function ReceiptClaimingScreen() {
         />
       </View>
 
-      {/* Member Picker Modal for Splitting */}
-      {showMemberPicker && selectedItem && (
-        <MemberSplitPicker
-          item={selectedItem}
-          members={members}
-          currentMemberId={currentMember?.id}
-          onConfirm={handleSplitConfirm}
-          onCancel={() => {
-            setShowMemberPicker(false);
-            setSelectedItem(null);
-          }}
-          currency={receipt.currency}
-        />
-      )}
-
       {/* Receipt Image Viewer Modal */}
       <Modal
         visible={showReceiptImage}
@@ -623,17 +591,59 @@ export default function ReceiptClaimingScreen() {
         <View style={styles.imageModalOverlay}>
           <TouchableOpacity
             style={styles.imageModalClose}
-            onPress={() => setShowReceiptImage(false)}
+            onPress={() => {
+              setShowReceiptImage(false);
+              setImageLoading(true);
+              setImageError(false);
+            }}
           >
             <Ionicons name="close-circle" size={32} color={colors.white} />
           </TouchableOpacity>
           <View style={styles.imageModalContent}>
             {receipt.image_url ? (
-              <Image
-                source={{ uri: receipt.image_url }}
-                style={styles.receiptImage}
-                resizeMode="contain"
-              />
+              <>
+                {imageLoading && (
+                  <View style={styles.imageLoadingContainer}>
+                    <ActivityIndicator size="large" color={colors.white} />
+                    <Text style={styles.imageLoadingText}>Loading receipt...</Text>
+                  </View>
+                )}
+                {imageError && (
+                  <View style={styles.noImageContainer}>
+                    <Ionicons name="alert-circle-outline" size={64} color={colors.white} />
+                    <Text style={styles.noImageText}>Failed to load receipt image</Text>
+                    <TouchableOpacity
+                      style={styles.retryButton}
+                      onPress={() => {
+                        setImageError(false);
+                        setImageLoading(true);
+                      }}
+                    >
+                      <Text style={styles.retryButtonText}>Tap to retry</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Image
+                  source={{ uri: receipt.image_url }}
+                  style={[
+                    styles.receiptImage,
+                    (imageLoading || imageError) && styles.receiptImageHidden,
+                  ]}
+                  resizeMode="contain"
+                  onLoadStart={() => {
+                    setImageLoading(true);
+                    setImageError(false);
+                  }}
+                  onLoad={() => {
+                    setImageLoading(false);
+                    setImageError(false);
+                  }}
+                  onError={() => {
+                    setImageLoading(false);
+                    setImageError(true);
+                  }}
+                />
+              </>
             ) : (
               <View style={styles.noImageContainer}>
                 <Ionicons name="image-outline" size={64} color={colors.white} />
@@ -643,104 +653,17 @@ export default function ReceiptClaimingScreen() {
           </View>
           <TouchableOpacity
             style={styles.imageModalCloseBottom}
-            onPress={() => setShowReceiptImage(false)}
+            onPress={() => {
+              setShowReceiptImage(false);
+              setImageLoading(true);
+              setImageError(false);
+            }}
           >
             <Text style={styles.imageModalCloseText}>Close</Text>
           </TouchableOpacity>
         </View>
       </Modal>
     </SafeAreaView>
-  );
-}
-
-// Member picker component for splitting items
-function MemberSplitPicker({
-  item,
-  members,
-  currentMemberId,
-  onConfirm,
-  onCancel,
-  currency,
-}: {
-  item: ReceiptItem;
-  members: Member[];
-  currentMemberId?: string;
-  onConfirm: (memberIds: string[]) => void;
-  onCancel: () => void;
-  currency: string;
-}) {
-  const [selectedIds, setSelectedIds] = useState<string[]>(
-    currentMemberId ? [currentMemberId] : []
-  );
-
-  const toggleMember = (memberId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(memberId)
-        ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId]
-    );
-  };
-
-  const splitAmount =
-    selectedIds.length > 0 ? item.total_price / selectedIds.length : 0;
-
-  return (
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>Split Item</Text>
-        <Text style={styles.modalSubtitle}>{item.description}</Text>
-        <Text style={styles.modalPrice}>
-          {formatReceiptAmount(item.total_price, currency)}
-        </Text>
-
-        <Text style={styles.modalLabel}>Select who to split with:</Text>
-
-        <ScrollView style={styles.memberList}>
-          {members.map((member) => (
-            <TouchableOpacity
-              key={member.id}
-              style={[
-                styles.memberOption,
-                selectedIds.includes(member.id) && styles.memberOptionSelected,
-              ]}
-              onPress={() => toggleMember(member.id)}
-            >
-              <Avatar
-                name={member.name}
-                size="sm"
-                color={selectedIds.includes(member.id) ? colors.primary : undefined}
-              />
-              <Text style={styles.memberOptionName}>{member.name}</Text>
-              {selectedIds.includes(member.id) && (
-                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {selectedIds.length > 1 && (
-          <Text style={styles.splitPreview}>
-            {formatReceiptAmount(splitAmount, currency)} each ({selectedIds.length}{' '}
-            people)
-          </Text>
-        )}
-
-        <View style={styles.modalActions}>
-          <Button
-            title="Cancel"
-            variant="secondary"
-            onPress={onCancel}
-            style={styles.modalButton}
-          />
-          <Button
-            title="Split"
-            onPress={() => onConfirm(selectedIds)}
-            disabled={selectedIds.length < 2}
-            style={styles.modalButton}
-          />
-        </View>
-      </View>
-    </View>
   );
 }
 
@@ -986,75 +909,6 @@ const styles = StyleSheet.create({
   footerButton: {
     flex: 1,
   },
-  // Modal styles
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    width: '100%',
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    ...typography.h2,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-  },
-  modalPrice: {
-    ...typography.h3,
-    color: colors.primary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  modalLabel: {
-    ...typography.bodyMedium,
-    marginBottom: spacing.sm,
-  },
-  memberList: {
-    maxHeight: 250,
-  },
-  memberOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.background,
-    gap: spacing.sm,
-  },
-  memberOptionSelected: {
-    backgroundColor: colors.primaryLight,
-  },
-  memberOptionName: {
-    ...typography.body,
-    flex: 1,
-  },
-  splitPreview: {
-    ...typography.bodyMedium,
-    color: colors.primary,
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  modalButton: {
-    flex: 1,
-  },
   // View Receipt Button
   viewReceiptButton: {
     flexDirection: 'row',
@@ -1107,6 +961,20 @@ const styles = StyleSheet.create({
     width: Dimensions.get('window').width - 40,
     height: Dimensions.get('window').height - 200,
   },
+  receiptImageHidden: {
+    opacity: 0,
+    position: 'absolute',
+  },
+  imageLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageLoadingText: {
+    color: colors.white,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    marginTop: spacing.md,
+  },
   noImageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1116,5 +984,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 16,
     marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
 });
