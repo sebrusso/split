@@ -26,7 +26,14 @@
         "NSPhotoLibraryUsageDescription": "SplitFree needs access to your photo library to select receipt images for bill splitting.",
         "NSUserNotificationsUsageDescription": "SplitFree sends you notifications when someone adds an expense, settles up, or joins your group.",
         "CFBundleAllowMixedLocalizations": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "venmo",
+          "paypal",
+          "cashapp",
+          "cashme",
+          "zelle"
+        ]
       },
       "config": {
         "usesNonExemptEncryption": false

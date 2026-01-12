@@ -25,6 +25,7 @@ import {
   formatReceiptAmount,
   generateVenmoLink,
 } from '../../../../../lib/receipts';
+import { getVenmoQRCodeUrl } from '../../../../../lib/payment-links';
 import { useAuth } from '../../../../../lib/auth-context';
 import { supabase } from '../../../../../lib/supabase';
 import { Member, ReceiptMemberCalculation } from '../../../../../lib/types';
@@ -121,9 +122,9 @@ export default function ReceiptSettleScreen() {
       if (canOpen) {
         await Linking.openURL(url);
       } else {
-        await Linking.openURL(
-          `https://venmo.com/${uploaderVenmo}?txn=pay&amount=${myTotal.grandTotal}&note=${encodeURIComponent(note)}`
-        );
+        // Use web-friendly URL format when app is not installed
+        const webUrl = getVenmoQRCodeUrl(uploaderVenmo, myTotal.grandTotal, note);
+        await Linking.openURL(webUrl);
       }
     } catch (err) {
       Alert.alert('Error', 'Unable to open Venmo');
