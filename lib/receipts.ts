@@ -47,7 +47,8 @@ export function getItemClaimedAmount(item: ReceiptItem): number {
 }
 
 /**
- * Check if an item is fully claimed (100% of it is assigned)
+ * Check if an item is fully claimed (100% or more of it is assigned)
+ * Returns true when claims sum to >= 99.9% to handle floating point precision
  */
 export function isItemFullyClaimed(item: ReceiptItem): boolean {
   if (!item.claims || item.claims.length === 0) return false;
@@ -57,7 +58,10 @@ export function isItemFullyClaimed(item: ReceiptItem): boolean {
     0
   );
 
-  return Math.abs(totalFraction - 1) < 0.001;
+  // Use >= 0.999 to handle both:
+  // 1. Floating point precision (0.333 + 0.333 + 0.334 = 1.0)
+  // 2. Over-claiming scenarios (totalFraction > 1.0)
+  return totalFraction >= 0.999;
 }
 
 /**
@@ -132,22 +136,45 @@ export function calculateMemberTotals(
   const tipAmount = receipt.tip_amount || 0;
 
   // Build member totals with proportional tax/tip
+  // Use floor rounding first, then distribute remainders to avoid creating money
   const totals: ReceiptMemberCalculation[] = [];
+  let totalTaxAllocated = 0;
+  let totalTipAllocated = 0;
 
-  for (const [memberId, data] of memberItemTotals) {
+  const entries = Array.from(memberItemTotals.entries());
+
+  for (let i = 0; i < entries.length; i++) {
+    const [memberId, data] = entries[i];
     const member = members.find((m) => m.id === memberId);
     if (!member) continue;
 
+    const isLast = i === entries.length - 1;
+
     // Calculate proportional share of tax and tip
     const proportion = claimedSubtotal > 0 ? data.total / claimedSubtotal : 0;
-    const taxShare = roundCurrency(taxAmount * proportion);
-    const tipShare = roundCurrency(tipAmount * proportion);
-    const grandTotal = roundCurrency(data.total + taxShare + tipShare);
+
+    let taxShare: number;
+    let tipShare: number;
+
+    if (isLast) {
+      // Last person gets the remainder to ensure totals match exactly
+      taxShare = roundCurrency(taxAmount - totalTaxAllocated);
+      tipShare = roundCurrency(tipAmount - totalTipAllocated);
+    } else {
+      // Use floor to avoid over-allocating
+      taxShare = Math.floor(taxAmount * proportion * 100) / 100;
+      tipShare = Math.floor(tipAmount * proportion * 100) / 100;
+      totalTaxAllocated += taxShare;
+      totalTipAllocated += tipShare;
+    }
+
+    const itemsTotal = roundCurrency(data.total);
+    const grandTotal = roundCurrency(itemsTotal + taxShare + tipShare);
 
     totals.push({
       memberId,
       memberName: member.name,
-      itemsTotal: roundCurrency(data.total),
+      itemsTotal,
       taxShare,
       tipShare,
       grandTotal,
@@ -155,7 +182,7 @@ export function calculateMemberTotals(
     });
   }
 
-  // Handle rounding discrepancy - add/subtract from person with highest total
+  // Handle overall rounding discrepancy - add/subtract from person with highest total
   if (totals.length > 0) {
     const calculatedTotal = totals.reduce((sum, t) => sum + t.grandTotal, 0);
     const expectedTotal =
@@ -374,7 +401,13 @@ export function createClaim(
 }
 
 /**
- * Determine if a member can claim more of an item
+ * Determine if a member can claim an item
+ *
+ * Rules:
+ * - Special items (tax/tip/subtotal/total) cannot be claimed
+ * - If member already has ANY claim on this item, they cannot claim again
+ *   (they should use unclaim first, or use split to adjust)
+ * - If item is fully claimed by others, cannot claim
  */
 export function canClaimItem(
   item: ReceiptItem,
@@ -385,9 +418,10 @@ export function canClaimItem(
     return { canClaim: false, reason: 'This item cannot be claimed' };
   }
 
-  // Check if member already claimed this item fully (check this first for better UX)
+  // Check if member already has ANY claim on this item
+  // They must unclaim first or use split to adjust their claim
   const memberClaim = item.claims?.find((c) => c.member_id === memberId);
-  if (memberClaim && memberClaim.share_fraction >= 1) {
+  if (memberClaim) {
     return { canClaim: false, reason: 'You already claimed this item' };
   }
 

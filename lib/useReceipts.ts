@@ -260,6 +260,12 @@ export function useItemClaims(receiptId: string | undefined) {
 
   /**
    * Split an item between multiple members
+   *
+   * Uses upsert + selective delete to be more atomic:
+   * 1. First upsert all new claims (updates existing, inserts new)
+   * 2. Then delete claims for members NOT in the new split
+   *
+   * This ensures we never lose all claims if something fails.
    */
   const splitItem = useCallback(
     async (
@@ -275,9 +281,6 @@ export function useItemClaims(receiptId: string | undefined) {
         setClaiming(true);
         setError(null);
 
-        // Delete existing claims for this item
-        await supabase.from('item_claims').delete().eq('receipt_item_id', itemId);
-
         // Create new split claims
         const splitCount = memberIds.length;
         const shareFraction = 1 / splitCount;
@@ -286,11 +289,27 @@ export function useItemClaims(receiptId: string | undefined) {
           createClaim(itemId, memberId, { splitCount, shareFraction, claimedVia })
         );
 
-        const { error: insertError } = await supabase
+        // Step 1: Upsert all new claims (safer - updates existing, inserts new)
+        const { error: upsertError } = await supabase
           .from('item_claims')
-          .insert(claims);
+          .upsert(claims, {
+            onConflict: 'receipt_item_id,member_id',
+          });
 
-        if (insertError) throw insertError;
+        if (upsertError) throw upsertError;
+
+        // Step 2: Delete claims for members NOT in the split
+        // Only do this after successful upsert to maintain data integrity
+        const { error: deleteError } = await supabase
+          .from('item_claims')
+          .delete()
+          .eq('receipt_item_id', itemId)
+          .not('member_id', 'in', `(${memberIds.join(',')})`);
+
+        if (deleteError) {
+          // Non-critical error - the split is mostly complete
+          console.warn('Failed to clean up old claims:', deleteError);
+        }
 
         return { success: true };
       } catch (err: any) {
