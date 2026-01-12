@@ -42,20 +42,29 @@ export default function ReceiptSettleScreen() {
   const [settling, setSettling] = useState(false);
   const [uploaderVenmo, setUploaderVenmo] = useState<string | null>(null);
 
-  // Fetch current user's member record
+  // Fetch current user's member record and uploader's payment info
   useFocusEffect(
     useCallback(() => {
       const fetchMember = async () => {
         if (!id || !userId) return;
 
-        const { data: member } = await supabase
-          .from('members')
-          .select('*')
-          .eq('group_id', id)
-          .eq('clerk_user_id', userId)
-          .single();
+        try {
+          const { data: member, error } = await supabase
+            .from('members')
+            .select('*')
+            .eq('group_id', id)
+            .eq('clerk_user_id', userId)
+            .single();
 
-        setCurrentMember(member);
+          if (error) {
+            console.error('Error fetching member:', error);
+            return;
+          }
+
+          setCurrentMember(member);
+        } catch (err) {
+          console.error('Error fetching member:', err);
+        }
       };
 
       fetchMember();
@@ -115,7 +124,7 @@ export default function ReceiptSettleScreen() {
     }
   };
 
-  const handlePayPayPal = async () => {
+  const handlePayPayPal = async (memberTotal: ReceiptMemberCalculation) => {
     // PayPal username not yet implemented - show placeholder message
     Alert.alert(
       'PayPal Not Set Up',
@@ -124,7 +133,7 @@ export default function ReceiptSettleScreen() {
     );
   };
 
-  const handlePayCashApp = async () => {
+  const handlePayCashApp = async (memberTotal: ReceiptMemberCalculation) => {
     // CashApp tag not yet implemented - show placeholder message
     Alert.alert(
       'Cash App Not Set Up',
@@ -413,13 +422,13 @@ export default function ReceiptSettleScreen() {
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={[styles.payButton, styles.payButtonDisabled]}
-                            onPress={() => handlePayPayPal()}
+                            onPress={() => handlePayPayPal(memberTotal)}
                           >
                             <Text style={[styles.payButtonText, styles.payButtonTextDisabled]}>PayPal</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={[styles.payButton, styles.payButtonDisabled]}
-                            onPress={() => handlePayCashApp()}
+                            onPress={() => handlePayCashApp(memberTotal)}
                           >
                             <Text style={[styles.payButtonText, styles.payButtonTextDisabled]}>Cash App</Text>
                           </TouchableOpacity>
@@ -657,13 +666,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.sm,
   },
+  payButtonDisabled: {
+    backgroundColor: colors.borderLight,
+  },
   payButtonText: {
     ...typography.small,
     color: colors.primary,
     fontFamily: 'Inter_600SemiBold',
-  },
-  payButtonDisabled: {
-    backgroundColor: colors.borderLight,
   },
   payButtonTextDisabled: {
     color: colors.textSecondary,

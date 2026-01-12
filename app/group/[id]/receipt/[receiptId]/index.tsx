@@ -92,6 +92,8 @@ export default function ReceiptClaimingScreen() {
     }
   }, [items, currentMember]);
 
+  const [memberError, setMemberError] = useState<string | null>(null);
+
   // Fetch current user's member record
   useFocusEffect(
     useCallback(() => {
@@ -103,20 +105,28 @@ export default function ReceiptClaimingScreen() {
 
         console.log('Fetching member for group/user:', { groupId: id, userId });
 
-        const { data: member, error } = await supabase
-          .from('members')
-          .select('*')
-          .eq('group_id', id)
-          .eq('clerk_user_id', userId)
-          .single();
+        try {
+          const { data: member, error } = await supabase
+            .from('members')
+            .select('*')
+            .eq('group_id', id)
+            .eq('clerk_user_id', userId)
+            .single();
 
-        console.log('Member fetch result:', { member, error });
+          console.log('Member fetch result:', { member, error });
 
-        if (error) {
-          console.warn('Error fetching member:', error.message);
+          if (error) {
+            console.error('Error fetching member:', error);
+            setMemberError('You are not a member of this group');
+            return;
+          }
+
+          setCurrentMember(member);
+          setMemberError(null);
+        } catch (err) {
+          console.error('Error fetching member:', err);
+          setMemberError('Failed to load member data');
         }
-
-        setCurrentMember(member);
       };
 
       fetchMember();
@@ -286,6 +296,19 @@ export default function ReceiptClaimingScreen() {
           <Ionicons name="alert-circle" size={64} color={colors.danger} />
           <Text style={styles.errorTitle}>Error Loading Receipt</Text>
           <Text style={styles.errorText}>{error || 'Receipt not found'}</Text>
+          <Button title="Go Back" onPress={() => router.back()} variant="secondary" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (memberError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="person-remove" size={64} color={colors.danger} />
+          <Text style={styles.errorTitle}>Cannot Claim Items</Text>
+          <Text style={styles.errorText}>{memberError}</Text>
           <Button title="Go Back" onPress={() => router.back()} variant="secondary" />
         </View>
       </SafeAreaView>
