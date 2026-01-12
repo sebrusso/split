@@ -634,12 +634,12 @@ export default function ReceiptClaimingScreen() {
                     setImageLoading(true);
                     setImageError(false);
                   }}
-                  onLoad={() => {
+                  onLoadEnd={() => {
+                    // onLoadEnd fires for both success and failure
+                    // Only set loading to false here - error state is set by onError
                     setImageLoading(false);
-                    setImageError(false);
                   }}
                   onError={() => {
-                    setImageLoading(false);
                     setImageError(true);
                   }}
                 />
