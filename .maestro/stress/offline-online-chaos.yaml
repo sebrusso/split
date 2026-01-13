@@ -1,0 +1,167 @@
+# Stress Test: Offline/Online Network Chaos
+# Goal: Toggle network during critical operations to expose sync issues
+#
+# Breaking scenarios:
+# - Sync queue processes duplicates
+# - Partial sync leaves orphaned records
+# - Real-time subscription reconnection fails
+# - Offline indicator not showing correctly
+#
+# Run with: maestro test .maestro/stress/offline-online-chaos.yaml --record
+#
+# NOTE: This test requires device/simulator network control.
+# On iOS Simulator: Use Network Link Conditioner or airplane mode
+# Some commands may need adjustment based on your test environment.
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app (online)
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Navigate to a group
+- tapOn:
+    text: ".*"
+    index: 0
+
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 10000
+
+# Step 3: Start adding an expense (fill form completely)
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Offline Test Expense 1"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "25.00"
+
+# Select payer
+- tapOn:
+    text: "Who paid?"
+    optional: true
+- tapOn:
+    text: ".*"
+    index: 0
+  optional: true
+
+# Step 4: GO OFFLINE (via script or external control)
+# This uses Maestro's runScript to toggle airplane mode
+# Note: Actual implementation depends on your CI/device setup
+- runScript:
+    file: ../scripts/toggle-airplane-mode.js
+    env:
+      MODE: "on"
+  optional: true
+
+# Alternative: Just continue and check for offline handling
+# The app should handle network failures gracefully
+
+# Step 5: Try to save while offline
+- tapOn: "Save"
+
+# Step 6: Check for offline indicator or queued state
+- assertVisible:
+    text: "offline|queued|pending|saved locally"
+    regex: true
+  optional: true
+
+# If no offline indicator, expense might have been saved before disconnect
+# Continue with the test
+
+# Step 7: Add ANOTHER expense while offline
+- tapOn: "Add Expense"
+  optional: true
+
+- runFlow:
+    when:
+      visible: "New Expense"
+    commands:
+      - tapOn:
+          id: "expense-description-input"
+      - inputText: "Offline Test Expense 2"
+      - tapOn:
+          id: "expense-amount-input"
+      - inputText: "50.00"
+      - tapOn: "Save"
+
+# Step 8: GO BACK ONLINE
+- runScript:
+    file: ../scripts/toggle-airplane-mode.js
+    env:
+      MODE: "off"
+  optional: true
+
+# Step 9: Wait for sync to complete
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 30000
+
+# Pull to refresh to trigger sync
+- swipe:
+    direction: DOWN
+    duration: 500
+
+# Wait for sync
+- extendedWaitUntil:
+    visible: "Offline Test"
+    timeout: 15000
+
+# Step 10: CRITICAL ASSERTIONS
+
+# Both expenses should appear (not duplicated)
+- assertVisible: "Offline Test Expense 1"
+
+# Check for expense 2 if it was created
+- assertVisible:
+    text: "Offline Test Expense 2"
+    optional: true
+
+# NO duplicate expenses
+# Count occurrences of "Offline Test Expense 1" - should be exactly 1
+# (Maestro doesn't have count, so we look for duplicate indicators)
+
+# Step 11: Navigate to balances
+- tapOn: "Balances"
+
+- extendedWaitUntil:
+    visible: "Who Owes Who"
+    timeout: 15000
+
+# Step 12: Balances should be correct
+# Total should reflect both expenses without duplicates
+- assertVisible:
+    text: "\\$"
+    regex: true
+
+# No error indicators
+- assertNotVisible:
+    text: "Error|sync failed|conflict"
+    regex: true
+  optional: true
+
+# Step 13: Verify no orphaned or duplicate records
+- tapOn:
+    text: "Back|Expenses"
+    regex: true
+  optional: true
+
+# Scroll through expenses to verify no duplicates
+- swipe:
+    direction: UP
+    duration: 300
+
+- swipe:
+    direction: DOWN
+    duration: 300
+
+# Final assertion - app should be stable
+- assertVisible:
+    text: "Expenses|Offline Test"
+    regex: true

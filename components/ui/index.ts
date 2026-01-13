@@ -36,3 +36,6 @@ export { SettlementQRCodeModal } from "./SettlementQRCodeModal";
 // Group components
 export { GroupPicker, GroupPickerButton } from "./GroupPicker";
 export { QuickCreateGroup } from "./QuickCreateGroup";
+
+// Receipt components
+export { QuickSplitModal } from "./QuickSplitModal";

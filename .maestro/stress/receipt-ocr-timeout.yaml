@@ -1,0 +1,219 @@
+# Stress Test: Receipt OCR Timeout
+# Goal: Test behavior when OCR processing takes too long or fails
+#
+# Breaking scenarios:
+# - Infinite loading state (spinner forever)
+# - Orphaned receipt record in database
+# - Memory pressure from large image
+# - No recovery option for user
+#
+# Run with: maestro test .maestro/stress/receipt-ocr-timeout.yaml --record
+#
+# NOTE: This test works best with a real device and a large/complex image
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Navigate to a group
+- tapOn:
+    text: ".*"
+    index: 0
+
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 10000
+
+# Step 3: Start receipt scanning flow
+- tapOn:
+    text: "Scan Receipt"
+    optional: true
+
+# If no scan receipt button, try the + menu
+- runFlow:
+    when:
+      notVisible: "Take Photo"
+    commands:
+      - tapOn:
+          text: "\\+|Add"
+          regex: true
+          optional: true
+      - tapOn:
+          text: "Scan|Receipt"
+          regex: true
+          optional: true
+
+# Step 4: Verify camera/photo options
+- assertVisible:
+    text: "Take Photo|Choose|Library|Camera"
+    regex: true
+  optional: true
+
+# Step 5: Choose from library (more controllable than camera)
+- tapOn:
+    text: "Choose|Library|Gallery"
+    regex: true
+  optional: true
+
+# Step 6: Select an image
+# In CI, this might use a pre-loaded test image
+# On device, select the first available image
+- runFlow:
+    when:
+      visible: "Photos|Recents|Camera Roll"
+    commands:
+      - tapOn:
+          index: 0
+          optional: true
+
+# Step 7: Wait for OCR processing indicator
+- assertVisible:
+    text: "Processing|Scanning|Analyzing"
+    regex: true
+  optional: true
+
+# Step 8: Wait for processing (with extended timeout)
+# This is where we test timeout behavior
+- extendedWaitUntil:
+    visible:
+      text: "Receipt Items|Items|Add Manually|Error|failed"
+      regex: true
+    timeout: 45000
+
+# Step 9: Check what state we're in
+
+# CASE A: OCR succeeded - items visible
+- runFlow:
+    when:
+      visible: "Receipt Items"
+    commands:
+      - assertVisible: "Receipt Items"
+      # OCR worked, test passed for success case
+
+# CASE B: OCR failed/timed out - error message
+- runFlow:
+    when:
+      visible:
+        text: "Error|failed|timeout"
+        regex: true
+    commands:
+      # Error case - verify recovery option exists
+      - assertVisible:
+          text: "Add Manually|Try Again|Cancel"
+          regex: true
+      # Tap Add Manually to recover
+      - tapOn:
+          text: "Add Manually"
+          optional: true
+
+# CASE C: Still processing (timeout bug)
+- runFlow:
+    when:
+      visible:
+        text: "Processing|Scanning"
+        regex: true
+    commands:
+      # This is a BUG - should have timed out
+      # Assert failure by looking for something that should exist
+      - assertVisible: "THIS_SHOULD_FAIL_IF_STILL_PROCESSING"
+
+# Step 10: Verify no orphaned receipt
+# Navigate back to check receipt list
+- tapOn:
+    text: "Back|Cancel|Close"
+    regex: true
+  optional: true
+
+# Check expenses/receipts list
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 10000
+
+# Step 11: Look for phantom "processing" receipts
+- assertNotVisible:
+    text: "Processing|Scanning|Loading"
+    regex: true
+  optional: true
+
+# Step 12: Memory check (visual - look for performance issues)
+# Try to perform another action to verify app is responsive
+
+- tapOn: "Add Expense"
+  optional: true
+
+# App should be responsive
+- assertVisible:
+    text: "New Expense|Amount|Description"
+    regex: true
+  optional: true
+
+- tapOn:
+    text: "Cancel|Back"
+    regex: true
+  optional: true
+
+# ========================================
+# TEST 2: Cancel during OCR processing
+# ========================================
+
+- tapOn:
+    text: "Scan Receipt"
+    optional: true
+
+- tapOn:
+    text: "Choose|Library"
+    regex: true
+  optional: true
+
+- runFlow:
+    when:
+      visible: "Photos|Recents"
+    commands:
+      - tapOn:
+          index: 0
+          optional: true
+
+# Wait for processing to START
+- extendedWaitUntil:
+    visible:
+      text: "Processing|Scanning"
+      regex: true
+    timeout: 10000
+  optional: true
+
+# IMMEDIATELY cancel while processing
+- tapOn:
+    text: "Cancel|Back|Close"
+    regex: true
+  optional: true
+
+# Verify we're back and no orphaned state
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 10000
+
+# No "processing" indicators should remain
+- assertNotVisible:
+    text: "Processing receipt"
+    regex: true
+  optional: true
+
+# ========================================
+# FINAL VERIFICATION
+# ========================================
+
+# App should be fully functional
+- assertVisible:
+    text: "Expenses|Add Expense"
+    regex: true
+
+# No error dialogs lingering
+- assertNotVisible:
+    text: "Error|crash|failed"
+    regex: true
+  optional: true

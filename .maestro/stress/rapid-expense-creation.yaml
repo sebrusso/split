@@ -1,0 +1,198 @@
+# Stress Test: Rapid Expense Creation
+# Goal: Create many expenses rapidly to stress balance calculation
+#
+# Breaking scenarios:
+# - Race between expense insert and balance refetch
+# - Floating point accumulation errors
+# - Real-time subscription storm causing UI freeze
+# - Memory pressure from many concurrent operations
+#
+# Run with: maestro test .maestro/stress/rapid-expense-creation.yaml --record
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Navigate to existing group or create one
+- tapOn:
+    text: ".*"
+    index: 0
+
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 10000
+
+# Step 3: Add members if needed (for split calculations)
+- runFlow:
+    when:
+      notVisible: "member"
+    commands:
+      - tapOn: "Add Member"
+      - tapOn:
+          id: "member-name-input"
+      - inputText: "Stress Test User"
+      - tapOn: "Add"
+
+# ========================================
+# RAPID EXPENSE CREATION - 10 expenses, no waiting
+# ========================================
+
+# Expense 1
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 1"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "12.34"
+- tapOn: "Save"
+
+# Expense 2 - DON'T wait for save to complete
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 2"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "56.78"
+- tapOn: "Save"
+
+# Expense 3
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 3"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "90.12"
+- tapOn: "Save"
+
+# Expense 4
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 4"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "34.56"
+- tapOn: "Save"
+
+# Expense 5
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 5"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "78.90"
+- tapOn: "Save"
+
+# Expense 6
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 6"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "23.45"
+- tapOn: "Save"
+
+# Expense 7
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 7"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "67.89"
+- tapOn: "Save"
+
+# Expense 8
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 8"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "0.01"
+- tapOn: "Save"
+
+# Expense 9
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 9"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "999.99"
+- tapOn: "Save"
+
+# Expense 10
+- tapOn: "Add Expense"
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Stress 10"
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "0.10"
+- tapOn: "Save"
+
+# ========================================
+# IMMEDIATE NAVIGATION TO BALANCES
+# (before all expenses may have synced)
+# ========================================
+
+- tapOn: "Balances"
+
+# Step 4: Wait for balances to load (this is where races manifest)
+- extendedWaitUntil:
+    visible: "Who Owes Who"
+    timeout: 30000
+
+# Step 5: CRITICAL ASSERTIONS
+
+# Screen should not be stuck loading
+- assertNotVisible:
+    text: "Loading|Calculating"
+    regex: true
+  optional: true
+
+# No error states
+- assertNotVisible:
+    text: "Error|failed|crash|NaN"
+    regex: true
+
+# Balances should be visible (not blank)
+- assertVisible:
+    text: "\\$[0-9]"
+    regex: true
+
+# Step 6: Navigate back to expenses list
+- tapOn:
+    text: "Back|Expenses"
+    regex: true
+  optional: true
+
+# Step 7: Verify all 10 expenses appear
+- assertVisible: "Stress 1"
+- assertVisible: "Stress 10"
+
+# Step 8: Pull to refresh to ensure sync complete
+- swipe:
+    direction: DOWN
+    duration: 500
+
+# Wait for refresh
+- extendedWaitUntil:
+    visible: "Stress"
+    timeout: 10000
+
+# Final verification - all expenses visible
+- assertVisible:
+    text: "Stress [0-9]+"
+    regex: true

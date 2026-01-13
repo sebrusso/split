@@ -22,8 +22,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../../../lib/theme';
 import { Button, Input, Card } from '../../../../../components/ui';
-import { useReceipt, useReceiptUpdate } from '../../../../../lib/useReceipts';
-import { formatReceiptAmount } from '../../../../../lib/receipts';
+import { useReceipt, useReceiptUpdate, useItemExpansion } from '../../../../../lib/useReceipts';
+import {
+  formatReceiptAmount,
+  canExpandItem,
+  isHiddenExpandedParent,
+} from '../../../../../lib/receipts';
 import { ReceiptItem } from '../../../../../lib/types';
 
 export default function ReceiptEditScreen() {
@@ -31,6 +35,7 @@ export default function ReceiptEditScreen() {
 
   const { receipt, items, loading, error, refetch } = useReceipt(receiptId);
   const { updateReceipt, updateItem, deleteItem, addItem, updating } = useReceiptUpdate();
+  const { expandItem, collapseItems, canExpand, expanding } = useItemExpansion(receiptId);
 
   // Form state
   const [merchantName, setMerchantName] = useState('');
@@ -58,11 +63,43 @@ export default function ReceiptEditScreen() {
     }
   }, [receipt]);
 
-  // Filter to regular items only (exclude tax, tip, subtotal, total, and discount flags)
+  // Filter to regular items only (exclude tax, tip, subtotal, total, discount, service charges, modifiers, and hidden expanded parents)
   const regularItems = items.filter(
     (item) =>
-      !item.is_tax && !item.is_tip && !item.is_subtotal && !item.is_total && !item.is_discount
+      !item.is_tax &&
+      !item.is_tip &&
+      !item.is_subtotal &&
+      !item.is_total &&
+      !item.is_discount &&
+      !item.is_service_charge &&
+      !item.is_modifier &&
+      !isHiddenExpandedParent(item)
   );
+
+  // P0: Handle expanding multi-quantity items
+  const handleExpandItem = async (item: ReceiptItem) => {
+    const result = await expandItem(item.id);
+    if (result.success) {
+      refetch();
+      Alert.alert(
+        'Item Expanded',
+        `"${item.description}" has been split into ${result.expandedCount} individual items.`
+      );
+    } else {
+      Alert.alert('Error', result.error || 'Failed to expand item');
+    }
+  };
+
+  // P0: Handle collapsing expanded items back to original
+  const handleCollapseItems = async (originalItemId: string) => {
+    const result = await collapseItems(originalItemId);
+    if (result.success) {
+      refetch();
+      Alert.alert('Items Collapsed', 'Items have been merged back together.');
+    } else {
+      Alert.alert('Error', result.error || 'Failed to collapse items');
+    }
+  };
 
   const handleSaveMetadata = async () => {
     if (!receiptId) return;
@@ -301,66 +338,121 @@ export default function ReceiptEditScreen() {
           )}
 
           {/* Items List */}
-          {regularItems.map((item) => (
-            <View key={item.id}>
-              {editingItem === item.id ? (
-                <Card style={styles.editItemCard}>
-                  <Input
-                    value={editItemDescription}
-                    onChangeText={setEditItemDescription}
-                    placeholder="Item description"
-                    containerStyle={styles.input}
-                  />
-                  <Input
-                    value={editItemPrice}
-                    onChangeText={setEditItemPrice}
-                    placeholder="Price"
-                    keyboardType="decimal-pad"
-                    containerStyle={styles.input}
-                  />
-                  <View style={styles.editItemActions}>
-                    <Button
-                      title="Cancel"
-                      variant="secondary"
-                      onPress={() => setEditingItem(null)}
-                      style={styles.editItemButton}
+          {regularItems.map((item) => {
+            // P0: Check if this item is expandable
+            const isExpandable = canExpandItem(item);
+            // P0: Check if this is an expanded item
+            const isExpanded = item.is_expansion;
+            // P1: Get modifiers for this item
+            const itemModifiers = items.filter((mod) => mod.parent_item_id === item.id);
+
+            return (
+              <View key={item.id}>
+                {editingItem === item.id ? (
+                  <Card style={styles.editItemCard}>
+                    <Input
+                      value={editItemDescription}
+                      onChangeText={setEditItemDescription}
+                      placeholder="Item description"
+                      containerStyle={styles.input}
                     />
-                    <Button
-                      title="Save"
-                      onPress={handleSaveItem}
-                      loading={updating}
-                      style={styles.editItemButton}
+                    <Input
+                      value={editItemPrice}
+                      onChangeText={setEditItemPrice}
+                      placeholder="Price"
+                      keyboardType="decimal-pad"
+                      containerStyle={styles.input}
                     />
+                    <View style={styles.editItemActions}>
+                      <Button
+                        title="Cancel"
+                        variant="secondary"
+                        onPress={() => setEditingItem(null)}
+                        style={styles.editItemButton}
+                      />
+                      <Button
+                        title="Save"
+                        onPress={handleSaveItem}
+                        loading={updating}
+                        style={styles.editItemButton}
+                      />
+                    </View>
+                  </Card>
+                ) : (
+                  <View style={[styles.itemCard, isExpanded && styles.itemCardExpanded]}>
+                    <View style={styles.itemContent}>
+                      <View style={styles.itemDescriptionContainer}>
+                        {/* Quantity badge for multi-quantity items */}
+                        {item.quantity > 1 && (
+                          <Text style={styles.quantityBadge}>{item.quantity}x</Text>
+                        )}
+                        <Text style={styles.itemDescription} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      </View>
+                      <Text style={styles.itemPrice}>
+                        {formatReceiptAmount(item.total_price, receipt.currency)}
+                      </Text>
+                    </View>
+
+                    {/* P1: Show modifiers */}
+                    {itemModifiers.length > 0 && (
+                      <View style={styles.modifiersContainer}>
+                        {itemModifiers.map((mod) => (
+                          <Text key={mod.id} style={styles.modifierText}>
+                            + {mod.description} ({formatReceiptAmount(mod.total_price, receipt.currency)})
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* P0: Show shared/expanded indicators */}
+                    {(item.is_likely_shared || isExpanded) && (
+                      <View style={styles.itemBadges}>
+                        {item.is_likely_shared && (
+                          <View style={styles.sharedBadge}>
+                            <Ionicons name="people" size={12} color={colors.primary} />
+                            <Text style={styles.badgeText}>Shared</Text>
+                          </View>
+                        )}
+                        {isExpanded && (
+                          <View style={styles.expandedBadge}>
+                            <Ionicons name="git-branch-outline" size={12} color={colors.textSecondary} />
+                            <Text style={styles.badgeTextMuted}>Expanded</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    <View style={styles.itemActions}>
+                      {/* P0: Expand button for multi-quantity items */}
+                      {isExpandable && (
+                        <TouchableOpacity
+                          style={styles.itemActionButton}
+                          onPress={() => handleExpandItem(item)}
+                          disabled={expanding}
+                        >
+                          <Ionicons name="layers-outline" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.itemActionButton}
+                        onPress={() => handleStartEditItem(item)}
+                      >
+                        <Ionicons name="pencil" size={18} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.itemActionButton}
+                        onPress={() => handleDeleteItem(item.id)}
+                      >
+                        <Ionicons name="trash" size={18} color={colors.danger} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </Card>
-              ) : (
-                <View style={styles.itemCard}>
-                  <View style={styles.itemContent}>
-                    <Text style={styles.itemDescription} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                    <Text style={styles.itemPrice}>
-                      {formatReceiptAmount(item.total_price, receipt.currency)}
-                    </Text>
-                  </View>
-                  <View style={styles.itemActions}>
-                    <TouchableOpacity
-                      style={styles.itemActionButton}
-                      onPress={() => handleStartEditItem(item)}
-                    >
-                      <Ionicons name="pencil" size={18} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.itemActionButton}
-                      onPress={() => handleDeleteItem(item.id)}
-                    >
-                      <Ionicons name="trash" size={18} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          ))}
+                )}
+              </View>
+            );
+          })}
 
           {regularItems.length === 0 && !showAddItem && (
             <Card style={styles.emptyCard}>
@@ -511,27 +603,85 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
     ...shadows.sm,
   },
+  itemCardExpanded: {
+    backgroundColor: colors.borderLight,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.textSecondary,
+  },
   itemContent: {
-    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  itemDescriptionContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginRight: spacing.md,
+  },
+  quantityBadge: {
+    ...typography.small,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.primary,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    marginRight: spacing.xs,
   },
   itemDescription: {
     ...typography.body,
     flex: 1,
-    marginRight: spacing.md,
   },
   itemPrice: {
     ...typography.bodyMedium,
   },
+  modifiersContainer: {
+    marginTop: spacing.xs,
+    marginLeft: spacing.md,
+  },
+  modifierText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  itemBadges: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  sharedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.sm,
+  },
+  expandedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.borderLight,
+    borderRadius: borderRadius.sm,
+  },
+  badgeText: {
+    ...typography.caption,
+    color: colors.primary,
+  },
+  badgeTextMuted: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
   itemActions: {
     flexDirection: 'row',
-    marginLeft: spacing.md,
+    justifyContent: 'flex-end',
+    marginTop: spacing.sm,
     gap: spacing.sm,
   },
   itemActionButton: {

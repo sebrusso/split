@@ -567,7 +567,7 @@ export function useReceiptUpload(groupId: string | undefined) {
             insertedItems.map((item) => [item.line_number, item.id])
           );
 
-          const modifierUpdates: Promise<any>[] = [];
+          const modifierUpdates: PromiseLike<any>[] = [];
           ocrResult.items.forEach((item, index) => {
             if (item.isModifier && item.parentItemIndex !== null && item.parentItemIndex !== undefined) {
               const modifierItemId = lineNumberToId.get(index + 1);
@@ -580,17 +580,18 @@ export function useReceiptUpload(groupId: string | undefined) {
                     .from('receipt_items')
                     .update({ parent_item_id: parentItemId })
                     .eq('id', modifierItemId)
+                    .then(() => {})
                 );
               }
             }
           });
 
           // Also handle discounts with applies_to_item_id
-          ocrResult.metadata.discounts?.forEach((discount, discountIndex) => {
+          ocrResult.metadata.discounts?.forEach((discount) => {
             if (discount.appliesToItemIndex !== null && discount.appliesToItemIndex !== undefined) {
               // Find the discount item (negative totalPrice items)
               const discountItemIndex = ocrResult.items.findIndex(
-                (item, i) => item.totalPrice < 0 && item.description === discount.description
+                (item) => item.totalPrice < 0 && item.description === discount.description
               );
               if (discountItemIndex >= 0) {
                 const discountItemId = lineNumberToId.get(discountItemIndex + 1);
@@ -603,6 +604,7 @@ export function useReceiptUpload(groupId: string | undefined) {
                       .from('receipt_items')
                       .update({ applies_to_item_id: targetItemId })
                       .eq('id', discountItemId)
+                      .then(() => {})
                   );
                 }
               }
@@ -1240,7 +1242,7 @@ export function useReceiptUploadNoGroup() {
               insertedItems.map((item) => [item.line_number, item.id])
             );
 
-            const modifierUpdates: Promise<any>[] = [];
+            const modifierUpdates: PromiseLike<any>[] = [];
             ocrResult.items.forEach((item, index) => {
               if (item.isModifier && item.parentItemIndex !== null && item.parentItemIndex !== undefined) {
                 const modifierItemId = lineNumberToId.get(index + 1);
@@ -1253,6 +1255,7 @@ export function useReceiptUploadNoGroup() {
                       .from('receipt_items')
                       .update({ parent_item_id: parentItemId })
                       .eq('id', modifierItemId)
+                      .then(() => {})
                   );
                 }
               }

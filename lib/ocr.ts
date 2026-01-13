@@ -390,11 +390,12 @@ function convertToOCRResult(
   let taxTotal: number | undefined;
 
   if (Array.isArray(parsed.taxes) && parsed.taxes.length > 0) {
-    taxes = parsed.taxes.map((t: any) => ({
+    const taxesArray = parsed.taxes.map((t: any) => ({
       type: t.type || 'Sales Tax',
       amount: t.amount || 0,
     }));
-    taxTotal = taxes.reduce((sum, t) => sum + t.amount, 0);
+    taxes = taxesArray;
+    taxTotal = taxesArray.reduce((sum: number, t: OCRTaxEntry) => sum + t.amount, 0);
   } else if (typeof parsed.tax === 'number') {
     // Legacy format - single tax value
     taxTotal = parsed.tax;

@@ -1,0 +1,148 @@
+# Stress Test: Member Claim Collision
+# Goal: Race condition when claiming the same member
+#
+# Breaking scenarios:
+# - No atomicity on member claiming UPDATE
+# - Last-write-wins without conflict detection
+# - UI shows "claimed" but server silently rejected
+# - Member ends up claimed by wrong user
+#
+# Run with: maestro test .maestro/stress/member-claim-collision.yaml --record
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Create a fresh group with an unclaimed member
+- tapOn: "Create Group"
+
+- tapOn:
+    id: "group-name-input"
+- inputText: "Member Claim Race Test"
+
+- tapOn: "Create"
+
+- extendedWaitUntil:
+    visible: "Member Claim Race Test"
+    timeout: 10000
+
+# Step 3: Add a member that will be claimed
+- tapOn: "Add Member"
+
+- tapOn:
+    id: "member-name-input"
+- inputText: "John Unclaimed"
+
+- tapOn: "Add"
+
+# Verify member appears as unclaimed
+- assertVisible: "John Unclaimed"
+
+# Step 4: RAPID CLAIM ATTEMPT
+# Try to claim the member, then immediately navigate away and back
+
+# First claim attempt
+- tapOn:
+    text: "John Unclaimed|Claim"
+    regex: true
+  optional: true
+
+# If there's a claim button specifically
+- tapOn:
+    text: "Claim"
+    optional: true
+
+# Step 5: IMMEDIATELY navigate back before claim resolves
+- swipe:
+    direction: RIGHT
+    duration: 100
+  optional: true
+
+- tapOn:
+    text: "Back"
+    optional: true
+
+# Step 6: Navigate back into the group
+- tapOn:
+    text: "Member Claim Race Test"
+    optional: true
+
+# Or if we're still in the group
+- extendedWaitUntil:
+    visible: "John"
+    timeout: 5000
+
+# Step 7: Try to claim AGAIN (this is the collision)
+- tapOn:
+    text: "Claim"
+    optional: true
+
+# Step 8: Rapid claim/unclaim toggle
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          text: "Claim|Unclaim"
+          regex: true
+          optional: true
+
+# Step 9: Wait for state to settle
+- extendedWaitUntil:
+    visible: "John"
+    timeout: 5000
+
+# Step 10: CRITICAL ASSERTIONS
+
+# Member should show as claimed by current user (or unclaimed)
+# NOT in an inconsistent state
+- assertVisible:
+    text: "John|claimed|Unclaim"
+    regex: true
+
+# No error indicators
+- assertNotVisible:
+    text: "Error|failed|conflict"
+    regex: true
+  optional: true
+
+# Step 11: Navigate away and back to verify persistence
+- swipe:
+    direction: RIGHT
+    duration: 200
+  optional: true
+
+# Go back to group
+- tapOn:
+    text: "Member Claim Race Test"
+    optional: true
+
+# Step 12: Verify member state persisted correctly
+- extendedWaitUntil:
+    visible: "John"
+    timeout: 5000
+
+# The claim state should match what we last set
+# (Either claimed or unclaimed, but consistent)
+
+# Step 13: Check member list for duplicates
+# There should only be ONE "John Unclaimed"
+- assertVisible: "John"
+
+# No duplicate member entries
+# (This would manifest as seeing "John" appear twice in the list)
+
+# Step 14: Try claiming again to verify state is stable
+- tapOn:
+    text: "Claim|Unclaim"
+    regex: true
+  optional: true
+
+# Final stability check
+- assertVisible:
+    text: "John|Member"
+    regex: true

@@ -1,0 +1,114 @@
+# Stress Test: Receipt Claim Race Condition
+# Goal: Expose race conditions when rapidly claiming/unclaiming receipt items
+#
+# Breaking scenarios:
+# - Optimistic UI desync with server state
+# - pendingClaims Set not clearing properly
+# - Real-time subscription refetch overwriting pending state
+#
+# Run with: maestro test .maestro/stress/receipt-claim-race.yaml --record
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Navigate to an existing group with receipts
+- tapOn:
+    text: ".*"
+    index: 0
+
+# Wait for group to load
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 10000
+
+# Step 3: Find and tap on a receipt
+- tapOn:
+    text: "Receipt"
+    optional: true
+
+# If no receipt visible, look for scan receipt option to understand the UI
+- runFlow:
+    when:
+      notVisible: "Receipt Items"
+    commands:
+      - tapOn:
+          text: "Scan Receipt"
+          optional: true
+
+# Step 4: Wait for receipt items to load
+- extendedWaitUntil:
+    visible:
+      text: "Claim|claimed|Item"
+      regex: true
+    timeout: 15000
+
+# Step 5: RAPID CLAIM/UNCLAIM CYCLE - This is the stress test
+# Tap claim on first item rapidly 5 times
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "receipt-item-0"
+          optional: true
+      # No wait - intentionally rapid
+
+# Step 6: While first item is potentially still processing, claim second item
+- tapOn:
+    id: "receipt-item-1"
+    optional: true
+
+# Step 7: Immediately claim third item before second resolves
+- tapOn:
+    id: "receipt-item-2"
+    optional: true
+
+# Step 8: Rapid tap on multiple items
+- tapOn:
+    id: "receipt-item-0"
+    optional: true
+- tapOn:
+    id: "receipt-item-1"
+    optional: true
+- tapOn:
+    id: "receipt-item-0"
+    optional: true
+
+# Step 9: Wait for state to settle
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 5000
+
+# Step 10: Assert - Check for error indicators or crashes
+- assertVisible:
+    text: "Item|Claim|Receipt"
+    regex: true
+
+# Step 11: Navigate away to force state save
+- tapOn:
+    text: "Back"
+    optional: true
+
+# Step 12: Navigate back to verify state persisted
+- tapOn:
+    text: "Receipt"
+    optional: true
+
+# Step 13: Final assertion - screen should load without crashing
+- extendedWaitUntil:
+    visible:
+      text: "Item|Claim|Receipt"
+      regex: true
+    timeout: 10000
+
+# Step 14: Check for duplicate claim indicators (visual assertion)
+# If we see "claimed by" text duplicated, that's a bug
+- assertNotVisible:
+    text: "Error|failed|crash"
+    regex: true
+  optional: true

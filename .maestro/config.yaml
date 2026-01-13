@@ -4,22 +4,48 @@
 # App configuration
 appId: com.splitfree.app
 
-# Default settings
+# ========================================
+# HAPPY PATH TESTS (Quick verification)
+# Run with: maestro test .maestro/
+# ========================================
 flows:
   - create-group-expense.yaml
   - receipt-scanning.yaml
   - settlement-flow.yaml
 
+# ========================================
+# STRESS TESTS (Adversarial testing)
+# Run with: maestro test .maestro/stress/
+# These are designed to break things and find edge cases.
+# ========================================
+# Stress test files in ./stress/:
+#   - receipt-claim-race.yaml      (Race condition on receipt claims)
+#   - double-settlement.yaml       (Duplicate settlement attempts)
+#   - boundary-amounts.yaml        (Edge case amounts: $0.01, $999,999.99)
+#   - rapid-expense-creation.yaml  (10 expenses rapidly)
+#   - offline-online-chaos.yaml    (Network toggle during operations)
+#   - rapid-navigation.yaml        (Fast screen switching)
+#   - member-claim-collision.yaml  (Race on member claiming)
+#   - currency-chaos.yaml          (Multi-currency precision)
+#   - deep-link-malformed.yaml     (Invalid deep links)
+#   - receipt-ocr-timeout.yaml     (OCR processing timeout)
+
 # Environment variables for tests
 env:
   TEST_USER_EMAIL: test@splitfree.app
+  STRESS_MODE: false
 
 # Screenshots on failure
 onFlowComplete:
+  takeScreenshot: true
+
+onFlowError:
   takeScreenshot: true
 
 onFlowStart:
   clearState: false
 
 # Timeout settings
+# Happy path: 10 seconds (default)
+# Stress tests use their own extendedWaitUntil with longer timeouts
 defaultTimeout: 10000

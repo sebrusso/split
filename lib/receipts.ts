@@ -80,7 +80,8 @@ export function getItemRemainingFraction(item: ReceiptItem): number {
 
 /**
  * Calculate each member's total based on their claimed items
- * Distributes tax and tip proportionally based on items claimed
+ * Distributes tax, tip, service charges, and discounts proportionally based on items claimed
+ * Enhanced for P1: Now includes service charge and discount distribution
  */
 export function calculateMemberTotals(
   receipt: Receipt,
@@ -102,12 +103,24 @@ export function calculateMemberTotals(
     }
   >();
 
+  // Get regular items (exclude special items and hidden expanded parents)
+  const regularItems = items.filter(
+    (item) =>
+      !item.is_tax &&
+      !item.is_tip &&
+      !item.is_subtotal &&
+      !item.is_total &&
+      !item.is_service_charge &&
+      item.quantity > 0 // Exclude hidden expanded parents
+  );
+
   // Initialize for all members who have claims
   for (const claim of claims) {
-    const item = items.find((i) => i.id === claim.receipt_item_id);
-    if (!item || item.is_tax || item.is_tip || item.is_subtotal || item.is_total) {
-      continue;
-    }
+    const item = regularItems.find((i) => i.id === claim.receipt_item_id);
+    if (!item) continue;
+
+    // Skip discount items - they're handled separately
+    if (item.is_discount) continue;
 
     const claimAmount = roundCurrency(item.total_price * claim.share_fraction);
 
@@ -125,34 +138,42 @@ export function calculateMemberTotals(
     });
   }
 
-  // Calculate the sum of all claimed items
+  // Calculate the sum of all claimed items (before discounts)
   const claimedSubtotal = Array.from(memberItemTotals.values()).reduce(
     (sum, data) => sum + data.total,
     0
   );
 
-  // Get tax and tip amounts
+  // Get amounts
   const taxAmount = receipt.tax_amount || 0;
   const tipAmount = receipt.tip_amount || 0;
+  const serviceChargeAmount = receipt.service_charge_amount || 0;
+  const discountAmount = receipt.discount_amount || 0; // This is negative
 
-  // Build member totals with proportional tax/tip
+  // Build member totals with proportional distribution
   const totals: ReceiptMemberCalculation[] = [];
 
   for (const [memberId, data] of memberItemTotals) {
     const member = members.find((m) => m.id === memberId);
     if (!member) continue;
 
-    // Calculate proportional share of tax and tip
+    // Calculate proportional share of all extras
     const proportion = claimedSubtotal > 0 ? data.total / claimedSubtotal : 0;
     const taxShare = roundCurrency(taxAmount * proportion);
     const tipShare = roundCurrency(tipAmount * proportion);
-    const grandTotal = roundCurrency(data.total + taxShare + tipShare);
+    const serviceChargeShare = roundCurrency(serviceChargeAmount * proportion);
+    const discountShare = roundCurrency(discountAmount * proportion); // Negative
+
+    // Grand total = items + tax + tip + service charge + discount (negative)
+    const grandTotal = roundCurrency(
+      data.total + taxShare + tipShare + serviceChargeShare + discountShare
+    );
 
     totals.push({
       memberId,
       memberName: member.name,
       itemsTotal: roundCurrency(data.total),
-      taxShare,
+      taxShare: taxShare + serviceChargeShare, // Combine for simpler display
       tipShare,
       grandTotal,
       claimedItems: data.items,
@@ -163,7 +184,8 @@ export function calculateMemberTotals(
   if (totals.length > 0) {
     const calculatedTotal = totals.reduce((sum, t) => sum + t.grandTotal, 0);
     const expectedTotal =
-      receipt.total_amount || claimedSubtotal + taxAmount + tipAmount;
+      receipt.total_amount ||
+      claimedSubtotal + taxAmount + tipAmount + serviceChargeAmount + discountAmount;
     const discrepancy = roundCurrency(expectedTotal - calculatedTotal);
 
     if (Math.abs(discrepancy) > 0 && Math.abs(discrepancy) < 0.1) {
@@ -174,6 +196,180 @@ export function calculateMemberTotals(
   }
 
   return totals;
+}
+
+// ============================================
+// P0/P1 ENHANCED UTILITIES
+// ============================================
+
+/**
+ * Check if an item can be expanded into individual units
+ * P0: Multi-quantity item expansion
+ */
+export function canExpandItem(item: ReceiptItem): boolean {
+  const quantity = item.original_quantity || item.quantity;
+  return (
+    quantity > 1 &&
+    !item.is_expansion &&
+    !item.is_tax &&
+    !item.is_tip &&
+    !item.is_discount &&
+    !item.is_service_charge
+  );
+}
+
+/**
+ * Check if an item is a hidden parent of expanded items
+ */
+export function isHiddenExpandedParent(item: ReceiptItem): boolean {
+  return item.quantity === 0 && (item.original_quantity || 0) > 1;
+}
+
+/**
+ * Get the display quantity for an item (handles expanded parents)
+ */
+export function getDisplayQuantity(item: ReceiptItem): number {
+  if (isHiddenExpandedParent(item)) {
+    return item.original_quantity || 0;
+  }
+  return item.quantity;
+}
+
+/**
+ * Group items with their modifiers for display
+ * P1: Modifier grouping
+ */
+export function groupItemsWithModifiers(items: ReceiptItem[]): Array<{
+  mainItem: ReceiptItem;
+  modifiers: ReceiptItem[];
+  totalPrice: number;
+}> {
+  const grouped: Array<{
+    mainItem: ReceiptItem;
+    modifiers: ReceiptItem[];
+    totalPrice: number;
+  }> = [];
+
+  // Get main items (not modifiers, not hidden)
+  const mainItems = items.filter(
+    (item) =>
+      !item.is_modifier &&
+      !item.is_tax &&
+      !item.is_tip &&
+      !item.is_subtotal &&
+      !item.is_total &&
+      !item.is_service_charge &&
+      item.quantity > 0
+  );
+
+  // Get modifiers
+  const modifiers = items.filter((item) => item.is_modifier);
+
+  for (const mainItem of mainItems) {
+    const itemModifiers = modifiers.filter(
+      (mod) => mod.parent_item_id === mainItem.id
+    );
+    const totalPrice =
+      mainItem.total_price +
+      itemModifiers.reduce((sum, mod) => sum + mod.total_price, 0);
+
+    grouped.push({
+      mainItem,
+      modifiers: itemModifiers,
+      totalPrice,
+    });
+  }
+
+  return grouped;
+}
+
+/**
+ * Get items that should be split (shared items and service charges)
+ * These are distributed proportionally
+ */
+export function getDistributedItems(
+  items: ReceiptItem[]
+): { serviceCharges: ReceiptItem[]; sharedItems: ReceiptItem[] } {
+  return {
+    serviceCharges: items.filter((item) => item.is_service_charge),
+    sharedItems: items.filter((item) => item.is_likely_shared && !item.is_service_charge),
+  };
+}
+
+/**
+ * Calculate the fair share of a discount for a specific claim amount
+ * P1: Discount attribution
+ */
+export function calculateDiscountShare(
+  totalDiscount: number, // Negative value
+  memberItemTotal: number,
+  totalClaimedAmount: number
+): number {
+  if (totalClaimedAmount === 0) return 0;
+  const proportion = memberItemTotal / totalClaimedAmount;
+  return roundCurrency(totalDiscount * proportion);
+}
+
+/**
+ * Get item-specific discount if any
+ */
+export function getItemDiscount(
+  item: ReceiptItem,
+  allItems: ReceiptItem[]
+): ReceiptItem | null {
+  return (
+    allItems.find(
+      (discount) => discount.is_discount && discount.applies_to_item_id === item.id
+    ) || null
+  );
+}
+
+/**
+ * Format service charge type for display
+ */
+export function formatServiceChargeType(type: ServiceChargeType | null | undefined): string {
+  switch (type) {
+    case 'gratuity':
+      return 'Auto-Gratuity';
+    case 'delivery':
+      return 'Delivery Fee';
+    case 'convenience':
+      return 'Convenience Fee';
+    case 'other':
+    default:
+      return 'Service Charge';
+  }
+}
+
+/**
+ * Check if a receipt has any expandable multi-quantity items
+ */
+export function hasExpandableItems(items: ReceiptItem[]): boolean {
+  return items.some((item) => canExpandItem(item));
+}
+
+/**
+ * Check if a receipt has any shared items that might benefit from splitting
+ */
+export function hasSharedItems(items: ReceiptItem[]): boolean {
+  return items.some((item) => item.is_likely_shared && item.quantity > 0);
+}
+
+/**
+ * Get the effective price for an item after modifiers
+ */
+export function getItemEffectivePrice(
+  item: ReceiptItem,
+  allItems: ReceiptItem[]
+): number {
+  if (item.is_modifier) {
+    // Modifier price is already included in total
+    return item.total_price;
+  }
+
+  // Add modifier prices
+  const modifiers = allItems.filter((mod) => mod.parent_item_id === item.id);
+  return item.total_price + modifiers.reduce((sum, mod) => sum + mod.total_price, 0);
 }
 
 /**

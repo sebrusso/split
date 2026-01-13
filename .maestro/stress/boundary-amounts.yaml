@@ -1,0 +1,227 @@
+# Stress Test: Boundary Amount Edge Cases
+# Goal: Test edge case amounts that break split calculations
+#
+# Breaking scenarios:
+# - Division by 3 creates infinite decimal
+# - Last-person rounding adjustment goes negative
+# - Large numbers overflow display or calculations
+# - Tiny amounts result in $0.00 splits for everyone
+#
+# Run with: maestro test .maestro/stress/boundary-amounts.yaml --record
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Create a test group
+- tapOn: "Create Group"
+
+- tapOn:
+    id: "group-name-input"
+- inputText: "Boundary Amount Test"
+
+- tapOn: "Create"
+
+- extendedWaitUntil:
+    visible: "Boundary Amount Test"
+    timeout: 10000
+
+# Step 3: Add exactly 3 members (worst case for division)
+- tapOn: "Add Member"
+- tapOn:
+    id: "member-name-input"
+- inputText: "Alice"
+- tapOn: "Add"
+
+- tapOn: "Add Member"
+- tapOn:
+    id: "member-name-input"
+- inputText: "Bob"
+- tapOn: "Add"
+
+- tapOn: "Add Member"
+- tapOn:
+    id: "member-name-input"
+- inputText: "Charlie"
+- tapOn: "Add"
+
+# Verify 3 members
+- assertVisible: "Alice"
+- assertVisible: "Bob"
+- assertVisible: "Charlie"
+
+# ========================================
+# TEST 1: $0.01 split 3 ways
+# Expected: Someone gets $0.01, others get $0.00
+# Bug case: Negative amounts or crash
+# ========================================
+
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "One Cent Test"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "0.01"
+
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Alice"
+
+- tapOn: "Save"
+
+- extendedWaitUntil:
+    visible: "One Cent Test"
+    timeout: 10000
+
+# Check balances for negative amounts
+- tapOn: "Balances"
+
+# CRITICAL: No negative amounts should appear
+- assertNotVisible:
+    text: "-\\$0\\."
+    regex: true
+
+- tapOn:
+    text: "Back"
+    optional: true
+
+# ========================================
+# TEST 2: $0.02 split 3 ways
+# Expected: One person gets $0.01, one gets $0.01, one gets $0.00
+# Or some valid rounding distribution
+# ========================================
+
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Two Cents Test"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "0.02"
+
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Alice"
+
+- tapOn: "Save"
+
+- extendedWaitUntil:
+    visible: "Two Cents Test"
+    timeout: 10000
+
+# ========================================
+# TEST 3: $0.03 split 3 ways (exact split)
+# Expected: Everyone gets exactly $0.01
+# ========================================
+
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Three Cents Test"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "0.03"
+
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Bob"
+
+- tapOn: "Save"
+
+- extendedWaitUntil:
+    visible: "Three Cents Test"
+    timeout: 10000
+
+# ========================================
+# TEST 4: $1.00 split 3 ways (classic problem)
+# Expected: $0.33 + $0.33 + $0.34 = $1.00
+# Bug case: $0.33 + $0.33 + $0.33 = $0.99 (missing penny)
+# ========================================
+
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "One Dollar Test"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "1.00"
+
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Charlie"
+
+- tapOn: "Save"
+
+- extendedWaitUntil:
+    visible: "One Dollar Test"
+    timeout: 10000
+
+# ========================================
+# TEST 5: Large amount - $999,999.99
+# Expected: No overflow, displays correctly
+# ========================================
+
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Maximum Amount Test"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "999999.99"
+
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Alice"
+
+- tapOn: "Save"
+
+- extendedWaitUntil:
+    visible: "Maximum Amount Test"
+    timeout: 15000
+
+# Verify large amount displays without overflow
+- assertVisible:
+    text: "999.*99"
+    regex: true
+
+# ========================================
+# FINAL VERIFICATION
+# ========================================
+
+# Navigate to balances
+- tapOn: "Balances"
+
+- extendedWaitUntil:
+    visible: "Who Owes Who"
+    timeout: 10000
+
+# CRITICAL: No negative amounts
+- assertNotVisible:
+    text: "-\\$[1-9]"
+    regex: true
+
+# CRITICAL: No NaN or Infinity
+- assertNotVisible:
+    text: "NaN|Infinity|undefined"
+    regex: true
+
+# CRITICAL: No error states
+- assertNotVisible:
+    text: "Error|failed|crash"
+    regex: true

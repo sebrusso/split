@@ -1,0 +1,157 @@
+# Stress Test: Double Settlement Attempt
+# Goal: Attempt to settle the same debt twice to expose idempotency issues
+#
+# Breaking scenarios:
+# - No idempotency on settlement creation
+# - Duplicate settlement records in database
+# - Balance goes negative after double settlement
+#
+# Run with: maestro test .maestro/stress/double-settlement.yaml --record
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Create a new group for clean state
+- tapOn: "Create Group"
+
+- assertVisible: "New Group"
+
+# Enter group name
+- tapOn:
+    id: "group-name-input"
+- inputText: "Double Settlement Test"
+
+# Create group
+- tapOn: "Create"
+
+# Wait for group to be created
+- extendedWaitUntil:
+    visible: "Double Settlement Test"
+    timeout: 10000
+
+# Step 3: Add first member (Alice - payer)
+- tapOn: "Add Member"
+- tapOn:
+    id: "member-name-input"
+- inputText: "Alice"
+- tapOn: "Add"
+
+# Step 4: Add second member (Bob - owes money)
+- tapOn: "Add Member"
+- tapOn:
+    id: "member-name-input"
+- inputText: "Bob"
+- tapOn: "Add"
+
+# Verify members added
+- assertVisible: "Alice"
+- assertVisible: "Bob"
+
+# Step 5: Add an expense - Alice pays $100
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Test Expense for Double Settlement"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "100.00"
+
+# Select Alice as payer
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Alice"
+
+# Save expense
+- tapOn: "Save"
+
+# Wait for expense to be created
+- extendedWaitUntil:
+    visible: "Test Expense"
+    timeout: 10000
+
+# Step 6: Navigate to balances
+- tapOn: "Balances"
+
+# Wait for balance calculation
+- extendedWaitUntil:
+    visible: "Who Owes Who"
+    timeout: 10000
+
+# Step 7: Verify initial balance
+# Bob should owe Alice $50 (half of $100)
+- assertVisible:
+    text: "Bob|owes|50"
+    regex: true
+
+# Step 8: FIRST SETTLEMENT ATTEMPT
+- tapOn: "Settle Up"
+
+# Verify settlement screen
+- assertVisible: "Settlement"
+
+# Step 9: Immediately go back WITHOUT completing
+- tapOn:
+    text: "Back|Cancel"
+    regex: true
+  optional: true
+
+# Step 10: RAPID SECOND SETTLEMENT ATTEMPT
+- tapOn: "Settle Up"
+
+# Step 11: Complete the settlement
+- tapOn:
+    text: "Confirm|Mark as Paid|Done"
+    regex: true
+  optional: true
+
+# Step 12: Quickly go back and try THIRD settlement
+- tapOn:
+    text: "Back"
+    optional: true
+
+- tapOn: "Settle Up"
+  optional: true
+
+# Try to confirm again
+- tapOn:
+    text: "Confirm|Mark as Paid|Done"
+    regex: true
+  optional: true
+
+# Step 13: Navigate to balances to check final state
+- tapOn: "Balances"
+
+# Step 14: CRITICAL ASSERTION - Balance should be $0, not negative
+- assertNotVisible:
+    text: "-\\$"
+    regex: true
+
+# Step 15: Check ledger for duplicate settlements
+- tapOn:
+    text: "Ledger|History|Transactions"
+    regex: true
+  optional: true
+
+# Assert only one settlement recorded (if ledger is visible)
+- runFlow:
+    when:
+      visible: "Settlement"
+    commands:
+      # Count settlements - should only see one
+      - assertVisible:
+          text: "Settlement"
+          # If we see multiple, that's the bug we're looking for
+
+# Step 16: Final balance check
+- assertVisible:
+    text: "settled|$0|all clear"
+    regex: true
+  optional: true

@@ -25,8 +25,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../../../lib/theme';
-import { Button, Card, Avatar } from '../../../../../components/ui';
-import { useReceiptSummary, useItemClaims } from '../../../../../lib/useReceipts';
+import { Button, Card, Avatar, QuickSplitModal } from '../../../../../components/ui';
+import { useReceiptSummary, useItemClaims, useItemExpansion } from '../../../../../lib/useReceipts';
 import {
   formatReceiptDate,
   formatReceiptAmount,
@@ -34,6 +34,10 @@ import {
   isItemFullyClaimed,
   canClaimItem,
   generateReceiptShareCode,
+  canExpandItem,
+  isHiddenExpandedParent,
+  hasExpandableItems,
+  groupItemsWithModifiers,
 } from '../../../../../lib/receipts';
 import { useAuth } from '../../../../../lib/auth-context';
 import { supabase } from '../../../../../lib/supabase';
@@ -46,11 +50,16 @@ export default function ReceiptClaimingScreen() {
   const { receipt, items, claims, members, summary, loading, error, refetch } =
     useReceiptSummary(receiptId);
   const { claimItem, unclaimItem, splitItem, clearAllClaims, claiming } = useItemClaims(receiptId);
+  const { expandItem, canExpand, expanding } = useItemExpansion(receiptId);
 
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [showReceiptImage, setShowReceiptImage] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
+
+  // Quick split modal state
+  const [quickSplitItem, setQuickSplitItem] = useState<ReceiptItem | null>(null);
+  const [showQuickSplit, setShowQuickSplit] = useState(false);
 
   // Optimistic UI state for instant feedback
   const [pendingClaims, setPendingClaims] = useState<Set<string>>(new Set());
@@ -226,6 +235,36 @@ export default function ReceiptClaimingScreen() {
     router.push(`/group/${id}/receipt/${receiptId}/split-item?itemId=${item.id}`);
   };
 
+  // P0: Open quick split modal
+  const handleQuickSplit = (item: ReceiptItem) => {
+    setQuickSplitItem(item);
+    setShowQuickSplit(true);
+  };
+
+  // P0: Handle quick split from modal
+  const handleQuickSplitConfirm = async (memberIds: string[]) => {
+    if (!quickSplitItem) return { success: false, error: 'No item selected' };
+    return splitItem(quickSplitItem.id, memberIds);
+  };
+
+  // P0: Handle claim for self from quick split modal
+  const handleQuickClaimForSelf = async () => {
+    if (!quickSplitItem || !currentMember) {
+      return { success: false, error: 'No item or member' };
+    }
+    return claimItem(quickSplitItem.id, currentMember.id);
+  };
+
+  // P0: Handle expanding multi-quantity items
+  const handleExpandItem = async (item: ReceiptItem) => {
+    const result = await expandItem(item.id);
+    if (result.success) {
+      refetch();
+    } else {
+      Alert.alert('Error', result.error || 'Failed to expand item');
+    }
+  };
+
   const handleShare = async () => {
     if (!receipt) return;
 
@@ -288,11 +327,21 @@ export default function ReceiptClaimingScreen() {
     return claim;
   };
 
-  // Filter to regular items only (not tax/tip/etc)
+  // Filter to regular items only (not tax/tip/etc, not hidden expanded parents, not modifiers)
   const regularItems = items.filter(
     (item) =>
-      !item.is_tax && !item.is_tip && !item.is_subtotal && !item.is_total && !item.is_discount
+      !item.is_tax &&
+      !item.is_tip &&
+      !item.is_subtotal &&
+      !item.is_total &&
+      !item.is_discount &&
+      !item.is_service_charge &&
+      !item.is_modifier && // Modifiers are shown with their parent
+      !isHiddenExpandedParent(item) // Hidden expanded parents
   );
+
+  // Check if there are any expandable items
+  const hasExpandable = hasExpandableItems(items);
 
   if (loading) {
     return (
@@ -412,6 +461,16 @@ export default function ReceiptClaimingScreen() {
           Tap to claim items. Tap claimed items to split them.
         </Text>
 
+        {/* Expandable Items Banner */}
+        {hasExpandable && (
+          <View style={styles.expandableBanner}>
+            <Ionicons name="layers-outline" size={18} color={colors.primary} />
+            <Text style={styles.expandableBannerText}>
+              Some items have multiple quantities. Long-press to split into individual items.
+            </Text>
+          </View>
+        )}
+
         {/* Items List */}
         {regularItems.length === 0 && (
           <Text style={styles.instructions}>No items found on this receipt.</Text>
@@ -432,6 +491,15 @@ export default function ReceiptClaimingScreen() {
 
           const isProcessing = isPendingClaim || isPendingUnclaim;
 
+          // P0: Check if item is expandable or likely shared
+          const isExpandable = canExpand(item);
+          const isShared = item.is_likely_shared;
+
+          // P1: Get modifiers for this item
+          const itemModifiers = items.filter((mod) => mod.parent_item_id === item.id);
+          const totalWithModifiers = item.total_price +
+            itemModifiers.reduce((sum, mod) => sum + mod.total_price, 0);
+
           return (
             <TouchableOpacity
               key={item.id}
@@ -439,6 +507,7 @@ export default function ReceiptClaimingScreen() {
                 styles.itemCard,
                 showAsClaimedByMe && styles.itemCardClaimed,
                 showAsClaimed && !showAsClaimedByMe && styles.itemCardClaimedOther,
+                isShared && !showAsClaimed && styles.itemCardShared,
               ]}
               onPress={() => {
                 // Fresh check for current member's claim at tap time
@@ -452,9 +521,7 @@ export default function ReceiptClaimingScreen() {
                 // Handle tap based on current state
                 if (isPendingUnclaim) {
                   // Re-claim: cancel the pending unclaim (will reclaim via DB when cleared)
-                  // Since unclaim was successful, we need to re-claim
                   if (successfulUnclaimsRef.current.has(item.id)) {
-                    // Unclaim already succeeded in DB, need to re-claim
                     successfulUnclaimsRef.current.delete(item.id);
                     setPendingUnclaims((prev) => {
                       const next = new Set(prev);
@@ -463,7 +530,6 @@ export default function ReceiptClaimingScreen() {
                     });
                     handleClaimItem(item);
                   } else {
-                    // Unclaim still pending, just cancel the UI state
                     setPendingUnclaims((prev) => {
                       const next = new Set(prev);
                       next.delete(item.id);
@@ -471,9 +537,7 @@ export default function ReceiptClaimingScreen() {
                     });
                   }
                 } else if (isPendingClaim) {
-                  // Unclaim: if claim already succeeded in DB, need to unclaim from DB
                   if (successfulClaimsRef.current.has(item.id)) {
-                    // Claim already succeeded in DB, need to actually unclaim
                     successfulClaimsRef.current.delete(item.id);
                     setPendingClaims((prev) => {
                       const next = new Set(prev);
@@ -482,7 +546,6 @@ export default function ReceiptClaimingScreen() {
                     });
                     handleUnclaimItem(item);
                   } else {
-                    // Claim still pending (not yet in DB), just cancel the UI state
                     setPendingClaims((prev) => {
                       const next = new Set(prev);
                       next.delete(item.id);
@@ -490,42 +553,105 @@ export default function ReceiptClaimingScreen() {
                     });
                   }
                 } else if (isAlreadySplit) {
-                  // Item is being split by multiple people - go to split screen to edit
                   handleSplitItem(item);
                 } else if (hasCurrentMemberClaim) {
-                  // Unclaim existing solo claim (use fresh check, not stale render-time value)
                   handleUnclaimItem(item);
                 } else if (!isClaimed) {
-                  // Claim unclaimed item
-                  handleClaimItem(item);
+                  // P0: For shared items, open quick split instead of claiming directly
+                  if (isShared) {
+                    handleQuickSplit(item);
+                  } else {
+                    handleClaimItem(item);
+                  }
                 } else {
-                  // Item is claimed by someone else (solo) - offer to join the split
                   handleJoinSplit(item);
                 }
               }}
-              onLongPress={() => handleSplitItem(item)}
-              disabled={claiming || isProcessing}
+              onLongPress={() => {
+                // P0: Long press shows quick split or expand options
+                if (isExpandable && !isClaimed) {
+                  Alert.alert(
+                    'Split Options',
+                    `"${item.description}" has ${item.quantity} items.`,
+                    [
+                      {
+                        text: 'Expand to Individual Items',
+                        onPress: () => handleExpandItem(item),
+                      },
+                      {
+                        text: 'Split by People',
+                        onPress: () => handleQuickSplit(item),
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                } else {
+                  handleQuickSplit(item);
+                }
+              }}
+              disabled={claiming || isProcessing || expanding}
             >
               <View style={styles.itemContent}>
                 <View style={styles.itemMain}>
+                  {/* Quantity and description */}
+                  <View style={styles.itemDescriptionRow}>
+                    {item.quantity > 1 && (
+                      <Text style={styles.quantityBadge}>{item.quantity}x</Text>
+                    )}
+                    <Text
+                      style={[
+                        styles.itemDescription,
+                        showAsClaimed && styles.itemDescriptionClaimed,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {item.description}
+                    </Text>
+                  </View>
+                  {/* P1: Show modifiers */}
+                  {itemModifiers.length > 0 && (
+                    <View style={styles.modifiersContainer}>
+                      {itemModifiers.map((mod) => (
+                        <Text key={mod.id} style={styles.modifierText}>
+                          + {mod.description} ({formatReceiptAmount(mod.total_price, receipt.currency)})
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {/* P0: Shared item indicator */}
+                  {isShared && !showAsClaimed && (
+                    <View style={styles.sharedIndicator}>
+                      <Ionicons name="people" size={12} color={colors.primary} />
+                      <Text style={styles.sharedIndicatorText}>Shared Item - tap to split</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.itemPriceContainer}>
                   <Text
                     style={[
-                      styles.itemDescription,
-                      showAsClaimed && styles.itemDescriptionClaimed,
+                      styles.itemPrice,
+                      isClaimedByMe && styles.itemPriceClaimed,
                     ]}
-                    numberOfLines={2}
                   >
-                    {item.description}
+                    {formatReceiptAmount(
+                      itemModifiers.length > 0 ? totalWithModifiers : item.total_price,
+                      receipt.currency
+                    )}
                   </Text>
+                  {/* P0: Expandable indicator */}
+                  {isExpandable && !isClaimed && (
+                    <TouchableOpacity
+                      style={styles.expandButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleExpandItem(item);
+                      }}
+                      disabled={expanding}
+                    >
+                      <Ionicons name="layers-outline" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <Text
-                  style={[
-                    styles.itemPrice,
-                    isClaimedByMe && styles.itemPriceClaimed,
-                  ]}
-                >
-                  {formatReceiptAmount(item.total_price, receipt.currency)}
-                </Text>
               </View>
 
               {/* Claimed by avatars */}
@@ -721,6 +847,21 @@ export default function ReceiptClaimingScreen() {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* P0: Quick Split Modal */}
+      <QuickSplitModal
+        visible={showQuickSplit}
+        onClose={() => {
+          setShowQuickSplit(false);
+          setQuickSplitItem(null);
+        }}
+        item={quickSplitItem}
+        members={members}
+        currentMemberId={currentMember?.id || null}
+        currency={receipt?.currency}
+        onSplit={handleQuickSplitConfirm}
+        onClaimForSelf={handleQuickClaimForSelf}
+      />
     </SafeAreaView>
   );
 }
@@ -857,6 +998,10 @@ const styles = StyleSheet.create({
   itemCardClaimedOther: {
     backgroundColor: colors.borderLight,
   },
+  itemCardShared: {
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+  },
   itemCardProcessing: {
     opacity: 0.7,
   },
@@ -869,11 +1014,68 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.md,
   },
+  itemDescriptionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  quantityBadge: {
+    ...typography.small,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.primary,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    marginRight: spacing.xs,
+  },
   itemDescription: {
     ...typography.bodyMedium,
+    flex: 1,
   },
   itemDescriptionClaimed: {
     color: colors.textSecondary,
+  },
+  modifiersContainer: {
+    marginTop: spacing.xs,
+    marginLeft: spacing.md,
+  },
+  modifierText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  sharedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  sharedIndicatorText: {
+    ...typography.caption,
+    color: colors.primary,
+  },
+  itemPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  expandButton: {
+    padding: spacing.xs,
+  },
+  expandableBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryLight,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  expandableBannerText: {
+    ...typography.small,
+    color: colors.primary,
+    flex: 1,
   },
   itemStatus: {
     ...typography.small,
