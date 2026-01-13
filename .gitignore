@@ -55,3 +55,8 @@ supabase/.temp/
 
 # GCP Service Account (sensitive)
 .gcp-service-account.json
+
+# Receipt Eval Tool
+tools/receipt-eval/reports/
+tools/receipt-eval/dataset/images/
+tools/receipt-eval/dist/

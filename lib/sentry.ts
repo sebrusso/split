@@ -168,7 +168,7 @@ export function startTransaction(
  * Wrap a component with Sentry error boundary
  * Provides a fallback for Expo Go where native Sentry isn't available
  */
-import React from "react";
+import React, { Component, createElement } from "react";
 
 interface FallbackErrorBoundaryProps {
   children: React.ReactNode;
@@ -183,7 +183,7 @@ interface FallbackErrorBoundaryState {
 /**
  * Fallback error boundary for when Sentry isn't available (e.g., Expo Go)
  */
-class FallbackErrorBoundary extends React.Component<
+class FallbackErrorBoundary extends Component<
   FallbackErrorBoundaryProps,
   FallbackErrorBoundaryState
 > {
@@ -204,10 +204,11 @@ class FallbackErrorBoundary extends React.Component<
     if (this.state.hasError && this.state.error) {
       const { fallback: Fallback } = this.props;
       if (Fallback) {
-        if (typeof Fallback === 'function') {
-          return <Fallback error={this.state.error} resetError={this.resetError} />;
-        }
-        return <Fallback error={this.state.error} resetError={this.resetError} />;
+        // Use createElement instead of JSX since this is a .ts file
+        return createElement(Fallback as React.ComponentType<{ error: Error; resetError: () => void }>, {
+          error: this.state.error,
+          resetError: this.resetError,
+        });
       }
       return null;
     }
@@ -223,7 +224,9 @@ export const SentryErrorBoundary = Sentry.ErrorBoundary || FallbackErrorBoundary
  * HOC to wrap screens with Sentry navigation tracking
  * Returns identity function if Sentry.wrap isn't available
  */
-export const withSentryScreen = Sentry.wrap || (<T,>(component: T) => component);
+export function withSentryScreen<T>(component: T): T {
+  return Sentry.wrap ? Sentry.wrap(component as any) : component;
+}
 
 // Re-export Sentry for advanced usage
 export { Sentry };

@@ -1,0 +1,7 @@
+{
+  "name": "SplitFree Receipt Evaluation Dataset",
+  "description": "Receipt images for OCR accuracy evaluation",
+  "version": "1.0.0",
+  "created": "2026-01-12",
+  "receipts": []
+}
