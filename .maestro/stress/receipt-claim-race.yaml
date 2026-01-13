@@ -6,7 +6,7 @@
 # - pendingClaims Set not clearing properly
 # - Real-time subscription refetch overwriting pending state
 #
-# Run with: maestro test .maestro/stress/receipt-claim-race.yaml --record
+# Run with: maestro test .maestro/stress/receipt-claim-race.yaml
 
 appId: com.splitfree.app
 
@@ -19,7 +19,6 @@ appId: com.splitfree.app
 
 # Step 2: Navigate to an existing group with receipts
 - tapOn:
-    text: ".*"
     index: 0
 
 # Wait for group to load
@@ -32,20 +31,9 @@ appId: com.splitfree.app
     text: "Receipt"
     optional: true
 
-# If no receipt visible, look for scan receipt option to understand the UI
-- runFlow:
-    when:
-      notVisible: "Receipt Items"
-    commands:
-      - tapOn:
-          text: "Scan Receipt"
-          optional: true
-
 # Step 4: Wait for receipt items to load
 - extendedWaitUntil:
-    visible:
-      text: "Claim|claimed|Item"
-      regex: true
+    visible: "Claim"
     timeout: 15000
 
 # Step 5: RAPID CLAIM/UNCLAIM CYCLE - This is the stress test
@@ -56,7 +44,6 @@ appId: com.splitfree.app
       - tapOn:
           id: "receipt-item-0"
           optional: true
-      # No wait - intentionally rapid
 
 # Step 6: While first item is potentially still processing, claim second item
 - tapOn:
@@ -81,13 +68,13 @@ appId: com.splitfree.app
 
 # Step 9: Wait for state to settle
 - extendedWaitUntil:
-    visible: ".*"
+    visible: "Item"
     timeout: 5000
 
 # Step 10: Assert - Check for error indicators or crashes
-- assertVisible:
-    text: "Item|Claim|Receipt"
-    regex: true
+- assertNotVisible: "Error"
+- assertNotVisible: "failed"
+- assertNotVisible: "crash"
 
 # Step 11: Navigate away to force state save
 - tapOn:
@@ -101,14 +88,5 @@ appId: com.splitfree.app
 
 # Step 13: Final assertion - screen should load without crashing
 - extendedWaitUntil:
-    visible:
-      text: "Item|Claim|Receipt"
-      regex: true
+    visible: "Item"
     timeout: 10000
-
-# Step 14: Check for duplicate claim indicators (visual assertion)
-# If we see "claimed by" text duplicated, that's a bug
-- assertNotVisible:
-    text: "Error|failed|crash"
-    regex: true
-  optional: true

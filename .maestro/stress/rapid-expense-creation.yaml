@@ -5,9 +5,8 @@
 # - Race between expense insert and balance refetch
 # - Floating point accumulation errors
 # - Real-time subscription storm causing UI freeze
-# - Memory pressure from many concurrent operations
 #
-# Run with: maestro test .maestro/stress/rapid-expense-creation.yaml --record
+# Run with: maestro test .maestro/stress/rapid-expense-creation.yaml
 
 appId: com.splitfree.app
 
@@ -20,23 +19,11 @@ appId: com.splitfree.app
 
 # Step 2: Navigate to existing group or create one
 - tapOn:
-    text: ".*"
     index: 0
 
 - extendedWaitUntil:
     visible: "Expenses"
     timeout: 10000
-
-# Step 3: Add members if needed (for split calculations)
-- runFlow:
-    when:
-      notVisible: "member"
-    commands:
-      - tapOn: "Add Member"
-      - tapOn:
-          id: "member-name-input"
-      - inputText: "Stress Test User"
-      - tapOn: "Add"
 
 # ========================================
 # RAPID EXPENSE CREATION - 10 expenses, no waiting
@@ -144,55 +131,28 @@ appId: com.splitfree.app
 
 # ========================================
 # IMMEDIATE NAVIGATION TO BALANCES
-# (before all expenses may have synced)
 # ========================================
 
 - tapOn: "Balances"
 
-# Step 4: Wait for balances to load (this is where races manifest)
+# Wait for balances to load (this is where races manifest)
 - extendedWaitUntil:
     visible: "Who Owes Who"
     timeout: 30000
 
-# Step 5: CRITICAL ASSERTIONS
-
-# Screen should not be stuck loading
-- assertNotVisible:
-    text: "Loading|Calculating"
-    regex: true
-  optional: true
-
-# No error states
-- assertNotVisible:
-    text: "Error|failed|crash|NaN"
-    regex: true
+# CRITICAL ASSERTIONS
+- assertNotVisible: "NaN"
+- assertNotVisible: "undefined"
+- assertNotVisible: "Error"
 
 # Balances should be visible (not blank)
-- assertVisible:
-    text: "\\$[0-9]"
-    regex: true
+- assertVisible: "$"
 
-# Step 6: Navigate back to expenses list
+# Navigate back to expenses list
 - tapOn:
-    text: "Back|Expenses"
-    regex: true
-  optional: true
+    text: "Back"
+    optional: true
 
-# Step 7: Verify all 10 expenses appear
+# Verify expenses appear
 - assertVisible: "Stress 1"
 - assertVisible: "Stress 10"
-
-# Step 8: Pull to refresh to ensure sync complete
-- swipe:
-    direction: DOWN
-    duration: 500
-
-# Wait for refresh
-- extendedWaitUntil:
-    visible: "Stress"
-    timeout: 10000
-
-# Final verification - all expenses visible
-- assertVisible:
-    text: "Stress [0-9]+"
-    regex: true

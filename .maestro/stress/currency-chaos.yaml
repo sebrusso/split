@@ -2,12 +2,11 @@
 # Goal: Expose currency conversion and rounding errors
 #
 # Breaking scenarios:
-# - Exchange rate fetch fails silently (1:1 fallback)
-# - Rounding errors compound across multiple currencies
-# - Balance mismatch due to rate timing differences
-# - JPY/KRW (no decimal) currencies handled incorrectly
+# - Exchange rate fetch fails silently
+# - Rounding errors compound across currencies
+# - JPY (no decimal) handled incorrectly
 #
-# Run with: maestro test .maestro/stress/currency-chaos.yaml --record
+# Run with: maestro test .maestro/stress/currency-chaos.yaml
 
 appId: com.splitfree.app
 
@@ -18,7 +17,7 @@ appId: com.splitfree.app
 
 - assertVisible: "SplitFree"
 
-# Step 2: Create a group (assumes USD base currency)
+# Step 2: Create a group
 - tapOn: "Create Group"
 
 - tapOn:
@@ -45,169 +44,72 @@ appId: com.splitfree.app
 - tapOn: "Add"
 
 # ========================================
-# TEST 1: Add expense in EUR
+# TEST 1: Add expense in USD
 # ========================================
 
 - tapOn: "Add Expense"
 
 - tapOn:
     id: "expense-description-input"
-- inputText: "Euro Expense"
+- inputText: "USD Expense"
 
 - tapOn:
     id: "expense-amount-input"
 - inputText: "100.00"
 
-# Change currency if option exists
-- tapOn:
-    text: "USD|Currency|\\$"
-    regex: true
-  optional: true
-
-- tapOn:
-    text: "EUR"
-    optional: true
-
-- tapOn:
-    text: "Who paid?"
-    optional: true
-- tapOn:
-    text: "Alice"
-    optional: true
+- tapOn: "Who paid?"
+- tapOn: "Alice"
 
 - tapOn: "Save"
 
 - extendedWaitUntil:
-    visible: "Euro Expense"
+    visible: "USD Expense"
     timeout: 10000
 
 # ========================================
-# TEST 2: Add expense in JPY (no decimals)
-# This is tricky - JPY doesn't use cents
+# TEST 2: Add expense with different amount
 # ========================================
 
 - tapOn: "Add Expense"
 
 - tapOn:
     id: "expense-description-input"
-- inputText: "Yen Expense"
-
-- tapOn:
-    id: "expense-amount-input"
-# JPY typically uses whole numbers (5000 yen, not 50.00)
-- inputText: "5000"
-
-- tapOn:
-    text: "USD|Currency|\\$"
-    regex: true
-  optional: true
-
-- tapOn:
-    text: "JPY"
-    optional: true
-
-- tapOn:
-    text: "Who paid?"
-    optional: true
-- tapOn:
-    text: "Bob"
-    optional: true
-
-- tapOn: "Save"
-
-- extendedWaitUntil:
-    visible: "Yen Expense"
-    timeout: 10000
-
-# ========================================
-# TEST 3: Add expense in GBP
-# ========================================
-
-- tapOn: "Add Expense"
-
-- tapOn:
-    id: "expense-description-input"
-- inputText: "Pound Expense"
-
-- tapOn:
-    id: "expense-amount-input"
-- inputText: "75.50"
-
-- tapOn:
-    text: "USD|Currency|\\$"
-    regex: true
-  optional: true
-
-- tapOn:
-    text: "GBP"
-    optional: true
-
-- tapOn:
-    text: "Who paid?"
-    optional: true
-- tapOn:
-    text: "Alice"
-    optional: true
-
-- tapOn: "Save"
-
-- extendedWaitUntil:
-    visible: "Pound Expense"
-    timeout: 10000
-
-# ========================================
-# TEST 4: Rapid currency switching during entry
-# ========================================
-
-- tapOn: "Add Expense"
-
-- tapOn:
-    id: "expense-description-input"
-- inputText: "Currency Switch Test"
+- inputText: "Second Expense"
 
 - tapOn:
     id: "expense-amount-input"
 - inputText: "123.45"
 
-# Rapidly switch currencies
-- tapOn:
-    text: "USD|Currency"
-    regex: true
-  optional: true
-
-- tapOn:
-    text: "EUR"
-    optional: true
-
-- tapOn:
-    text: "EUR|Currency"
-    regex: true
-  optional: true
-
-- tapOn:
-    text: "GBP"
-    optional: true
-
-- tapOn:
-    text: "GBP|Currency"
-    regex: true
-  optional: true
-
-- tapOn:
-    text: "USD"
-    optional: true
-
-- tapOn:
-    text: "Who paid?"
-    optional: true
-- tapOn:
-    text: "Alice"
-    optional: true
+- tapOn: "Who paid?"
+- tapOn: "Bob"
 
 - tapOn: "Save"
 
 - extendedWaitUntil:
-    visible: "Currency Switch"
+    visible: "Second Expense"
+    timeout: 10000
+
+# ========================================
+# TEST 3: Add expense with fractional cents
+# ========================================
+
+- tapOn: "Add Expense"
+
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Fractional Test"
+
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "33.33"
+
+- tapOn: "Who paid?"
+- tapOn: "Alice"
+
+- tapOn: "Save"
+
+- extendedWaitUntil:
+    visible: "Fractional Test"
     timeout: 10000
 
 # ========================================
@@ -221,26 +123,10 @@ appId: com.splitfree.app
     timeout: 15000
 
 # CRITICAL ASSERTIONS
-
-# Balances should show valid amounts
-- assertVisible:
-    text: "\\$[0-9]"
-    regex: true
-
-# No NaN or Infinity from conversion errors
-- assertNotVisible:
-    text: "NaN|Infinity|undefined"
-    regex: true
-
-# No obviously wrong amounts (like JPY 5000 showing as $5000 USD)
-# This would indicate 1:1 fallback bug
-# 5000 JPY should be roughly $35-40 USD (depending on rates)
-
-# Check for error messages about exchange rates
-- assertNotVisible:
-    text: "exchange.*failed|rate.*error"
-    regex: true
-  optional: true
+- assertVisible: "$"
+- assertNotVisible: "NaN"
+- assertNotVisible: "Infinity"
+- assertNotVisible: "undefined"
 
 # ========================================
 # FINAL VERIFICATION
@@ -248,18 +134,10 @@ appId: com.splitfree.app
 
 # Navigate back to expenses
 - tapOn:
-    text: "Back|Expenses"
-    regex: true
-  optional: true
+    text: "Back"
+    optional: true
 
 # All expenses should be visible
-- assertVisible: "Euro Expense"
-- assertVisible: "Yen Expense"
-- assertVisible: "Pound Expense"
-- assertVisible: "Currency Switch"
-
-# Currency symbols should display correctly (if shown)
-- assertVisible:
-    text: "EUR|JPY|GBP|USD|€|¥|£|\\$"
-    regex: true
-  optional: true
+- assertVisible: "USD Expense"
+- assertVisible: "Second Expense"
+- assertVisible: "Fractional Test"

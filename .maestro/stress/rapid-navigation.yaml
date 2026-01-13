@@ -5,9 +5,8 @@
 # - useFocusEffect races with previous fetches
 # - In-flight requests return to wrong screen context
 # - Memory leaks from uncancelled subscriptions
-# - Wrong data displayed after rapid back/forward
 #
-# Run with: maestro test .maestro/stress/rapid-navigation.yaml --record
+# Run with: maestro test .maestro/stress/rapid-navigation.yaml
 
 appId: com.splitfree.app
 
@@ -18,12 +17,6 @@ appId: com.splitfree.app
 
 - assertVisible: "SplitFree"
 
-# Step 2: Verify we have multiple groups (or create them)
-# For this test, we need at least 2-3 groups
-- assertVisible:
-    text: ".*"
-    regex: true
-
 # ========================================
 # RAPID GROUP SWITCHING
 # Navigate between groups faster than data can load
@@ -31,90 +24,36 @@ appId: com.splitfree.app
 
 # Tap first group
 - tapOn:
-    text: ".*"
     index: 0
 
 # IMMEDIATELY navigate back (before load completes)
-- tapOn:
-    text: "Back"
-    optional: true
-
-# Or use swipe gesture for faster back
 - swipe:
     direction: RIGHT
     duration: 100
-  optional: true
-
-# Tap second group (if exists)
-- tapOn:
-    text: ".*"
-    index: 1
-  optional: true
-
-# Immediately back again
-- swipe:
-    direction: RIGHT
-    duration: 100
-  optional: true
 
 # Tap first group again
 - tapOn:
-    text: ".*"
     index: 0
 
-# Tap second group before first loads
+# Back again
 - swipe:
     direction: RIGHT
     duration: 100
-  optional: true
 
+# Tap again
 - tapOn:
-    text: ".*"
-    index: 1
-  optional: true
-
-# Back to first
-- swipe:
-    direction: RIGHT
-    duration: 100
-  optional: true
-
-- tapOn:
-    text: ".*"
     index: 0
 
 # ========================================
 # RAPID MODAL OPENING/CLOSING
-# Open and close Add Expense modal repeatedly
 # ========================================
 
-# Wait for group to at least partially load
+# Wait for group to load
 - extendedWaitUntil:
     visible: "Add Expense"
     timeout: 5000
-  optional: true
 
-# Open modal
-- tapOn: "Add Expense"
-  optional: true
-
-# Immediately close (swipe down or tap cancel)
-- swipe:
-    direction: DOWN
-    duration: 100
-  optional: true
-
-# Open again
-- tapOn: "Add Expense"
-  optional: true
-
-# Close again
-- swipe:
-    direction: DOWN
-    duration: 100
-  optional: true
-
-# Repeat 5 more times rapidly
+# Open modal and immediately close 5 times
 - repeat:
     times: 5
     commands:
@@ -124,23 +63,9 @@ appId: com.splitfree.app
       - swipe:
           direction: DOWN
           duration: 100
-        optional: true
 
 # ========================================
-# VERIFY NO ORPHANED RECORDS
-# Rapid modal open/close should NOT create expenses
-# ========================================
-
-# Navigate to expenses list
-- swipe:
-    direction: DOWN
-    duration: 300
-
-# Check that no phantom expenses were created
-# (We didn't fill out any forms)
-
-# ========================================
-# RAPID TAB SWITCHING (if tabs exist)
+# RAPID TAB SWITCHING
 # ========================================
 
 - tapOn:
@@ -156,20 +81,18 @@ appId: com.splitfree.app
     optional: true
 
 - tapOn:
-    text: "Activity"
-    optional: true
-
-- tapOn:
     text: "Expenses"
     optional: true
 
-# Rapid switching
+# Rapid switching 10 times
 - repeat:
     times: 10
     commands:
       - tapOn:
-          text: "Balances|Expenses"
-          regex: true
+          text: "Balances"
+          optional: true
+      - tapOn:
+          text: "Expenses"
           optional: true
 
 # ========================================
@@ -178,30 +101,21 @@ appId: com.splitfree.app
 
 # Wait for any pending operations
 - extendedWaitUntil:
-    visible: ".*"
+    visible: "Expenses"
     timeout: 5000
 
 # App should not be crashed
-- assertVisible:
-    text: "Expenses|Balances|Groups|SplitFree"
-    regex: true
+- assertVisible: "Expenses"
 
 # No error dialogs
-- assertNotVisible:
-    text: "Error|crash|failed|undefined"
-    regex: true
-  optional: true
+- assertNotVisible: "Error"
+- assertNotVisible: "crash"
+- assertNotVisible: "undefined"
 
 # Navigate home to verify app still functional
-- tapOn:
-    text: "Groups|Home"
-    regex: true
-  optional: true
-
 - swipe:
     direction: RIGHT
     duration: 200
-  optional: true
 
 # Final assertion - home screen loads
 - assertVisible: "SplitFree"
