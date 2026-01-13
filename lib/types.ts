@@ -266,6 +266,10 @@ export interface Receipt {
   total_amount?: number | null;
   currency: string;
 
+  // Enhanced receipt scanning fields
+  discount_amount?: number | null;
+  service_charge_amount?: number | null;
+
   // Status
   status: ReceiptStatus;
   claim_deadline?: string | null;
@@ -278,6 +282,9 @@ export interface Receipt {
   items?: ReceiptItem[];
   uploader?: Member;
 }
+
+// Service charge types
+export type ServiceChargeType = 'gratuity' | 'delivery' | 'convenience' | 'other';
 
 export interface ReceiptItem {
   id: string;
@@ -304,10 +311,31 @@ export interface ReceiptItem {
   is_subtotal: boolean;
   is_total: boolean;
 
+  // Multi-quantity expansion (P0)
+  original_quantity?: number | null; // Original quantity before expansion
+  expanded_from_id?: string | null; // Points to parent item when expanded
+  is_expansion?: boolean; // True if created by expanding multi-quantity item
+
+  // Shared item detection (P0)
+  is_likely_shared?: boolean; // True if OCR detected as shared item
+
+  // Modifier/add-on grouping (P1)
+  is_modifier?: boolean; // True if this is an add-on (e.g., "+ Extra Cheese")
+  parent_item_id?: string | null; // Points to main item this modifier belongs to
+
+  // Service charge detection (P1)
+  is_service_charge?: boolean; // True if this is a service charge
+  service_charge_type?: ServiceChargeType | null; // Type of service charge
+
+  // Discount attribution (P1)
+  applies_to_item_id?: string | null; // For item-specific discounts
+
   created_at: string;
 
   // Joined fields
   claims?: ItemClaim[];
+  modifiers?: ReceiptItem[]; // Child modifiers for this item
+  expanded_items?: ReceiptItem[]; // Expanded individual items from multi-quantity
 }
 
 export interface ItemClaim {
@@ -358,6 +386,33 @@ export interface OCRExtractedItem {
   confidence?: number;
   originalText?: string;
   boundingBox?: { x: number; y: number; width: number; height: number };
+
+  // Enhanced fields (P0/P1)
+  isLikelyShared?: boolean; // Detected as shared item (pitcher, appetizer, etc.)
+  isModifier?: boolean; // Is this a modifier/add-on?
+  parentItemIndex?: number | null; // Index of parent item for modifiers
+  isServiceCharge?: boolean; // Is this a service charge?
+  serviceChargeType?: ServiceChargeType; // Type of service charge
+}
+
+// Service charge from OCR
+export interface OCRServiceCharge {
+  description: string;
+  amount: number;
+  type?: ServiceChargeType;
+}
+
+// Discount from OCR
+export interface OCRDiscount {
+  description: string;
+  amount: number; // Negative value
+  appliesToItemIndex?: number | null; // null = applies to whole receipt
+}
+
+// Tax entry from OCR (supporting multiple tax rates)
+export interface OCRTaxEntry {
+  type?: string; // e.g., "Sales Tax", "Alcohol Tax"
+  amount: number;
 }
 
 export interface OCRExtractedMetadata {
@@ -365,10 +420,15 @@ export interface OCRExtractedMetadata {
   merchantAddress?: string;
   date?: string;
   subtotal?: number;
-  tax?: number;
+  tax?: number; // Legacy single tax (sum of all taxes)
+  taxes?: OCRTaxEntry[]; // Enhanced: multiple tax entries
   tip?: number;
   total?: number;
   currency?: string;
+
+  // Enhanced fields (P1)
+  serviceCharges?: OCRServiceCharge[];
+  discounts?: OCRDiscount[];
 }
 
 export interface OCRResult {

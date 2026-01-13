@@ -21,6 +21,7 @@ import {
   shadows,
 } from "../../lib/theme";
 import { Button, Input } from "../../components/ui";
+import { useAnalytics, AnalyticsEvents } from "../../lib/analytics-provider";
 
 /**
  * User-friendly error messages for Clerk error codes
@@ -57,6 +58,7 @@ export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
+  const { trackEvent } = useAnalytics();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -91,6 +93,7 @@ export default function SignInScreen() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
+        trackEvent(AnalyticsEvents.SIGN_IN_COMPLETED, { method: "email" });
         router.replace("/");
       } else {
         // Handle other statuses (e.g., needs_second_factor)
@@ -134,6 +137,7 @@ export default function SignInScreen() {
 
       if (createdSessionId && setOAuthActive) {
         await setOAuthActive({ session: createdSessionId });
+        trackEvent(AnalyticsEvents.SIGN_IN_COMPLETED, { method: "google" });
         router.replace("/");
       }
     } catch (err: unknown) {
@@ -163,6 +167,7 @@ export default function SignInScreen() {
 
       if (createdSessionId && setOAuthActive) {
         await setOAuthActive({ session: createdSessionId });
+        trackEvent(AnalyticsEvents.SIGN_IN_COMPLETED, { method: "apple" });
         router.replace("/");
       }
     } catch (err: unknown) {

@@ -26,6 +26,7 @@ import {
 } from "../../lib/preferences";
 import { exportAllUserData } from "../../lib/export";
 import { useAuth } from "../../lib/auth-context";
+import { useAnalytics } from "../../lib/analytics-provider";
 
 // Available currencies
 const CURRENCIES = [
@@ -47,6 +48,7 @@ const CURRENCIES = [
  */
 export default function SettingsScreen() {
   const { userId } = useAuth();
+  const { isOptedOut, setOptOut } = useAnalytics();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
@@ -56,6 +58,14 @@ export default function SettingsScreen() {
   const [expenseNotifications, setExpenseNotifications] = useState(true);
   const [settlementNotifications, setSettlementNotifications] = useState(true);
   const [groupUpdates, setGroupUpdates] = useState(false);
+
+  // Analytics opt-out (local state to handle async updates)
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(!isOptedOut);
+
+  // Sync analytics state with provider
+  useEffect(() => {
+    setAnalyticsEnabled(!isOptedOut);
+  }, [isOptedOut]);
 
   // Load preferences on mount
   useEffect(() => {
@@ -82,6 +92,11 @@ export default function SettingsScreen() {
       Alert.alert("Error", "Failed to save currency preference");
     }
   }, []);
+
+  const handleAnalyticsToggle = useCallback(async (enabled: boolean) => {
+    setAnalyticsEnabled(enabled);
+    await setOptOut(!enabled);
+  }, [setOptOut]);
 
   const selectedCurrency = CURRENCIES.find((c) => c.code === defaultCurrency);
 
@@ -211,6 +226,29 @@ export default function SettingsScreen() {
                 trackColor={{ false: colors.border, true: colors.primaryLight }}
                 thumbColor={groupUpdates ? colors.primary : colors.textMuted}
                 disabled
+              />
+            </View>
+          </Card>
+        </View>
+
+        {/* Privacy Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Privacy</Text>
+          <Card style={styles.settingCard}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Help Improve SplitFree</Text>
+                <Text style={styles.settingDescription}>
+                  Share anonymous usage data to help us improve the app
+                </Text>
+              </View>
+              <Switch
+                value={analyticsEnabled}
+                onValueChange={handleAnalyticsToggle}
+                trackColor={{ false: colors.border, true: colors.primaryLight }}
+                thumbColor={
+                  analyticsEnabled ? colors.primary : colors.textMuted
+                }
               />
             </View>
           </Card>

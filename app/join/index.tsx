@@ -19,10 +19,12 @@ import {
   borderRadius,
 } from "../../lib/theme";
 import { Button, Card, Input } from "../../components/ui";
+import { useAnalytics, AnalyticsEvents } from "../../lib/analytics-provider";
 
 export default function JoinGroupScreen() {
   // Get code from deep link if present
   const { code: deepLinkCode } = useLocalSearchParams<{ code?: string }>();
+  const { trackEvent } = useAnalytics();
 
   const [shareCode, setShareCode] = useState(deepLinkCode || "");
   const [memberName, setMemberName] = useState("");
@@ -119,6 +121,10 @@ export default function JoinGroupScreen() {
 
       if (memberError) throw memberError;
 
+      trackEvent(AnalyticsEvents.GROUP_JOINED, {
+        groupId: foundGroup.id,
+        viaDeepLink: !!deepLinkCode,
+      });
       // Navigate to the group
       router.replace(`/group/${foundGroup.id}`);
     } catch (err) {

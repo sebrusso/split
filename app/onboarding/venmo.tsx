@@ -23,11 +23,12 @@ import {
 } from "../../lib/theme";
 import { Button, Input, Card } from "../../components/ui";
 import { useAuth } from "../../lib/auth-context";
-import { updateVenmoUsername } from "../../lib/user-profile";
+import { updateVenmoProfile } from "../../lib/user-profile";
 
 export default function VenmoOnboardingScreen() {
   const { userId } = useAuth();
   const [venmoUsername, setVenmoUsername] = useState("");
+  const [venmoDisplayName, setVenmoDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,11 +46,15 @@ export default function VenmoOnboardingScreen() {
     setError("");
 
     try {
-      const success = await updateVenmoUsername(userId, cleanUsername || null);
+      const success = await updateVenmoProfile(
+        userId,
+        cleanUsername || null,
+        venmoDisplayName.trim() || null
+      );
       if (success) {
         router.replace("/(tabs)");
       } else {
-        setError("Failed to save Venmo username. Please try again.");
+        setError("Failed to save Venmo profile. Please try again.");
       }
     } catch (err) {
       setError("Something went wrong. Please try again.");
@@ -123,6 +128,23 @@ export default function VenmoOnboardingScreen() {
               prefix="@"
               error={error}
             />
+
+            {venmoUsername.trim() && (
+              <View style={styles.displayNameInput}>
+                <Text style={styles.inputLabel}>Your Name on Venmo (optional)</Text>
+                <Input
+                  value={venmoDisplayName}
+                  onChangeText={setVenmoDisplayName}
+                  placeholder="John Smith"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+                <Text style={styles.displayNameHint}>
+                  Helps friends recognize you in payment screens
+                </Text>
+              </View>
+            )}
+
             <Text style={styles.inputHint}>
               You can always change this later in your profile
             </Text>
@@ -217,6 +239,14 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
     textAlign: "center",
+  },
+  displayNameInput: {
+    marginTop: spacing.lg,
+  },
+  displayNameHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
   },
   actions: {
     gap: spacing.md,

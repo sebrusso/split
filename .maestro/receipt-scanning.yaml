@@ -1,0 +1,90 @@
+# E2E Test: Receipt Scanning Flow
+# Tests: Take photo/select image -> OCR processing -> Item claiming
+#
+# Run with: maestro test .maestro/receipt-scanning.yaml
+#
+# Note: This test uses simulated camera input for CI environments.
+# For real device testing, ensure camera permissions are granted.
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Navigate to an existing group (or create one)
+# For this test, assume we tap on an existing group
+- tapOn:
+    text: ".*"  # Tap first group in list
+    index: 0
+
+# Step 3: Start receipt scanning flow
+- tapOn: "Scan Receipt"
+
+# Step 4: Verify camera/photo options appear
+- assertVisible:
+    text: "Take Photo|Choose from Library"
+    regex: true
+
+# Step 5: Choose from library (more reliable for E2E testing)
+- tapOn: "Choose from Library"
+
+# Step 6: Wait for image picker
+# Note: In CI, you may need to mock this or use a pre-loaded test image
+- runFlow:
+    when:
+      visible: "Camera Roll|Photos|Recents"
+    commands:
+      - tapOn:
+          index: 0  # Select first photo
+
+# Step 7: Wait for OCR processing
+- assertVisible:
+    text: "Processing|Scanning"
+    regex: true
+  optional: true
+
+# Wait for processing to complete (up to 10 seconds)
+- extendedWaitUntil:
+    visible: "Receipt Items"
+    timeout: 15000
+
+# Step 8: Verify receipt items are displayed
+- assertVisible: "Receipt Items"
+
+# Step 9: Claim items for different people
+# Tap on first item to claim it
+- tapOn:
+    id: "receipt-item-0"
+
+- assertVisible: "Claim for"
+
+# Select a member to claim this item
+- tapOn: "Alice"
+
+# Step 10: Claim another item for different person
+- tapOn:
+    id: "receipt-item-1"
+    optional: true
+
+- runFlow:
+    when:
+      visible: "Claim for"
+    commands:
+      - tapOn: "Bob"
+
+# Step 11: Verify claimed items show member names
+- assertVisible:
+    text: "Alice|Bob"
+    regex: true
+
+# Step 12: Complete the split
+- tapOn: "Done"
+
+# Step 13: Verify expense was created from receipt
+- assertVisible: "Receipt"
+
+# Success - receipt scanning flow completed

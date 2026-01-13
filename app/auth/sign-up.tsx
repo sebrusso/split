@@ -20,6 +20,7 @@ import {
   shadows,
 } from "../../lib/theme";
 import { Button, Input } from "../../components/ui";
+import { useAnalytics, AnalyticsEvents } from "../../lib/analytics-provider";
 
 /**
  * Sign Up Screen
@@ -29,6 +30,7 @@ export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
+  const { trackEvent } = useAnalytics();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -201,14 +203,17 @@ export default function SignUpScreen() {
       if (result.status === "complete" && result.createdSessionId) {
         // Sign-up complete, activate session
         await setActive({ session: result.createdSessionId });
+        trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
         router.replace("/");
       } else if (result.status === "complete") {
         // Complete but no session - try to get session from signUp
         if (signUp.createdSessionId) {
           await setActive({ session: signUp.createdSessionId });
+          trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
           router.replace("/");
         } else {
           // Redirect to sign-in since account is created
+          trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
           setSuccessMessage("Account created! Redirecting to sign in...");
           setTimeout(() => router.replace("/auth/sign-in"), 1500);
         }
@@ -228,14 +233,17 @@ export default function SignUpScreen() {
         } else if (signUp.createdSessionId) {
           // Try to complete the sign-up
           await setActive({ session: signUp.createdSessionId });
+          trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
           router.replace("/");
         } else {
           // Account created but needs sign-in
+          trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
           setSuccessMessage("Account created! Redirecting to sign in...");
           setTimeout(() => router.replace("/auth/sign-in"), 1500);
         }
       } else {
         console.log("Unexpected status:", result.status);
+        trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
         setSuccessMessage("Account created! Redirecting to sign in...");
         setTimeout(() => router.replace("/auth/sign-in"), 1500);
       }
@@ -322,6 +330,7 @@ export default function SignUpScreen() {
 
       if (createdSessionId && setOAuthActive) {
         await setOAuthActive({ session: createdSessionId });
+        trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "google" });
         router.replace("/");
       }
     } catch (err: unknown) {
@@ -348,6 +357,7 @@ export default function SignUpScreen() {
 
       if (createdSessionId && setOAuthActive) {
         await setOAuthActive({ session: createdSessionId });
+        trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "apple" });
         router.replace("/");
       }
     } catch (err: unknown) {

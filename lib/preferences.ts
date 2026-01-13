@@ -12,6 +12,7 @@ const KEYS = {
   EXPENSE_NOTIFICATIONS: "pref_expense_notifications",
   SETTLEMENT_NOTIFICATIONS: "pref_settlement_notifications",
   GROUP_UPDATE_NOTIFICATIONS: "pref_group_updates",
+  PAYMENT_GROUPING_THRESHOLD: "pref_payment_grouping_threshold",
 } as const;
 
 // Default values
@@ -20,6 +21,7 @@ const DEFAULTS = {
   EXPENSE_NOTIFICATIONS: true,
   SETTLEMENT_NOTIFICATIONS: true,
   GROUP_UPDATE_NOTIFICATIONS: true,
+  PAYMENT_GROUPING_THRESHOLD: 50, // Group payments under $50 by default
 };
 
 /**
@@ -150,6 +152,35 @@ export async function clearAllLocalData(): Promise<void> {
     await AsyncStorage.clear();
   } catch (error) {
     logger.error("Error clearing all local data:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get payment grouping threshold (in dollars)
+ * Payments under this amount to the same person will be grouped together
+ */
+export async function getPaymentGroupingThreshold(): Promise<number> {
+  try {
+    const value = await AsyncStorage.getItem(KEYS.PAYMENT_GROUPING_THRESHOLD);
+    if (value === null) return DEFAULTS.PAYMENT_GROUPING_THRESHOLD;
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? DEFAULTS.PAYMENT_GROUPING_THRESHOLD : parsed;
+  } catch (error) {
+    logger.error("Error getting payment grouping threshold:", error);
+    return DEFAULTS.PAYMENT_GROUPING_THRESHOLD;
+  }
+}
+
+/**
+ * Set payment grouping threshold (in dollars)
+ * @param threshold - Threshold amount (0 to disable grouping)
+ */
+export async function setPaymentGroupingThreshold(threshold: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KEYS.PAYMENT_GROUPING_THRESHOLD, threshold.toString());
+  } catch (error) {
+    logger.error("Error setting payment grouping threshold:", error);
     throw error;
   }
 }

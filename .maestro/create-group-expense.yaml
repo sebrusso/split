@@ -1,0 +1,120 @@
+# E2E Test: Create Group and Add Expense Flow
+# Tests the happy path: Create group -> Add members -> Add expense -> View balances
+#
+# Run with: maestro test .maestro/create-group-expense.yaml
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app and wait for home screen
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Create a new group
+- tapOn: "Create Group"
+
+- assertVisible: "New Group"
+
+# Enter group name
+- tapOn:
+    id: "group-name-input"
+- inputText: "Dinner Party Test"
+
+# Select an emoji (tap first emoji option)
+- tapOn:
+    text: "Select Emoji"
+- tapOn: ".*"  # Tap first emoji in grid
+
+# Tap create button
+- tapOn: "Create"
+
+# Step 3: Verify group was created and we're on group detail
+- assertVisible: "Dinner Party Test"
+
+# Step 4: Add first member
+- tapOn: "Add Member"
+
+- assertVisible: "Add Member"
+
+- tapOn:
+    id: "member-name-input"
+- inputText: "Alice"
+
+- tapOn: "Add"
+
+# Verify member added
+- assertVisible: "Alice"
+
+# Step 5: Add second member
+- tapOn: "Add Member"
+
+- tapOn:
+    id: "member-name-input"
+- inputText: "Bob"
+
+- tapOn: "Add"
+
+# Verify second member added
+- assertVisible: "Bob"
+
+# Step 6: Add third member
+- tapOn: "Add Member"
+
+- tapOn:
+    id: "member-name-input"
+- inputText: "Charlie"
+
+- tapOn: "Add"
+
+# Verify third member added
+- assertVisible: "Charlie"
+
+# Step 7: Add an expense
+- tapOn: "Add Expense"
+
+- assertVisible: "New Expense"
+
+# Enter expense description
+- tapOn:
+    id: "expense-description-input"
+- inputText: "Pizza and drinks"
+
+# Enter amount
+- tapOn:
+    id: "expense-amount-input"
+- inputText: "75.00"
+
+# Select payer (Alice)
+- tapOn:
+    text: "Who paid?"
+- tapOn: "Alice"
+
+# Keep equal split (default)
+- assertVisible: "Split Equally"
+
+# Save expense
+- tapOn: "Save"
+
+# Step 8: Verify expense was added
+- assertVisible: "Pizza and drinks"
+- assertVisible: "$75.00"
+
+# Step 9: Check balances
+- tapOn: "Balances"
+
+# Verify balance summary shows
+- assertVisible: "Who Owes Who"
+
+# Alice paid $75 for 3 people = $25 each
+# Alice is owed $50 (Bob and Charlie each owe $25)
+- assertVisible: "Alice"
+- assertVisible: "owed"
+
+# Step 10: Verify settlement suggestions
+- assertVisible: "Bob"
+- assertVisible: "Charlie"
+
+# Success - full flow completed
+- assertVisible: "Settle Up"

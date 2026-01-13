@@ -459,7 +459,7 @@ export function useReceiptUpload(groupId: string | undefined) {
   );
 
   /**
-   * Process a receipt with OCR
+   * Process a receipt with OCR (enhanced with P0/P1 features)
    */
   const processReceipt = useCallback(
     async (receiptId: string, imageUri: string) => {
@@ -495,6 +495,16 @@ export function useReceiptUpload(groupId: string | undefined) {
           };
         }
 
+        // Calculate service charge and discount totals
+        const serviceChargeAmount = ocrResult.metadata.serviceCharges?.reduce(
+          (sum, sc) => sum + sc.amount,
+          0
+        ) || 0;
+        const discountAmount = ocrResult.metadata.discounts?.reduce(
+          (sum, d) => sum + d.amount, // discounts are negative
+          0
+        ) || 0;
+
         // Update receipt with metadata
         await supabase
           .from('receipts')
@@ -511,11 +521,13 @@ export function useReceiptUpload(groupId: string | undefined) {
             tip_amount: ocrResult.metadata.tip,
             total_amount: ocrResult.metadata.total,
             currency: ocrResult.metadata.currency || 'USD',
+            service_charge_amount: serviceChargeAmount,
+            discount_amount: discountAmount,
             status: 'claiming',
           })
           .eq('id', receiptId);
 
-        // Insert receipt items
+        // Insert receipt items with enhanced fields
         const items = ocrResult.items.map((item, index) => ({
           receipt_id: receiptId,
           description: item.description,
@@ -530,13 +542,77 @@ export function useReceiptUpload(groupId: string | undefined) {
           is_discount: item.totalPrice < 0,
           is_subtotal: false,
           is_total: false,
+          // P0: Multi-quantity support
+          original_quantity: item.quantity > 1 ? item.quantity : null,
+          // P0: Shared item detection
+          is_likely_shared: item.isLikelyShared || false,
+          // P1: Modifier detection
+          is_modifier: item.isModifier || false,
+          // P1: Service charge detection
+          is_service_charge: item.isServiceCharge || false,
+          service_charge_type: item.serviceChargeType || null,
         }));
 
-        const { error: itemsError } = await supabase
+        // First insert all items to get their IDs
+        const { data: insertedItems, error: itemsError } = await supabase
           .from('receipt_items')
-          .insert(items);
+          .insert(items)
+          .select('id, line_number');
 
         if (itemsError) throw itemsError;
+
+        // Update parent_item_id for modifiers (need IDs from inserted items)
+        if (insertedItems && insertedItems.length > 0) {
+          const lineNumberToId = new Map(
+            insertedItems.map((item) => [item.line_number, item.id])
+          );
+
+          const modifierUpdates: Promise<any>[] = [];
+          ocrResult.items.forEach((item, index) => {
+            if (item.isModifier && item.parentItemIndex !== null && item.parentItemIndex !== undefined) {
+              const modifierItemId = lineNumberToId.get(index + 1);
+              const parentLineNumber = item.parentItemIndex + 1;
+              const parentItemId = lineNumberToId.get(parentLineNumber);
+
+              if (modifierItemId && parentItemId) {
+                modifierUpdates.push(
+                  supabase
+                    .from('receipt_items')
+                    .update({ parent_item_id: parentItemId })
+                    .eq('id', modifierItemId)
+                );
+              }
+            }
+          });
+
+          // Also handle discounts with applies_to_item_id
+          ocrResult.metadata.discounts?.forEach((discount, discountIndex) => {
+            if (discount.appliesToItemIndex !== null && discount.appliesToItemIndex !== undefined) {
+              // Find the discount item (negative totalPrice items)
+              const discountItemIndex = ocrResult.items.findIndex(
+                (item, i) => item.totalPrice < 0 && item.description === discount.description
+              );
+              if (discountItemIndex >= 0) {
+                const discountItemId = lineNumberToId.get(discountItemIndex + 1);
+                const targetLineNumber = discount.appliesToItemIndex + 1;
+                const targetItemId = lineNumberToId.get(targetLineNumber);
+
+                if (discountItemId && targetItemId) {
+                  modifierUpdates.push(
+                    supabase
+                      .from('receipt_items')
+                      .update({ applies_to_item_id: targetItemId })
+                      .eq('id', discountItemId)
+                  );
+                }
+              }
+            }
+          });
+
+          if (modifierUpdates.length > 0) {
+            await Promise.all(modifierUpdates);
+          }
+        }
 
         return {
           success: true,
@@ -597,6 +673,212 @@ export function useReceiptSummary(receiptId: string | undefined) {
     loading,
     error,
     refetch,
+  };
+}
+
+/**
+ * Hook to expand multi-quantity items into individual units
+ * P0: Allows users to claim individual items from "3 x Burger = $27" as separate $9 items
+ */
+export function useItemExpansion(receiptId: string | undefined) {
+  const [expanding, setExpanding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Expand a multi-quantity item into individual units
+   * e.g., "3 x Burger @ $9 = $27" becomes 3 separate "Burger" items at $9 each
+   */
+  const expandItem = useCallback(
+    async (itemId: string) => {
+      if (!receiptId) return { success: false, error: 'No receipt ID' };
+
+      try {
+        setExpanding(true);
+        setError(null);
+
+        // Fetch the item to expand
+        const { data: item, error: fetchError } = await supabase
+          .from('receipt_items')
+          .select('*')
+          .eq('id', itemId)
+          .single();
+
+        if (fetchError) throw fetchError;
+        if (!item) throw new Error('Item not found');
+
+        const quantity = item.original_quantity || item.quantity;
+        if (quantity <= 1) {
+          return { success: false, error: 'Item cannot be expanded (quantity is 1)' };
+        }
+
+        // Calculate unit price
+        const unitPrice = item.unit_price || (item.total_price / quantity);
+
+        // Create expanded items
+        const expandedItems = [];
+        for (let i = 0; i < quantity; i++) {
+          expandedItems.push({
+            receipt_id: receiptId,
+            description: item.description,
+            quantity: 1,
+            unit_price: unitPrice,
+            total_price: unitPrice,
+            original_text: item.original_text,
+            confidence: item.confidence,
+            line_number: (item.line_number || 0) + (i * 0.01), // Keep ordering
+            is_tax: false,
+            is_tip: false,
+            is_discount: false,
+            is_subtotal: false,
+            is_total: false,
+            is_likely_shared: false, // Individual items are no longer shared
+            is_modifier: false,
+            is_expansion: true,
+            expanded_from_id: itemId,
+            original_quantity: 1,
+          });
+        }
+
+        // Insert expanded items
+        const { data: newItems, error: insertError } = await supabase
+          .from('receipt_items')
+          .insert(expandedItems)
+          .select();
+
+        if (insertError) throw insertError;
+
+        // Mark original item as expanded (set quantity to 0 to hide it from claiming)
+        // We keep the original for reference and potential "collapse" later
+        const { error: updateError } = await supabase
+          .from('receipt_items')
+          .update({
+            quantity: 0, // Hide from claiming
+            total_price: 0, // Zero out to not affect totals
+          })
+          .eq('id', itemId);
+
+        if (updateError) throw updateError;
+
+        return {
+          success: true,
+          expandedItems: newItems,
+          expandedCount: quantity,
+        };
+      } catch (err: any) {
+        console.error('Error expanding item:', err);
+        const errorMsg = err.message || 'Failed to expand item';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      } finally {
+        setExpanding(false);
+      }
+    },
+    [receiptId]
+  );
+
+  /**
+   * Collapse expanded items back into the original multi-quantity item
+   */
+  const collapseItems = useCallback(
+    async (originalItemId: string) => {
+      if (!receiptId) return { success: false, error: 'No receipt ID' };
+
+      try {
+        setExpanding(true);
+        setError(null);
+
+        // Fetch the original item
+        const { data: originalItem, error: fetchError } = await supabase
+          .from('receipt_items')
+          .select('*')
+          .eq('id', originalItemId)
+          .single();
+
+        if (fetchError) throw fetchError;
+        if (!originalItem) throw new Error('Original item not found');
+
+        // Fetch expanded items
+        const { data: expandedItems, error: expandedError } = await supabase
+          .from('receipt_items')
+          .select('*')
+          .eq('expanded_from_id', originalItemId);
+
+        if (expandedError) throw expandedError;
+        if (!expandedItems || expandedItems.length === 0) {
+          return { success: false, error: 'No expanded items found' };
+        }
+
+        // Check if any expanded items have claims
+        const expandedIds = expandedItems.map((i) => i.id);
+        const { data: claims, error: claimsError } = await supabase
+          .from('item_claims')
+          .select('id')
+          .in('receipt_item_id', expandedIds);
+
+        if (claimsError) throw claimsError;
+        if (claims && claims.length > 0) {
+          return {
+            success: false,
+            error: 'Cannot collapse: some expanded items have been claimed',
+          };
+        }
+
+        // Delete expanded items
+        const { error: deleteError } = await supabase
+          .from('receipt_items')
+          .delete()
+          .in('id', expandedIds);
+
+        if (deleteError) throw deleteError;
+
+        // Restore original item
+        const quantity = originalItem.original_quantity || expandedItems.length;
+        const unitPrice = expandedItems[0].unit_price || expandedItems[0].total_price;
+        const { error: updateError } = await supabase
+          .from('receipt_items')
+          .update({
+            quantity: quantity,
+            total_price: unitPrice * quantity,
+          })
+          .eq('id', originalItemId);
+
+        if (updateError) throw updateError;
+
+        return { success: true };
+      } catch (err: any) {
+        console.error('Error collapsing items:', err);
+        const errorMsg = err.message || 'Failed to collapse items';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      } finally {
+        setExpanding(false);
+      }
+    },
+    [receiptId]
+  );
+
+  /**
+   * Check if an item can be expanded
+   */
+  const canExpand = (item: ReceiptItem): boolean => {
+    const quantity = item.original_quantity || item.quantity;
+    return quantity > 1 && !item.is_expansion && !item.is_tax && !item.is_tip;
+  };
+
+  /**
+   * Check if an item is the parent of expanded items
+   */
+  const isExpandedParent = (item: ReceiptItem): boolean => {
+    return item.quantity === 0 && (item.original_quantity || 0) > 1;
+  };
+
+  return {
+    expandItem,
+    collapseItems,
+    canExpand,
+    isExpandedParent,
+    expanding,
+    error,
   };
 }
 
@@ -850,7 +1132,7 @@ export function useReceiptUploadNoGroup() {
   );
 
   /**
-   * Process a receipt with OCR (same as original, works without group)
+   * Process a receipt with OCR (enhanced with P0/P1 features, works without group)
    */
   const processReceipt = useCallback(
     async (receiptId: string, imageUri: string) => {
@@ -886,6 +1168,16 @@ export function useReceiptUploadNoGroup() {
           };
         }
 
+        // Calculate service charge and discount totals
+        const serviceChargeAmount = ocrResult.metadata.serviceCharges?.reduce(
+          (sum, sc) => sum + sc.amount,
+          0
+        ) || 0;
+        const discountAmount = ocrResult.metadata.discounts?.reduce(
+          (sum, d) => sum + d.amount, // discounts are negative
+          0
+        ) || 0;
+
         // Update receipt with metadata (keep status as draft until group assigned)
         await supabase
           .from('receipts')
@@ -902,11 +1194,13 @@ export function useReceiptUploadNoGroup() {
             tip_amount: ocrResult.metadata.tip,
             total_amount: ocrResult.metadata.total,
             currency: ocrResult.metadata.currency || 'USD',
+            service_charge_amount: serviceChargeAmount,
+            discount_amount: discountAmount,
             // Don't change status to 'claiming' yet - will be set when group is assigned
           })
           .eq('id', receiptId);
 
-        // Insert receipt items
+        // Insert receipt items with enhanced fields
         const items = ocrResult.items.map((item, index) => ({
           receipt_id: receiptId,
           description: item.description,
@@ -920,10 +1214,54 @@ export function useReceiptUploadNoGroup() {
           is_discount: item.totalPrice < 0,
           is_subtotal: false,
           is_total: false,
+          // P0: Multi-quantity support
+          original_quantity: item.quantity > 1 ? item.quantity : null,
+          // P0: Shared item detection
+          is_likely_shared: item.isLikelyShared || false,
+          // P1: Modifier detection
+          is_modifier: item.isModifier || false,
+          // P1: Service charge detection
+          is_service_charge: item.isServiceCharge || false,
+          service_charge_type: item.serviceChargeType || null,
         }));
 
         if (items.length > 0) {
-          await supabase.from('receipt_items').insert(items);
+          // First insert all items to get their IDs
+          const { data: insertedItems, error: itemsError } = await supabase
+            .from('receipt_items')
+            .insert(items)
+            .select('id, line_number');
+
+          if (itemsError) throw itemsError;
+
+          // Update parent_item_id for modifiers
+          if (insertedItems && insertedItems.length > 0) {
+            const lineNumberToId = new Map(
+              insertedItems.map((item) => [item.line_number, item.id])
+            );
+
+            const modifierUpdates: Promise<any>[] = [];
+            ocrResult.items.forEach((item, index) => {
+              if (item.isModifier && item.parentItemIndex !== null && item.parentItemIndex !== undefined) {
+                const modifierItemId = lineNumberToId.get(index + 1);
+                const parentLineNumber = item.parentItemIndex + 1;
+                const parentItemId = lineNumberToId.get(parentLineNumber);
+
+                if (modifierItemId && parentItemId) {
+                  modifierUpdates.push(
+                    supabase
+                      .from('receipt_items')
+                      .update({ parent_item_id: parentItemId })
+                      .eq('id', modifierItemId)
+                  );
+                }
+              }
+            });
+
+            if (modifierUpdates.length > 0) {
+              await Promise.all(modifierUpdates);
+            }
+          }
         }
 
         return {

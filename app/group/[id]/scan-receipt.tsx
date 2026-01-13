@@ -26,10 +26,12 @@ import { useReceiptUpload } from '../../../lib/useReceipts';
 import { useAuth } from '../../../lib/auth-context';
 import { supabase } from '../../../lib/supabase';
 import { Member } from '../../../lib/types';
+import { useAnalytics, AnalyticsEvents } from '../../../lib/analytics-provider';
 
 export default function ScanReceiptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
+  const { trackEvent } = useAnalytics();
   const cameraRef = useRef<CameraView>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -160,6 +162,11 @@ export default function ScanReceiptScreen() {
       );
       return;
     }
+
+    // Track successful receipt scan
+    trackEvent(AnalyticsEvents.RECEIPT_SCANNED, {
+      groupId: id,
+    });
 
     // Success - navigate to claiming screen
     router.replace(`/group/${id}/receipt/${uploadResult.receipt.id}`);

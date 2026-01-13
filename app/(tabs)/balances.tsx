@@ -16,6 +16,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -36,10 +38,18 @@ import {
 } from "../../lib/balances";
 import { formatCurrency } from "../../lib/utils";
 import { useAuth } from "../../lib/auth-context";
+import {
+  GroupedPayment,
+  getGroupedPaymentsWithVenmo,
+  hasGroupablePayments,
+  calculateGroupingSavings,
+} from "../../lib/payment-grouping";
+import { getVenmoDeepLink, getVenmoQRCodeUrl } from "../../lib/payment-links";
 
 export default function BalancesTabScreen() {
   const { userId } = useAuth();
   const [balanceData, setBalanceData] = useState<UserGlobalBalance | null>(null);
+  const [groupedPayments, setGroupedPayments] = useState<GroupedPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -53,6 +63,14 @@ export default function BalancesTabScreen() {
     try {
       const data = await getGlobalBalancesForUser(userId);
       setBalanceData(data);
+
+      // Fetch grouped payments with Venmo info
+      if (data && data.totalOwing > 0) {
+        const grouped = await getGroupedPaymentsWithVenmo(data, userId);
+        setGroupedPayments(grouped);
+      } else {
+        setGroupedPayments([]);
+      }
     } catch (error) {
       console.error("Error fetching balances:", error);
     } finally {
@@ -85,10 +103,57 @@ export default function BalancesTabScreen() {
     }
   };
 
+  // Find grouped payment for a person
+  const getGroupedPaymentForPerson = (personName: string): GroupedPayment | undefined => {
+    return groupedPayments.find(
+      (gp) => gp.recipientName.toLowerCase() === personName.toLowerCase()
+    );
+  };
+
+  // Handle paying a grouped payment via Venmo
+  const handlePayGrouped = async (payment: GroupedPayment) => {
+    if (!payment.recipientVenmo) {
+      Alert.alert(
+        "Venmo Not Set Up",
+        `${payment.recipientName} hasn't added their Venmo username yet.`,
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    const venmoUrl = getVenmoDeepLink(
+      payment.totalAmount,
+      payment.suggestedNote,
+      payment.recipientVenmo,
+      "pay"
+    );
+
+    try {
+      const canOpen = await Linking.canOpenURL(venmoUrl);
+      if (canOpen) {
+        await Linking.openURL(venmoUrl);
+      } else {
+        // Fallback to web
+        const webUrl = getVenmoQRCodeUrl(
+          payment.recipientVenmo,
+          payment.totalAmount,
+          payment.suggestedNote
+        );
+        await Linking.openURL(webUrl);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Unable to open Venmo");
+    }
+  };
+
   const renderPerson = ({ item }: { item: PersonBalance }) => {
     const isOwedToUser = item.netBalance > 0;
     const balanceColor = isOwedToUser ? colors.success : colors.danger;
     const balancePrefix = isOwedToUser ? "owes you " : "you owe ";
+
+    // Check if this person has a grouped payment option
+    const groupedPayment = !isOwedToUser ? getGroupedPaymentForPerson(item.name) : undefined;
+    const showPayAllButton = groupedPayment && groupedPayment.isCombined;
 
     return (
       <TouchableOpacity
@@ -103,6 +168,21 @@ export default function BalancesTabScreen() {
             <Text style={styles.personGroups}>
               {item.groups.length} group{item.groups.length !== 1 ? "s" : ""}
             </Text>
+            {showPayAllButton && (
+              <TouchableOpacity
+                style={styles.payAllButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handlePayGrouped(groupedPayment);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="wallet-outline" size={14} color={colors.white} />
+                <Text style={styles.payAllText}>
+                  Pay All {formatCurrency(groupedPayment.totalAmount)}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         <View style={styles.personRight}>
@@ -329,6 +409,22 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  payAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.xs,
+    alignSelf: "flex-start",
+    gap: 4,
+  },
+  payAllText: {
+    ...typography.small,
+    color: colors.white,
+    fontFamily: "Inter_600SemiBold",
   },
   personRight: {
     alignItems: "flex-end",

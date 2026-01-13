@@ -155,16 +155,61 @@ export default function GroupsScreen() {
 
   const EmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>💸</Text>
-      <Text style={styles.emptyTitle}>No groups yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Create a group to start splitting expenses with friends
-      </Text>
-      <Button
-        title="Create Your First Group"
-        onPress={() => router.push("/create-group")}
-        style={styles.emptyButton}
-      />
+      <View style={styles.emptyHero}>
+        <Text style={styles.emptyEmoji}>💸</Text>
+        <Text style={styles.emptyTitle}>Welcome to SplitFree!</Text>
+        <Text style={styles.emptySubtitle}>
+          The easiest way to split expenses with friends, roommates, and travel buddies
+        </Text>
+      </View>
+
+      <View style={styles.emptyActions}>
+        <Button
+          title="Create Your First Group"
+          onPress={() => router.push("/create-group")}
+          style={styles.emptyButton}
+        />
+
+        <TouchableOpacity
+          style={styles.joinGroupButton}
+          onPress={() => router.push("/join")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="enter-outline" size={20} color={colors.primary} />
+          <Text style={styles.joinGroupText}>Have a share code? Join a group</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.emptyTips}>
+        <Text style={styles.tipsTitle}>How it works</Text>
+        <View style={styles.tipItem}>
+          <View style={styles.tipIcon}>
+            <Ionicons name="people" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.tipContent}>
+            <Text style={styles.tipLabel}>Create a group</Text>
+            <Text style={styles.tipDescription}>Add your friends, roommates, or travel buddies</Text>
+          </View>
+        </View>
+        <View style={styles.tipItem}>
+          <View style={styles.tipIcon}>
+            <Ionicons name="receipt" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.tipContent}>
+            <Text style={styles.tipLabel}>Log expenses</Text>
+            <Text style={styles.tipDescription}>Add bills, scan receipts, or enter manually</Text>
+          </View>
+        </View>
+        <View style={styles.tipItem}>
+          <View style={styles.tipIcon}>
+            <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.tipContent}>
+            <Text style={styles.tipLabel}>Settle up</Text>
+            <Text style={styles.tipDescription}>See who owes what and settle with one tap</Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 
@@ -368,9 +413,12 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+  },
+  emptyHero: {
+    alignItems: "center",
+    marginBottom: spacing.xxl,
   },
   emptyEmoji: {
     fontSize: 64,
@@ -385,10 +433,61 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: "center",
     marginTop: spacing.sm,
-    marginBottom: spacing.xl,
+    lineHeight: 22,
+  },
+  emptyActions: {
+    marginBottom: spacing.xxl,
   },
   emptyButton: {
     width: "100%",
+  },
+  joinGroupButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  joinGroupText: {
+    ...typography.bodyMedium,
+    color: colors.primary,
+  },
+  emptyTips: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  tipsTitle: {
+    ...typography.h3,
+    fontSize: 16,
+    marginBottom: spacing.md,
+  },
+  tipItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  tipIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipLabel: {
+    ...typography.bodyMedium,
+    marginBottom: 2,
+  },
+  tipDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   fabContainer: {
     position: "absolute",

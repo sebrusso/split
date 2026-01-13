@@ -1,0 +1,25 @@
+# Maestro E2E Test Configuration for SplitFree
+# https://maestro.mobile.dev/
+
+# App configuration
+appId: com.splitfree.app
+
+# Default settings
+flows:
+  - create-group-expense.yaml
+  - receipt-scanning.yaml
+  - settlement-flow.yaml
+
+# Environment variables for tests
+env:
+  TEST_USER_EMAIL: test@splitfree.app
+
+# Screenshots on failure
+onFlowComplete:
+  takeScreenshot: true
+
+onFlowStart:
+  clearState: false
+
+# Timeout settings
+defaultTimeout: 10000

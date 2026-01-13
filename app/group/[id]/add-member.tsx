@@ -11,9 +11,11 @@ import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { colors, spacing, typography } from "../../../lib/theme";
 import { Button, Input, Avatar } from "../../../components/ui";
+import { useAnalytics, AnalyticsEvents } from "../../../lib/analytics-provider";
 
 export default function AddMemberScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { trackEvent } = useAnalytics();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -35,6 +37,7 @@ export default function AddMemberScreen() {
 
       if (memberError) throw memberError;
 
+      trackEvent(AnalyticsEvents.MEMBER_INVITED, { groupId: id });
       router.back();
     } catch (err) {
       console.error("Error adding member:", err);

@@ -7,22 +7,91 @@ import { handleAsync, AsyncResult } from "./utils";
 
 const RECEIPTS_BUCKET = "receipts";
 
+/** Valid image extensions for receipts */
+const VALID_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif"];
+
+/**
+ * Extract file extension from URI with proper URL handling
+ * Fixes bug where URLs like "https://example.com/image" returned "com/image"
+ * @param uri File URI or URL
+ * @returns Valid image extension or "jpg" as default
+ */
+export function getFileExtension(uri: string): string {
+  // Handle data URIs (e.g., data:image/png;base64,...)
+  if (uri.startsWith("data:image/")) {
+    const mimeType = uri.split(";")[0].split("/")[1];
+    if (mimeType === "jpeg") return "jpg";
+    if (VALID_IMAGE_EXTENSIONS.includes(mimeType)) return mimeType;
+    return "jpg";
+  }
+
+  try {
+    // Try to parse as URL first
+    const url = new URL(uri);
+    const pathname = url.pathname;
+    const lastSegment = pathname.split("/").pop() || "";
+
+    // Check if the last segment has a dot (file extension)
+    if (lastSegment.includes(".")) {
+      const ext = lastSegment.split(".").pop()?.toLowerCase();
+      if (ext && VALID_IMAGE_EXTENSIONS.includes(ext)) {
+        return ext;
+      }
+    }
+  } catch {
+    // Not a valid URL, try simple extraction from file path
+    const parts = uri.split("/").pop()?.split(".") || [];
+    if (parts.length > 1) {
+      const ext = parts.pop()?.toLowerCase();
+      if (ext && VALID_IMAGE_EXTENSIONS.includes(ext)) {
+        return ext;
+      }
+    }
+  }
+
+  // Default to jpg if no valid extension found
+  return "jpg";
+}
+
+/**
+ * Get the correct content type for an image extension
+ * Fixes bug with HEIC content-type handling
+ * @param extension File extension
+ * @returns MIME type string
+ */
+export function getContentType(extension: string): string {
+  const contentTypes: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    heic: "image/heic",
+    heif: "image/heif",
+  };
+
+  return contentTypes[extension.toLowerCase()] || "application/octet-stream";
+}
+
 /**
  * Upload a receipt image to Supabase storage
  * @param uri Local URI of the image
  * @param groupId Group ID for organizing receipts
  * @param expenseId Expense ID for unique filename
+ * @param userId User ID for user-scoped storage paths (prevents overwrites)
  * @returns Public URL of the uploaded image
  */
 export async function uploadReceipt(
   uri: string,
   groupId: string,
-  expenseId: string
+  expenseId: string,
+  userId: string
 ): Promise<AsyncResult<string>> {
   return handleAsync(async () => {
-    // Get file extension from URI
-    const extension = uri.split(".").pop()?.toLowerCase() || "jpg";
-    const filename = `${groupId}/${expenseId}.${extension}`;
+    // Get file extension using new helper (fixes bug with URLs without extensions)
+    const extension = getFileExtension(uri);
+    // User-scoped path prevents cross-user receipt overwrites
+    const filename = `${userId}/${groupId}/${expenseId}.${extension}`;
 
     // Fetch the image as blob
     const response = await fetch(uri);
@@ -50,14 +119,21 @@ export async function uploadReceipt(
     }
 
     // Upload to Supabase storage
+    // Using upsert: false to prevent accidental overwrites
     const { data, error } = await supabase.storage
       .from(RECEIPTS_BUCKET)
       .upload(filename, bytes, {
-        contentType: `image/${extension === "jpg" ? "jpeg" : extension}`,
-        upsert: true,
+        contentType: getContentType(extension),
+        upsert: false,
       });
 
     if (error) {
+      // Check if error is due to file already existing
+      if (error.message?.includes("already exists") || error.message?.includes("Duplicate")) {
+        throw new Error(
+          "A receipt already exists for this expense. Delete it first to upload a new one."
+        );
+      }
       // Check if error is due to missing bucket
       if (error.message?.includes("Bucket not found") || error.message?.includes("bucket")) {
         throw new Error(
@@ -144,24 +220,57 @@ export function getReceiptThumbnailUrl(
  * @returns Whether the file is a valid image
  */
 export function isValidImageType(uri: string): boolean {
-  const extension = uri.split(".").pop()?.toLowerCase();
-  return ["jpg", "jpeg", "png", "gif", "webp", "heic"].includes(extension || "");
+  // Handle data URIs specially
+  if (uri.startsWith("data:image/")) {
+    const mimeType = uri.split(";")[0].split("/")[1];
+    return VALID_IMAGE_EXTENSIONS.includes(mimeType) || mimeType === "jpeg";
+  }
+
+  // For regular URIs, extract the extension directly (not using getFileExtension
+  // which defaults to jpg - we want to reject unknown types here)
+  try {
+    // Try to parse as URL first
+    const url = new URL(uri);
+    const pathname = url.pathname;
+    const lastSegment = pathname.split("/").pop() || "";
+
+    if (lastSegment.includes(".")) {
+      const ext = lastSegment.split(".").pop()?.toLowerCase();
+      return ext ? VALID_IMAGE_EXTENSIONS.includes(ext) : false;
+    }
+    // URL without extension - accept it (will use default jpg for upload)
+    return true;
+  } catch {
+    // Not a valid URL, try simple file path extraction
+    const filename = uri.split("/").pop() || uri;
+    if (filename.includes(".")) {
+      const ext = filename.split(".").pop()?.toLowerCase();
+      return ext ? VALID_IMAGE_EXTENSIONS.includes(ext) : false;
+    }
+    // No extension found - reject (unless it's a URL which was handled above)
+    return false;
+  }
 }
 
 /**
  * Get file size from URI (for validation)
- * Note: This is an estimate based on the blob size
+ * Returns AsyncResult to properly handle errors instead of silently returning 0
+ * (Fixes bug where validation could be bypassed on fetch failure)
  * @param uri File URI
- * @returns File size in bytes
+ * @returns AsyncResult with file size in bytes or error
  */
-export async function getFileSize(uri: string): Promise<number> {
-  try {
+export async function getFileSize(uri: string): Promise<AsyncResult<number>> {
+  return handleAsync(async () => {
     const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: HTTP ${response.status}`);
+    }
     const blob = await response.blob();
+    if (blob.size === 0) {
+      throw new Error("File appears to be empty");
+    }
     return blob.size;
-  } catch {
-    return 0;
-  }
+  }, "Failed to get file size");
 }
 
 /**
@@ -171,6 +280,7 @@ export const MAX_RECEIPT_SIZE = 5 * 1024 * 1024;
 
 /**
  * Validate receipt image before upload
+ * Now properly handles file fetch errors instead of silently passing validation
  * @param uri File URI
  * @returns Validation result
  */
@@ -184,8 +294,25 @@ export async function validateReceiptImage(
     };
   }
 
-  const size = await getFileSize(uri);
-  if (size > MAX_RECEIPT_SIZE) {
+  const sizeResult = await getFileSize(uri);
+
+  // Handle file fetch errors (fixes validation bypass bug)
+  if (sizeResult.error) {
+    return {
+      isValid: false,
+      error: "Unable to validate file. Please try selecting the image again.",
+    };
+  }
+
+  // Handle null/zero size (shouldn't happen if no error, but be defensive)
+  if (sizeResult.data === null || sizeResult.data === 0) {
+    return {
+      isValid: false,
+      error: "Invalid file. Please select a different image.",
+    };
+  }
+
+  if (sizeResult.data > MAX_RECEIPT_SIZE) {
     return {
       isValid: false,
       error: "Image is too large. Maximum size is 5MB.",

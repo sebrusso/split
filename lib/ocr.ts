@@ -7,7 +7,16 @@
  * - Two-pass: Gemini extracts text first, then parses semantically
  */
 
-import { OCRResult, OCRExtractedItem, OCRExtractedMetadata, OCRProvider } from './types';
+import {
+  OCRResult,
+  OCRExtractedItem,
+  OCRExtractedMetadata,
+  OCRProvider,
+  OCRServiceCharge,
+  OCRDiscount,
+  OCRTaxEntry,
+  ServiceChargeType,
+} from './types';
 
 // API configuration
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
@@ -32,7 +41,7 @@ export function getOCRMode(): OCRMode {
   return currentOCRMode;
 }
 
-// Single-pass prompt: Extract and parse receipt in one call
+// Single-pass prompt: Extract and parse receipt in one call with enhanced detection
 const SINGLE_PASS_PROMPT = `You are a receipt parser. Analyze this receipt image and extract all information into a structured JSON format.
 
 Return a JSON object with this exact structure:
@@ -47,25 +56,66 @@ Return a JSON object with this exact structure:
       "description": "Item name/description",
       "quantity": 1,
       "unitPrice": 5.99 | null,
-      "totalPrice": 5.99
+      "totalPrice": 5.99,
+      "isLikelyShared": false,
+      "isModifier": false,
+      "parentItemIndex": null
     }
   ],
   "subtotal": 25.99 | null,
-  "tax": 2.08 | null,
+  "taxes": [{ "type": "Sales Tax", "amount": 2.08 }],
   "tip": 5.00 | null,
+  "serviceCharges": [{ "description": "Gratuity 18%", "amount": 8.00, "type": "gratuity" }],
+  "discounts": [{ "description": "Happy Hour", "amount": -5.00, "appliesToItemIndex": null }],
   "total": 33.07,
   "currency": "USD"
 }
 
-Important rules:
-1. Extract ALL line items from the receipt
-2. For quantity, default to 1 if not specified
-3. Prices should be numbers without currency symbols
-4. If you can't read a value clearly, use null
-5. Do not guess or make up values
-6. Include discounts as negative totalPrice values
-7. Only include actual purchased items, not section headers or payment info
-8. The currency should be inferred from symbols ($=USD, €=EUR, £=GBP) or default to USD
+CRITICAL RULES:
+
+1. QUANTITY HANDLING (very important for splitting):
+   - For items with quantity > 1 (e.g., "3 x Burger @ $9.00 = $27.00"), ALWAYS extract:
+     - quantity: 3
+     - unitPrice: 9.00
+     - totalPrice: 27.00
+   - For single items, use quantity: 1
+
+2. SHARED ITEM DETECTION - Set isLikelyShared: true for:
+   - Items containing: "pitcher", "bottle of", "carafe", "for the table", "to share", "family style", "platter"
+   - Large appetizers: nachos, wings (10+ count), fries for table, chips & salsa/guac, dips
+   - Items with unusually high quantities (6+ drinks, large platters)
+   - Desserts meant for sharing: "brownie sundae", "sampler"
+
+3. MODIFIER/ADD-ON DETECTION:
+   - Set isModifier: true for lines that modify another item:
+     - Lines starting with "+", "Add", "Extra", "No", "Sub", "With"
+     - Toppings, sides that are priced separately
+     - Customizations like "Upgrade to large +$2"
+   - Set parentItemIndex to the 0-based index of the item being modified
+   - Example: If item[0] is "Burger $12" and item[1] is "+ Bacon $2", then item[1] should have isModifier: true and parentItemIndex: 0
+
+4. SERVICE CHARGES (separate from tip):
+   - Extract as serviceCharges array, NOT as regular items
+   - Types: "gratuity" (auto-gratuity), "delivery", "convenience", "other"
+   - Common examples: "Service Charge", "Gratuity 18%", "Delivery Fee", "Convenience Fee"
+
+5. DISCOUNTS:
+   - Extract as discounts array with NEGATIVE amounts
+   - If discount applies to specific item, set appliesToItemIndex
+   - If discount applies to whole bill, set appliesToItemIndex: null
+   - Examples: "Happy Hour -$5", "20% OFF", "BOGO", "Member Discount"
+
+6. TAX HANDLING:
+   - Extract as taxes array to support multiple tax types
+   - Common types: "Sales Tax", "Alcohol Tax", "State Tax", "Local Tax"
+
+7. GENERAL RULES:
+   - Prices should be numbers without currency symbols
+   - If you can't read a value clearly, use null
+   - Do not guess or make up values
+   - Exclude section headers, payment info, and change/balance due
+   - Currency: infer from symbols ($=USD, €=EUR, £=GBP) or default to USD
+   - Include combo components even if $0.00 (mark as modifiers of the combo)
 
 Return ONLY the JSON object, no other text or markdown.`;
 
@@ -73,6 +123,11 @@ Return ONLY the JSON object, no other text or markdown.`;
 const TEXT_EXTRACTION_PROMPT = `Extract all text from this receipt image exactly as it appears.
 Preserve the layout as much as possible, keeping items and prices on the same lines.
 Include everything: store name, address, items, prices, tax, total, date, etc.
+Pay special attention to:
+- Quantities (e.g., "3 x Burger" or "2 @ $5.99")
+- Modifiers/add-ons (lines starting with +, Add, Extra)
+- Service charges (Gratuity, Delivery Fee)
+- Discounts (lines with negative amounts or % off)
 Return only the extracted text, nothing else.`;
 
 // Two-pass: Second pass parses the extracted text
@@ -95,24 +150,40 @@ Return a JSON object with this exact structure:
       "description": "Item name/description",
       "quantity": 1,
       "unitPrice": 5.99 | null,
-      "totalPrice": 5.99
+      "totalPrice": 5.99,
+      "isLikelyShared": false,
+      "isModifier": false,
+      "parentItemIndex": null
     }
   ],
   "subtotal": 25.99 | null,
-  "tax": 2.08 | null,
+  "taxes": [{ "type": "Sales Tax", "amount": 2.08 }],
   "tip": 5.00 | null,
+  "serviceCharges": [{ "description": "Gratuity 18%", "amount": 8.00, "type": "gratuity" }],
+  "discounts": [{ "description": "Happy Hour", "amount": -5.00, "appliesToItemIndex": null }],
   "total": 33.07,
   "currency": "USD"
 }
 
-Important rules:
-1. Extract ALL line items from the receipt
-2. For quantity, default to 1 if not specified
-3. Prices should be numbers without currency symbols
-4. If you can't determine a value clearly, use null
-5. Do not guess or make up values
-6. Include discounts as negative totalPrice values
-7. Only include actual purchased items, not section headers or payment info
+CRITICAL RULES:
+
+1. QUANTITY HANDLING:
+   - For "3 x Burger @ $9.00 = $27.00": quantity: 3, unitPrice: 9.00, totalPrice: 27.00
+   - For single items, use quantity: 1
+
+2. SHARED ITEM DETECTION - Set isLikelyShared: true for:
+   - Items with: "pitcher", "bottle of", "carafe", "for the table", "to share", "family style", "platter"
+   - Large appetizers: nachos, wings, shared desserts
+
+3. MODIFIER DETECTION:
+   - Set isModifier: true for lines starting with "+", "Add", "Extra", "No", "Sub", "With"
+   - Set parentItemIndex to the 0-based index of the parent item
+
+4. SERVICE CHARGES: Extract separately (not as items). Types: "gratuity", "delivery", "convenience", "other"
+
+5. DISCOUNTS: Extract with NEGATIVE amounts. Set appliesToItemIndex if item-specific, null if global.
+
+6. TAXES: Support multiple tax types as array.
 
 Return ONLY the JSON object, no other text or markdown.`;
 
@@ -305,18 +376,61 @@ function convertToOCRResult(
       unitPrice: item.unitPrice ?? undefined,
       totalPrice: item.totalPrice || 0,
       confidence: 0.9,
+      // Enhanced fields
+      isLikelyShared: item.isLikelyShared || false,
+      isModifier: item.isModifier || false,
+      parentItemIndex: item.parentItemIndex ?? null,
+      isServiceCharge: item.isServiceCharge || false,
+      serviceChargeType: item.serviceChargeType as ServiceChargeType | undefined,
     })
   );
+
+  // Parse taxes - support both legacy single tax and new array format
+  let taxes: OCRTaxEntry[] | undefined;
+  let taxTotal: number | undefined;
+
+  if (Array.isArray(parsed.taxes) && parsed.taxes.length > 0) {
+    taxes = parsed.taxes.map((t: any) => ({
+      type: t.type || 'Sales Tax',
+      amount: t.amount || 0,
+    }));
+    taxTotal = taxes.reduce((sum, t) => sum + t.amount, 0);
+  } else if (typeof parsed.tax === 'number') {
+    // Legacy format - single tax value
+    taxTotal = parsed.tax;
+    taxes = [{ type: 'Sales Tax', amount: parsed.tax }];
+  }
+
+  // Parse service charges
+  const serviceCharges: OCRServiceCharge[] | undefined = Array.isArray(parsed.serviceCharges)
+    ? parsed.serviceCharges.map((sc: any) => ({
+        description: sc.description || 'Service Charge',
+        amount: sc.amount || 0,
+        type: (sc.type as ServiceChargeType) || 'other',
+      }))
+    : undefined;
+
+  // Parse discounts
+  const discounts: OCRDiscount[] | undefined = Array.isArray(parsed.discounts)
+    ? parsed.discounts.map((d: any) => ({
+        description: d.description || 'Discount',
+        amount: d.amount || 0, // Should be negative
+        appliesToItemIndex: d.appliesToItemIndex ?? null,
+      }))
+    : undefined;
 
   const metadata: OCRExtractedMetadata = {
     merchantName: parsed.merchant?.name,
     merchantAddress: parsed.merchant?.address,
     date: parsed.date,
     subtotal: parsed.subtotal,
-    tax: parsed.tax,
+    tax: taxTotal,
+    taxes,
     tip: parsed.tip,
     total: parsed.total,
     currency: parsed.currency || 'USD',
+    serviceCharges,
+    discounts,
   };
 
   // Calculate confidence based on completeness

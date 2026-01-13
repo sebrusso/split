@@ -156,3 +156,134 @@ export async function hasCompletedVenmoOnboarding(clerkUserId: string): Promise<
   const username = await getVenmoUsername(clerkUserId);
   return username !== null && username.length > 0;
 }
+
+/**
+ * Get user's Venmo profile (username and display name)
+ */
+export async function getVenmoProfile(clerkUserId: string): Promise<{
+  username: string | null;
+  displayName: string | null;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("venmo_username, venmo_display_name")
+      .eq("clerk_id", clerkUserId)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return { username: null, displayName: null };
+      }
+      throw error;
+    }
+
+    return {
+      username: data?.venmo_username || null,
+      displayName: data?.venmo_display_name || null,
+    };
+  } catch (error) {
+    logger.error("Error fetching Venmo profile:", error);
+    return { username: null, displayName: null };
+  }
+}
+
+/**
+ * Update user's Venmo profile (username and display name)
+ */
+export async function updateVenmoProfile(
+  clerkUserId: string,
+  venmoUsername: string | null,
+  venmoDisplayName: string | null
+): Promise<boolean> {
+  try {
+    // Clean up the username - remove @ prefix if present
+    const cleanUsername = venmoUsername
+      ? venmoUsername.replace(/^@/, "").trim()
+      : null;
+
+    // Validate username format
+    if (cleanUsername && !/^[a-zA-Z0-9_-]{1,30}$/.test(cleanUsername)) {
+      throw new Error("Invalid Venmo username format");
+    }
+
+    // Clean display name (trim whitespace, limit length)
+    const cleanDisplayName = venmoDisplayName
+      ? venmoDisplayName.trim().slice(0, 50)
+      : null;
+
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({
+        venmo_username: cleanUsername,
+        venmo_display_name: cleanDisplayName,
+      })
+      .eq("clerk_id", clerkUserId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    logger.error("Error updating Venmo profile:", error);
+    return false;
+  }
+}
+
+/**
+ * Batch fetch Venmo profiles (username + display name) for members
+ * Returns a map of memberId -> { username, displayName }
+ */
+export async function getVenmoProfilesForMembers(
+  memberIds: string[]
+): Promise<Map<string, { username: string; displayName: string | null }>> {
+  const result = new Map<string, { username: string; displayName: string | null }>();
+
+  if (memberIds.length === 0) return result;
+
+  try {
+    const { data: members, error: membersError } = await supabase
+      .from("members")
+      .select("id, clerk_user_id")
+      .in("id", memberIds)
+      .not("clerk_user_id", "is", null);
+
+    if (membersError || !members?.length) {
+      return result;
+    }
+
+    const clerkUserIds = [...new Set(members.map(m => m.clerk_user_id).filter(Boolean))];
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from("user_profiles")
+      .select("clerk_id, venmo_username, venmo_display_name")
+      .in("clerk_id", clerkUserIds)
+      .not("venmo_username", "is", null);
+
+    if (profilesError || !profiles?.length) {
+      return result;
+    }
+
+    const clerkToVenmo = new Map<string, { username: string; displayName: string | null }>();
+    for (const profile of profiles) {
+      if (profile.venmo_username) {
+        clerkToVenmo.set(profile.clerk_id, {
+          username: profile.venmo_username,
+          displayName: profile.venmo_display_name || null,
+        });
+      }
+    }
+
+    for (const member of members) {
+      if (member.clerk_user_id) {
+        const venmoProfile = clerkToVenmo.get(member.clerk_user_id);
+        if (venmoProfile) {
+          result.set(member.id, venmoProfile);
+        }
+      }
+    }
+
+    return result;
+  } catch (error) {
+    logger.error("Error batch fetching Venmo profiles:", error);
+    return result;
+  }
+}

@@ -37,6 +37,9 @@ import { getSettlementMethodName, getSettlementMethodIcon } from "../../../compo
 import { openPaymentApp, getPaymentAppName, getPaymentAppIcon, type PaymentApp } from "../../../lib/payment-links";
 import { notifySettlementRecorded } from "../../../lib/notifications";
 import { getVenmoUsernamesForMembers } from "../../../lib/user-profile";
+import { useAuth } from "../../../lib/auth-context";
+import { createReminder, suggestReminderTime } from "../../../lib/payment-reminders";
+import { Ionicons } from "@expo/vector-icons";
 
 interface ExpenseWithSplits {
   id: string;
@@ -50,6 +53,7 @@ interface ExpenseWithSplits {
 
 export default function BalancesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { userId } = useAuth();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [settlementRecords, setSettlementRecords] = useState<SettlementRecord[]>([]);
@@ -61,6 +65,7 @@ export default function BalancesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [settlingIndex, setSettlingIndex] = useState<number | null>(null);
   const [venmoUsernames, setVenmoUsernames] = useState<Map<string, string>>(new Map());
+  const [sendingReminderIndex, setSendingReminderIndex] = useState<number | null>(null);
 
   // Settlement modal state
   const [showSettlementModal, setShowSettlementModal] = useState(false);
@@ -316,6 +321,110 @@ export default function BalancesScreen() {
     );
   };
 
+  // Check if current user is the creditor (person owed money) for a settlement
+  const isCurrentUserCreditor = (toMemberId: string): boolean => {
+    if (!userId) return false;
+    const member = members.find((m) => m.id === toMemberId);
+    return member?.clerk_user_id === userId;
+  };
+
+  // Get current user's member in this group
+  const getCurrentUserMember = (): Member | undefined => {
+    if (!userId) return undefined;
+    return members.find((m) => m.clerk_user_id === userId);
+  };
+
+  // Handle sending a payment reminder
+  const handleSendReminder = async (
+    fromMemberId: string,
+    toMemberId: string,
+    amount: number,
+    index: number
+  ) => {
+    const fromMember = getMemberById(fromMemberId);
+    const currentUserMember = getCurrentUserMember();
+
+    if (!currentUserMember || !userId) {
+      Alert.alert("Error", "You must be logged in to send reminders");
+      return;
+    }
+
+    Alert.alert(
+      "Send Payment Reminder",
+      `Send a reminder to ${fromMember?.name || "this person"} to pay ${formatCurrency(amount, group?.currency)}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send Now",
+          onPress: async () => {
+            setSendingReminderIndex(index);
+            try {
+              const reminder = await createReminder({
+                groupId: id!,
+                fromMemberId,
+                toMemberId,
+                amount,
+                createdBy: userId,
+                frequency: "once",
+                scheduledAt: new Date(), // Send immediately
+              });
+
+              if (reminder) {
+                Alert.alert(
+                  "Reminder Sent",
+                  `${fromMember?.name || "They"} will receive a notification to pay you.`
+                );
+              } else {
+                Alert.alert("Error", "Failed to send reminder. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error creating reminder:", error);
+              Alert.alert("Error", "Failed to send reminder. Please try again.");
+            } finally {
+              setSendingReminderIndex(null);
+            }
+          },
+        },
+        {
+          text: "Schedule for Later",
+          onPress: async () => {
+            setSendingReminderIndex(index);
+            try {
+              const suggestedTime = suggestReminderTime();
+              const reminder = await createReminder({
+                groupId: id!,
+                fromMemberId,
+                toMemberId,
+                amount,
+                createdBy: userId,
+                frequency: "once",
+                scheduledAt: suggestedTime,
+              });
+
+              if (reminder) {
+                const timeStr = suggestedTime.toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit'
+                });
+                Alert.alert(
+                  "Reminder Scheduled",
+                  `${fromMember?.name || "They"} will be reminded at ${timeStr}.`
+                );
+              } else {
+                Alert.alert("Error", "Failed to schedule reminder. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error scheduling reminder:", error);
+              Alert.alert("Error", "Failed to schedule reminder. Please try again.");
+            } finally {
+              setSendingReminderIndex(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -432,22 +541,47 @@ export default function BalancesScreen() {
                         <Text style={styles.settlementAmount}>
                           {formatCurrency(settlement.amount, group?.currency)}
                         </Text>
-                        <TouchableOpacity
-                          style={styles.settleButton}
-                          onPress={() =>
-                            handleSettle(
-                              settlement.from,
-                              settlement.to,
-                              settlement.amount,
-                              index,
-                            )
-                          }
-                          disabled={isSettling}
-                        >
-                          <Text style={styles.settleButtonText}>
-                            {isSettling ? "..." : "Settle"}
-                          </Text>
-                        </TouchableOpacity>
+                        <View style={styles.settlementButtons}>
+                          {isCurrentUserCreditor(settlement.to) && (
+                            <TouchableOpacity
+                              style={styles.remindButton}
+                              onPress={() =>
+                                handleSendReminder(
+                                  settlement.from,
+                                  settlement.to,
+                                  settlement.amount,
+                                  index,
+                                )
+                              }
+                              disabled={sendingReminderIndex === index}
+                            >
+                              <Ionicons
+                                name="notifications-outline"
+                                size={14}
+                                color={colors.primary}
+                              />
+                              <Text style={styles.remindButtonText}>
+                                {sendingReminderIndex === index ? "..." : "Remind"}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            style={styles.settleButton}
+                            onPress={() =>
+                              handleSettle(
+                                settlement.from,
+                                settlement.to,
+                                settlement.amount,
+                                index,
+                              )
+                            }
+                            disabled={isSettling}
+                          >
+                            <Text style={styles.settleButtonText}>
+                              {isSettling ? "..." : "Settle"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </Card>
@@ -795,6 +929,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: "Inter_600SemiBold",
     marginBottom: spacing.xs,
+  },
+  settlementButtons: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  remindButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    gap: 4,
+  },
+  remindButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   settleButton: {
     backgroundColor: colors.primary,

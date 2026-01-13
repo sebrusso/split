@@ -41,10 +41,12 @@ import { uploadReceipt, validateReceiptImage } from "../../../lib/storage";
 import { notifyExpenseAdded } from "../../../lib/notifications";
 import { useAuth } from "../../../lib/auth-context";
 import { getExchangeRate } from "../../../lib/exchange-rates";
+import { useAnalytics, AnalyticsEvents } from "../../../lib/analytics-provider";
 
 export default function AddExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
+  const { trackEvent } = useAnalytics();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [amount, setAmount] = useState("");
@@ -336,6 +338,13 @@ export default function AddExpenseScreen() {
         );
       }
 
+      trackEvent(AnalyticsEvents.EXPENSE_ADDED, {
+        groupId: id,
+        amount: amountNum,
+        category,
+        splitMethod,
+        hasReceipt: !!receiptUri,
+      });
       router.back();
     } catch (err) {
       console.error("Error creating expense:", err);

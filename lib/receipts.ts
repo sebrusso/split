@@ -14,6 +14,7 @@ import {
   ReceiptMemberCalculation,
   ReceiptSummary,
   ClaimSource,
+  ServiceChargeType,
 } from './types';
 
 /**

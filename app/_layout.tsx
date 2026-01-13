@@ -1,7 +1,7 @@
-import { useEffect } from "react";
-import { Stack, useSegments, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Stack, useSegments, useRouter, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 import {
   useFonts,
   Inter_400Regular,
@@ -11,15 +11,28 @@ import {
 } from "@expo-google-fonts/inter";
 import * as SplashScreen from "expo-splash-screen";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../lib/theme";
 import { CLERK_PUBLISHABLE_KEY, tokenCache, isClerkConfigured } from "../lib/clerk";
 import { AuthProvider } from "../lib/auth-context";
+import { AnalyticsProvider, useAnalytics } from "../lib/analytics-provider";
 import {
   configureNotificationHandler,
   registerPushToken,
   removePushToken,
 } from "../lib/notifications";
 import { logger } from "../lib/logger";
+import { WELCOME_SEEN_KEY } from "./auth/welcome";
+import {
+  initSentry,
+  setSentryUser,
+  clearSentryUser,
+  SentryErrorBoundary,
+  addBreadcrumb,
+} from "../lib/sentry";
+
+// Initialize Sentry early
+initSentry();
 
 // Note: Offline support requires native modules (development build)
 // It's disabled in Expo Go - will be enabled when building for production
@@ -29,41 +42,114 @@ SplashScreen.preventAutoHideAsync();
 /**
  * Authentication Guard
  * Redirects users based on their auth state
- * Also handles push notification registration
+ * Also handles push notification registration and welcome flow
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [welcomeChecked, setWelcomeChecked] = useState(false);
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(true); // Default to true to avoid flicker
+
+  // Check if user has seen welcome screen
+  useEffect(() => {
+    const checkWelcome = async () => {
+      try {
+        const seen = await AsyncStorage.getItem(WELCOME_SEEN_KEY);
+        setHasSeenWelcome(seen === "true");
+      } catch {
+        setHasSeenWelcome(true); // On error, skip welcome
+      }
+      setWelcomeChecked(true);
+    };
+    checkWelcome();
+  }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !welcomeChecked) return;
 
     const inAuthGroup = segments[0] === "auth";
+    // Cast to string[] to access potential second segment
+    const segmentsArray = segments as string[];
+    const onWelcomeScreen = segmentsArray.length > 1 && segmentsArray[1] === "welcome";
 
     if (!isSignedIn && !inAuthGroup) {
-      // Redirect to sign-in if not authenticated and not already in auth flow
-      router.replace("/auth/sign-in");
+      // Not signed in and not in auth flow
+      if (!hasSeenWelcome) {
+        // First time user - show welcome carousel
+        router.replace("/auth/welcome");
+      } else {
+        // Returning user - go to sign-in
+        router.replace("/auth/sign-in");
+      }
+    } else if (!isSignedIn && inAuthGroup && !hasSeenWelcome && !onWelcomeScreen) {
+      // In auth but hasn't seen welcome yet - redirect to welcome
+      router.replace("/auth/welcome");
     } else if (isSignedIn && inAuthGroup) {
       // Redirect to home if authenticated but still in auth flow
       router.replace("/");
     }
-  }, [isLoaded, isSignedIn, segments, router]);
+  }, [isLoaded, isSignedIn, segments, router, welcomeChecked, hasSeenWelcome]);
 
-  // Register for push notifications when user signs in
+  // Register for push notifications and set Sentry user context when user signs in
   useEffect(() => {
     if (isSignedIn && userId) {
       // Register push token in the background
       registerPushToken(userId).catch((error) => {
         logger.error("Failed to register push token:", error);
       });
+
+      // Set Sentry user context for error tracking
+      setSentryUser({ id: userId });
+      addBreadcrumb("auth", "User signed in", { userId });
     } else if (!isSignedIn && userId) {
       // Remove push token when user signs out
       removePushToken(userId).catch((error) => {
         logger.error("Failed to remove push token:", error);
       });
+
+      // Clear Sentry user context
+      clearSentryUser();
+      addBreadcrumb("auth", "User signed out");
     }
   }, [isSignedIn, userId]);
+
+  return <>{children}</>;
+}
+
+/**
+ * Screen Tracking Component
+ * Tracks screen views for analytics
+ */
+function ScreenTracker({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { trackScreen, isReady } = useAnalytics();
+  const previousPath = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    // Only track if path actually changed
+    if (pathname && pathname !== previousPath.current) {
+      // Convert path to readable screen name
+      // e.g., "/group/123/add-expense" -> "group_add_expense"
+      const screenName = pathname
+        .replace(/^\//, "") // Remove leading slash
+        .replace(/\/\[.*?\]/g, "") // Remove dynamic segments like [id]
+        .replace(/\//g, "_") // Replace slashes with underscores
+        || "home";
+
+      trackScreen(screenName);
+
+      // Add Sentry navigation breadcrumb
+      addBreadcrumb("navigation", `Navigated to ${screenName}`, {
+        from: previousPath.current,
+        to: pathname,
+      });
+
+      previousPath.current = pathname;
+    }
+  }, [pathname, isReady, trackScreen]);
 
   return <>{children}</>;
 }
@@ -330,20 +416,39 @@ export default function RootLayout() {
     }
   }
 
+  // Error fallback for Sentry error boundary
+  const errorFallback = ({ resetError }: { resetError: () => void }) => (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorTitle}>Something went wrong</Text>
+      <Text style={styles.errorMessage}>
+        The app encountered an unexpected error. Please try again.
+      </Text>
+      <Text style={styles.errorButton} onPress={resetError}>
+        Try Again
+      </Text>
+    </View>
+  );
+
   return (
-    <ClerkProvider
-      publishableKey={CLERK_PUBLISHABLE_KEY}
-      tokenCache={tokenCache}
-    >
-      <ClerkLoaded>
-        <AuthProvider>
-          <StatusBar style="dark" />
-          <AuthGuard>
-            <RootNavigator />
-          </AuthGuard>
-        </AuthProvider>
-      </ClerkLoaded>
-    </ClerkProvider>
+    <SentryErrorBoundary fallback={errorFallback}>
+      <ClerkProvider
+        publishableKey={CLERK_PUBLISHABLE_KEY}
+        tokenCache={tokenCache}
+      >
+        <ClerkLoaded>
+          <AuthProvider>
+            <AnalyticsProvider>
+              <StatusBar style="dark" />
+              <AuthGuard>
+                <ScreenTracker>
+                  <RootNavigator />
+                </ScreenTracker>
+              </AuthGuard>
+            </AnalyticsProvider>
+          </AuthProvider>
+        </ClerkLoaded>
+      </ClerkProvider>
+    </SentryErrorBoundary>
   );
 }
 
@@ -353,5 +458,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.background,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background,
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontFamily: "Inter_700Bold",
+    color: colors.text,
+    marginBottom: 12,
+  },
+  errorMessage: {
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  errorButton: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
   },
 });

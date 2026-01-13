@@ -666,3 +666,54 @@ export function formatTimeSinceOpened(session: PendingPaymentSession): string {
   const hours = Math.floor(minutes / 60);
   return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
 }
+
+// ============================================
+// Venmo Profile Deep Links
+// ============================================
+
+/**
+ * Open a Venmo user's profile
+ * @param username - Venmo username (without @)
+ * @returns True if opened successfully
+ */
+export async function openVenmoProfile(username: string): Promise<boolean> {
+  const cleanUsername = username.replace(/^@/, '');
+  const venmoProfileUrl = `venmo://users?username=${cleanUsername}`;
+  const webFallbackUrl = `https://venmo.com/${cleanUsername}`;
+
+  try {
+    const canOpen = await Linking.canOpenURL(venmoProfileUrl);
+    if (canOpen) {
+      await Linking.openURL(venmoProfileUrl);
+      return true;
+    } else {
+      // Fallback to web
+      await Linking.openURL(webFallbackUrl);
+      return true;
+    }
+  } catch (error) {
+    // Try web fallback
+    try {
+      await Linking.openURL(webFallbackUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * Get the Venmo profile URL (web) for a username
+ */
+export function getVenmoProfileUrl(username: string): string {
+  const cleanUsername = username.replace(/^@/, '');
+  return `https://venmo.com/${cleanUsername}`;
+}
+
+/**
+ * Get the Venmo profile deep link for a username
+ */
+export function getVenmoProfileDeepLink(username: string): string {
+  const cleanUsername = username.replace(/^@/, '');
+  return `venmo://users?username=${cleanUsername}`;
+}

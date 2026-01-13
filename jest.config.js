@@ -10,6 +10,17 @@ module.exports = {
     '!lib/supabase.ts',
   ],
   coverageDirectory: 'coverage',
+  // Coverage thresholds for quality gates
+  coverageThreshold: {
+    global: {
+      branches: 60,
+      functions: 60,
+      lines: 60,
+      statements: 60,
+    },
+  },
+  // Setup file for fast-check and test configuration
+  setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
   verbose: true,
   // Transform for React Native/Expo components
   transform: {

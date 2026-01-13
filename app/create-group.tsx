@@ -17,6 +17,7 @@ import logger from "../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../lib/theme";
 import { Button, Input, Card } from "../components/ui";
 import { useAuth } from "../lib/auth-context";
+import { useAnalytics, AnalyticsEvents } from "../lib/analytics-provider";
 
 const EMOJIS = [
   "💰",
@@ -36,6 +37,7 @@ const EMOJIS = [
 export default function CreateGroupScreen() {
   const { user } = useUser();
   const { userId } = useAuth();
+  const { trackEvent } = useAnalytics();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("💰");
   const [loading, setLoading] = useState(false);
@@ -76,6 +78,7 @@ export default function CreateGroupScreen() {
 
       if (memberError) throw memberError;
 
+      trackEvent(AnalyticsEvents.GROUP_CREATED, { groupId: group.id });
       router.replace(`/group/${group.id}`);
     } catch (err) {
       logger.error("Error creating group:", err);

@@ -1,0 +1,92 @@
+# E2E Test: Settlement/Payment Flow
+# Tests: View balances -> Select settlement -> Generate payment link -> Mark as settled
+#
+# Run with: maestro test .maestro/settlement-flow.yaml
+
+appId: com.splitfree.app
+
+---
+
+# Step 1: Launch app
+- launchApp
+
+- assertVisible: "SplitFree"
+
+# Step 2: Navigate to a group with existing balances
+# Tap on first group
+- tapOn:
+    text: ".*"
+    index: 0
+
+# Step 3: Go to balances tab
+- tapOn: "Balances"
+
+# Step 4: Verify balance information is shown
+- assertVisible: "Who Owes Who"
+
+# Step 5: Find a settlement to complete
+# Look for "owes" text indicating someone has a debt
+- assertVisible:
+    text: "owes"
+
+# Step 6: Tap on "Settle Up" or a specific settlement
+- tapOn: "Settle Up"
+
+# Step 7: Verify settlement options screen
+- assertVisible: "Settlement"
+
+# Step 8: Check payment app options are available
+- assertVisible:
+    text: "Venmo|PayPal|Cash App|Zelle"
+    regex: true
+
+# Step 9: Select a payment method (Venmo as example)
+- tapOn:
+    text: "Venmo"
+    optional: true
+
+# If Venmo not available, try any payment option
+- runFlow:
+    when:
+      notVisible: "Venmo"
+    commands:
+      - tapOn:
+          text: "Pay|Send"
+          index: 0
+
+# Step 10: Verify payment link or deep link is generated
+- assertVisible:
+    text: "Open|Pay|Send"
+    regex: true
+
+# Step 11: Instead of opening external app, mark as paid
+- tapOn:
+    text: "Mark as Paid|I've Paid|Confirm"
+    regex: true
+  optional: true
+
+# Alternative: Go back and manually confirm
+- runFlow:
+    when:
+      visible: "Back"
+    commands:
+      - tapOn: "Back"
+
+# Step 12: Confirm the settlement
+- tapOn:
+    text: "Confirm|Yes|Done"
+    regex: true
+  optional: true
+
+# Step 13: Verify settlement was recorded
+# Balance should be updated or cleared
+- assertVisible:
+    text: "Settled|Paid|All settled"
+    regex: true
+  optional: true
+
+# Step 14: Go back to balances to verify update
+- tapOn: "Balances"
+
+# The owed amount should be reduced or cleared
+# Success - settlement flow completed

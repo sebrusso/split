@@ -191,6 +191,24 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.menuArrow}>→</Text>
             </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push("/profile/my-reminders")}
+            >
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuIcon}>🔔</Text>
+                <View style={styles.menuItemText}>
+                  <Text style={styles.menuItemTitle}>Payment Reminders</Text>
+                  <Text style={styles.menuItemSubtitle}>
+                    View and manage reminders
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
           </Card>
         </View>
 
