@@ -296,6 +296,19 @@ export default function SignInScreen() {
               <Text style={styles.signUpLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Dev-only: Reset onboarding button */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.devResetButton}
+              onPress={async () => {
+                await AsyncStorage.removeItem("@splitfree/welcome_seen");
+                router.replace("/auth/welcome");
+              }}
+            >
+              <Text style={styles.devResetText}>DEV: Show Welcome Screen</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -427,5 +440,16 @@ const styles = StyleSheet.create({
   signUpLink: {
     ...typography.bodyMedium,
     color: colors.primary,
+  },
+  devResetButton: {
+    alignItems: "center",
+    marginTop: spacing.xl,
+    padding: spacing.sm,
+    backgroundColor: colors.warning + "20",
+    borderRadius: borderRadius.sm,
+  },
+  devResetText: {
+    ...typography.small,
+    color: colors.warning,
   },
 });
