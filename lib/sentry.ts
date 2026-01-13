@@ -166,14 +166,64 @@ export function startTransaction(
 
 /**
  * Wrap a component with Sentry error boundary
- * Re-export for convenience
+ * Provides a fallback for Expo Go where native Sentry isn't available
  */
-export const SentryErrorBoundary = Sentry.ErrorBoundary;
+import React from "react";
+
+interface FallbackErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ComponentType<{ error: Error; resetError: () => void }> | ((props: { error: Error; resetError: () => void }) => React.ReactNode);
+}
+
+interface FallbackErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+/**
+ * Fallback error boundary for when Sentry isn't available (e.g., Expo Go)
+ */
+class FallbackErrorBoundary extends React.Component<
+  FallbackErrorBoundaryProps,
+  FallbackErrorBoundaryState
+> {
+  constructor(props: FallbackErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): FallbackErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  resetError = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      const { fallback: Fallback } = this.props;
+      if (Fallback) {
+        if (typeof Fallback === 'function') {
+          return <Fallback error={this.state.error} resetError={this.resetError} />;
+        }
+        return <Fallback error={this.state.error} resetError={this.resetError} />;
+      }
+      return null;
+    }
+
+    return this.props.children;
+  }
+}
+
+// Use Sentry's ErrorBoundary if available, otherwise use fallback
+export const SentryErrorBoundary = Sentry.ErrorBoundary || FallbackErrorBoundary;
 
 /**
  * HOC to wrap screens with Sentry navigation tracking
+ * Returns identity function if Sentry.wrap isn't available
  */
-export const withSentryScreen = Sentry.wrap;
+export const withSentryScreen = Sentry.wrap || (<T,>(component: T) => component);
 
 // Re-export Sentry for advanced usage
 export { Sentry };

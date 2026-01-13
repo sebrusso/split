@@ -119,13 +119,28 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
   );
 }
 
+// No-op functions for when analytics isn't available
+const noopTrackEvent = () => {};
+const noopTrackScreen = () => {};
+const noopSetOptOut = async () => {};
+
+const defaultAnalyticsValue: AnalyticsContextValue = {
+  isReady: false,
+  isOptedOut: false,
+  trackEvent: noopTrackEvent,
+  trackScreen: noopTrackScreen,
+  setOptOut: noopSetOptOut,
+};
+
 /**
  * Hook to access analytics functions
+ * Returns no-op functions if used outside provider (graceful fallback)
  */
 export function useAnalytics(): AnalyticsContextValue {
   const context = useContext(AnalyticsContext);
+  // Return default value instead of throwing - allows usage before provider is ready
   if (context === undefined) {
-    throw new Error("useAnalytics must be used within an AnalyticsProvider");
+    return defaultAnalyticsValue;
   }
   return context;
 }
