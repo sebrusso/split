@@ -25,7 +25,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../../../lib/theme';
-import { Button, Card, Avatar, QuickSplitModal } from '../../../../../components/ui';
+import {
+  Button,
+  Card,
+  Avatar,
+  QuickSplitModal,
+  VoiceDictationButton,
+  VoiceDictationModal,
+} from '../../../../../components/ui';
+import { useVoiceDictation, VoiceClaimIntent } from '../../../../../lib/voice';
 import { useReceiptSummary, useItemClaims, useItemExpansion } from '../../../../../lib/useReceipts';
 import {
   formatReceiptDate,
@@ -60,6 +68,9 @@ export default function ReceiptClaimingScreen() {
   // Quick split modal state
   const [quickSplitItem, setQuickSplitItem] = useState<ReceiptItem | null>(null);
   const [showQuickSplit, setShowQuickSplit] = useState(false);
+
+  // Voice dictation state
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
 
   // Optimistic UI state for instant feedback
   const [pendingClaims, setPendingClaims] = useState<Set<string>>(new Set());
@@ -103,6 +114,70 @@ export default function ReceiptClaimingScreen() {
   }, [items, currentMember]);
 
   const [memberError, setMemberError] = useState<string | null>(null);
+
+  // Voice dictation: apply claims from voice commands
+  const handleVoiceApplyClaims = useCallback(
+    async (voiceClaims: VoiceClaimIntent[]): Promise<{ success: boolean; error?: string }> => {
+      if (!currentMember) {
+        return { success: false, error: 'Member not found' };
+      }
+
+      try {
+        // Apply each claim
+        for (const claim of voiceClaims) {
+          const item = items.find((i) => i.id === claim.itemId);
+          if (!item) continue;
+
+          // Check if this is a split
+          if (claim.shareFraction < 1) {
+            // This is part of a split - use splitItem if multiple people
+            const existingClaims = item.claims || [];
+            const otherClaimers = existingClaims
+              .filter((c) => c.member_id !== claim.memberId)
+              .map((c) => c.member_id);
+
+            if (otherClaimers.length > 0) {
+              // Add to existing split
+              await splitItem(claim.itemId, [...otherClaimers, claim.memberId]);
+            } else {
+              // Create new claim with fraction
+              await claimItem(claim.itemId, claim.memberId, {
+                shareFraction: claim.shareFraction,
+              });
+            }
+          } else {
+            // Full claim
+            await claimItem(claim.itemId, claim.memberId);
+          }
+        }
+
+        // Refetch to update UI
+        refetch();
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to apply claims' };
+      }
+    },
+    [items, currentMember, claimItem, splitItem, refetch]
+  );
+
+  // Voice dictation hook
+  const [voiceState, voiceActions] = useVoiceDictation({
+    items,
+    members,
+    currentMemberId: currentMember?.id || null,
+    currency: receipt?.currency || 'USD',
+    onApplyClaims: handleVoiceApplyClaims,
+  });
+
+  // Handle voice button press
+  const handleVoiceButtonPress = useCallback(() => {
+    if (voiceState.state === 'idle') {
+      setShowVoiceModal(true);
+    } else if (voiceState.state === 'recording') {
+      voiceActions.stopRecording();
+    }
+  }, [voiceState.state, voiceActions]);
 
   // Fetch current user's member record
   useFocusEffect(
@@ -862,6 +937,41 @@ export default function ReceiptClaimingScreen() {
         onSplit={handleQuickSplitConfirm}
         onClaimForSelf={handleQuickClaimForSelf}
       />
+
+      {/* Voice Dictation FAB */}
+      <View style={styles.voiceFabContainer}>
+        <VoiceDictationButton
+          state={voiceState.state}
+          durationMs={voiceState.recordingDuration}
+          onPress={handleVoiceButtonPress}
+          onLongPress={voiceActions.cancelRecording}
+          disabled={claiming || expanding}
+        />
+      </View>
+
+      {/* Voice Dictation Modal */}
+      <VoiceDictationModal
+        visible={showVoiceModal}
+        dictationState={voiceState}
+        items={items}
+        members={members}
+        currency={receipt?.currency || 'USD'}
+        onStartRecording={voiceActions.startRecording}
+        onStopRecording={voiceActions.stopRecording}
+        onConfirm={async () => {
+          await voiceActions.confirmClaims();
+          setShowVoiceModal(false);
+        }}
+        onRetry={() => {
+          voiceActions.rejectClaims();
+        }}
+        onCancel={() => {
+          voiceActions.cancelRecording();
+          voiceActions.rejectClaims();
+          setShowVoiceModal(false);
+        }}
+        onContinue={voiceActions.continueConversation}
+      />
     </SafeAreaView>
   );
 }
@@ -1270,5 +1380,12 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
+  },
+  // Voice FAB
+  voiceFabContainer: {
+    position: 'absolute',
+    bottom: 100,
+    right: spacing.lg,
+    zIndex: 100,
   },
 });
