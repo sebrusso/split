@@ -2,7 +2,7 @@
  * Supabase storage helpers for receipt images
  */
 
-import { supabase } from "./supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { handleAsync, AsyncResult } from "./utils";
 
 const RECEIPTS_BUCKET = "receipts";
@@ -75,6 +75,7 @@ export function getContentType(extension: string): string {
 
 /**
  * Upload a receipt image to Supabase storage
+ * @param client The authenticated Supabase client
  * @param uri Local URI of the image
  * @param groupId Group ID for organizing receipts
  * @param expenseId Expense ID for unique filename
@@ -82,6 +83,7 @@ export function getContentType(extension: string): string {
  * @returns Public URL of the uploaded image
  */
 export async function uploadReceipt(
+  client: SupabaseClient,
   uri: string,
   groupId: string,
   expenseId: string,
@@ -120,7 +122,7 @@ export async function uploadReceipt(
 
     // Upload to Supabase storage
     // Using upsert: false to prevent accidental overwrites
-    const { data, error } = await supabase.storage
+    const { data, error } = await client.storage
       .from(RECEIPTS_BUCKET)
       .upload(filename, bytes, {
         contentType: getContentType(extension),
@@ -144,7 +146,7 @@ export async function uploadReceipt(
     }
 
     // Get public URL
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = client.storage
       .from(RECEIPTS_BUCKET)
       .getPublicUrl(filename);
 
@@ -154,10 +156,14 @@ export async function uploadReceipt(
 
 /**
  * Delete a receipt image from Supabase storage
+ * @param client The authenticated Supabase client
  * @param receiptUrl Full URL of the receipt image
  * @returns Success result
  */
-export async function deleteReceipt(receiptUrl: string): Promise<AsyncResult<boolean>> {
+export async function deleteReceipt(
+  client: SupabaseClient,
+  receiptUrl: string
+): Promise<AsyncResult<boolean>> {
   return handleAsync(async () => {
     // Extract path from URL
     const url = new URL(receiptUrl);
@@ -167,7 +173,7 @@ export async function deleteReceipt(receiptUrl: string): Promise<AsyncResult<boo
     }
     const path = pathParts[1];
 
-    const { error } = await supabase.storage.from(RECEIPTS_BUCKET).remove([path]);
+    const { error } = await client.storage.from(RECEIPTS_BUCKET).remove([path]);
 
     if (error) {
       throw error;
@@ -180,12 +186,14 @@ export async function deleteReceipt(receiptUrl: string): Promise<AsyncResult<boo
 /**
  * Get the thumbnail URL for a receipt
  * Supabase can transform images on the fly
+ * @param client The authenticated Supabase client
  * @param receiptUrl Original receipt URL
  * @param width Desired thumbnail width
  * @param height Desired thumbnail height
  * @returns Transformed image URL
  */
 export function getReceiptThumbnailUrl(
+  client: SupabaseClient,
   receiptUrl: string,
   width: number = 200,
   height: number = 200
@@ -200,7 +208,7 @@ export function getReceiptThumbnailUrl(
     const path = pathParts[1];
 
     // Use Supabase image transformation
-    const { data } = supabase.storage.from(RECEIPTS_BUCKET).getPublicUrl(path, {
+    const { data } = client.storage.from(RECEIPTS_BUCKET).getPublicUrl(path, {
       transform: {
         width,
         height,

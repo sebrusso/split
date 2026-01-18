@@ -20,6 +20,7 @@ interface AmountInputProps {
   error?: string;
   onFocus?: () => void;
   onBlur?: () => void;
+  testID?: string;
 }
 
 // Currency symbols map
@@ -53,6 +54,7 @@ export function AmountInput({
   error,
   onFocus,
   onBlur,
+  testID,
 }: AmountInputProps) {
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -118,6 +120,7 @@ export function AmountInput({
         <Text style={symbolStyle}>{currencySymbol}</Text>
         <TextInput
           ref={inputRef}
+          testID={testID}
           style={inputStyle}
           value={value}
           onChangeText={handleChangeText}
@@ -210,7 +213,7 @@ const styles = StyleSheet.create({
   containerFocused: {},
   containerError: {},
   currencySymbol: {
-    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     color: colors.textMuted,
   },
   symbol_sm: {
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   input: {
-    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     color: colors.text,
     textAlign: "center",
   },

@@ -21,7 +21,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../lib/supabase";
+import { useSupabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth-context";
 import { colors, spacing, typography, borderRadius, shadows } from "../../lib/theme";
 
@@ -45,6 +45,7 @@ interface Group {
 
 export default function TestDataScreen() {
   const { userId, user } = useAuth();
+  const { getSupabase } = useSupabase();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,6 +53,7 @@ export default function TestDataScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
       // Fetch all groups with members
       const { data: groupsData, error: groupsError } = await supabase
         .from("groups")
@@ -91,7 +93,7 @@ export default function TestDataScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId]);
+  }, [userId, getSupabase]);
 
   useEffect(() => {
     fetchData();
@@ -117,6 +119,7 @@ export default function TestDataScreen() {
           text: "Link",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const { error } = await supabase
                 .from("members")
                 .update({ clerk_user_id: userId })
@@ -147,6 +150,7 @@ export default function TestDataScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const { error } = await supabase
                 .from("members")
                 .update({ clerk_user_id: null })
@@ -215,6 +219,7 @@ export default function TestDataScreen() {
           text: "Link All",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               for (const member of matchingMembers) {
                 await supabase
                   .from("members")

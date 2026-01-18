@@ -10,7 +10,7 @@
 #
 # NOTE: This test simulates offline behavior through rapid actions
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
@@ -33,10 +33,12 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Offline Test Expense 1"
+- pressKey: Enter
 
 - tapOn:
     id: "expense-amount-input"
 - inputText: "25.00"
+- pressKey: Enter
 
 # Step 4: Save the expense
 - tapOn: "Save"
@@ -47,10 +49,12 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Offline Test Expense 2"
+- pressKey: Enter
 
 - tapOn:
     id: "expense-amount-input"
 - inputText: "50.00"
+- pressKey: Enter
 
 - tapOn: "Save"
 
@@ -60,10 +64,12 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Offline Test Expense 3"
+- pressKey: Enter
 
 - tapOn:
     id: "expense-amount-input"
 - inputText: "75.00"
+- pressKey: Enter
 
 - tapOn: "Save"
 

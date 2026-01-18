@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.primary,
   },
   currencyCode: {
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   },
   currencyOptionSymbol: {
     fontSize: 20,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.text,
     width: 30,
     textAlign: "center",

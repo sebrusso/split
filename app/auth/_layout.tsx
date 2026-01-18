@@ -14,7 +14,7 @@ export default function AuthLayout() {
         },
         headerTintColor: colors.text,
         headerTitleStyle: {
-          fontFamily: "Inter_600SemiBold",
+          fontWeight: "600",
         },
         headerShadowVisible: false,
         contentStyle: {

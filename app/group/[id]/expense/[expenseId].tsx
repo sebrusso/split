@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { supabase } from "../../../../lib/supabase";
+import { useSupabase } from "../../../../lib/supabase";
 import { Expense, Member, Split, SplitMethod } from "../../../../lib/types";
 import { colors, spacing, typography, borderRadius } from "../../../../lib/theme";
 import {
@@ -37,12 +37,15 @@ import {
 } from "../../../../lib/splits";
 import { uploadReceipt, deleteReceipt, validateReceiptImage } from "../../../../lib/storage";
 import { formatCurrency, formatRelativeDate } from "../../../../lib/utils";
+import { useAuth } from "../../../../lib/auth-context";
 
 export default function ExpenseDetailScreen() {
   const { id: groupId, expenseId } = useLocalSearchParams<{
     id: string;
     expenseId: string;
   }>();
+  const { getSupabase } = useSupabase();
+  const { userId } = useAuth();
 
   // State
   const [loading, setLoading] = useState(true);
@@ -83,6 +86,7 @@ export default function ExpenseDetailScreen() {
 
   const fetchData = async () => {
     try {
+      const supabase = await getSupabase();
       // Fetch expense with splits
       const { data: expenseData, error: expenseError } = await supabase
         .from("expenses")
@@ -259,14 +263,16 @@ export default function ExpenseDetailScreen() {
     setError("");
 
     try {
+      const supabase = await getSupabase();
       // Upload new receipt if changed
       let finalReceiptUrl = receiptUrl;
-      if (localReceiptUri) {
+      if (localReceiptUri && userId) {
+        const supabase = await getSupabase();
         // Delete old receipt if exists
         if (receiptUrl) {
-          await deleteReceipt(receiptUrl);
+          await deleteReceipt(supabase, receiptUrl);
         }
-        const uploadResult = await uploadReceipt(localReceiptUri, groupId!, expenseId!);
+        const uploadResult = await uploadReceipt(supabase, localReceiptUri, groupId!, expenseId!, userId);
         if (uploadResult.data) {
           finalReceiptUrl = uploadResult.data;
         }
@@ -337,6 +343,7 @@ export default function ExpenseDetailScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               // Soft delete - set deleted_at timestamp
               const { error } = await supabase
                 .from("expenses")
@@ -368,9 +375,10 @@ export default function ExpenseDetailScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               // Delete receipt if exists
               if (receiptUrl) {
-                await deleteReceipt(receiptUrl);
+                await deleteReceipt(supabase, receiptUrl);
               }
 
               // Hard delete expense (cascades to splits)
@@ -394,6 +402,7 @@ export default function ExpenseDetailScreen() {
 
   const handleRestore = async () => {
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase
         .from("expenses")
         .update({ deleted_at: null })
@@ -417,7 +426,8 @@ export default function ExpenseDetailScreen() {
         style: "destructive",
         onPress: async () => {
           if (receiptUrl) {
-            await deleteReceipt(receiptUrl);
+            const supabase = await getSupabase();
+            await deleteReceipt(supabase, receiptUrl);
             setReceiptUrl(null);
           }
           setLocalReceiptUri(null);
@@ -864,7 +874,7 @@ const styles = StyleSheet.create({
   },
   memberButtonTextSelected: {
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   paidByRow: {
     flexDirection: "row",

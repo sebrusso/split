@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, Stack } from "expo-router";
-import { supabase } from "../../lib/supabase";
+import { useSupabase } from "../../lib/supabase";
 import { Group } from "../../lib/types";
 import {
   colors,
@@ -25,6 +25,7 @@ export default function JoinGroupScreen() {
   // Get code from deep link if present
   const { code: deepLinkCode } = useLocalSearchParams<{ code?: string }>();
   const { trackEvent } = useAnalytics();
+  const { getSupabase } = useSupabase();
 
   const [shareCode, setShareCode] = useState(deepLinkCode || "");
   const [memberName, setMemberName] = useState("");
@@ -53,6 +54,7 @@ export default function JoinGroupScreen() {
     setFoundGroup(null);
 
     try {
+      const supabase = await getSupabase();
       const { data, error: searchError } = await supabase
         .from("groups")
         .select("*")
@@ -93,6 +95,7 @@ export default function JoinGroupScreen() {
     setJoining(true);
 
     try {
+      const supabase = await getSupabase();
       // Check if member with same name already exists in group
       const { data: existingMembers } = await supabase
         .from("members")

@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { generateShareCode, formatCurrency, calculateBalancesWithSettlements } from "../../../lib/utils";
 import logger from "../../../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
@@ -52,6 +52,7 @@ const CURRENCIES = [
 export default function EditGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [userMember, setUserMember] = useState<Member | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -72,6 +73,8 @@ export default function EditGroupScreen() {
     isFetching.current = true;
 
     try {
+      const supabase = await getSupabase();
+
       // Fetch group, members, expenses (with currency fields), and settlements in parallel
       const [groupResult, membersResult, expensesResult, settlementsResult] = await Promise.all([
         supabase.from("groups").select("*").eq("id", id).single(),
@@ -134,7 +137,7 @@ export default function EditGroupScreen() {
       setLoading(false);
       isFetching.current = false;
     }
-  }, [id, userId]);
+  }, [id, userId, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -152,6 +155,7 @@ export default function EditGroupScreen() {
     setError("");
 
     try {
+      const supabase = await getSupabase();
       const { error: updateError } = await supabase
         .from("groups")
         .update({
@@ -185,6 +189,7 @@ export default function EditGroupScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const newShareCode = await generateShareCode();
               const { error } = await supabase
                 .from("groups")
@@ -249,6 +254,7 @@ export default function EditGroupScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               // Unclaim the member (set clerk_user_id to null) instead of deleting
               // This preserves expense history
               const { error } = await supabase
@@ -281,6 +287,7 @@ export default function EditGroupScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const { error } = await supabase
                 .from("groups")
                 .update({ archived_at: new Date().toISOString() })
@@ -565,7 +572,7 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.primary,
   },
   currencyCode: {
@@ -599,7 +606,7 @@ const styles = StyleSheet.create({
   },
   currencyOptionSymbol: {
     fontSize: 20,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.text,
     width: 30,
     textAlign: "center",

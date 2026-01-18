@@ -17,7 +17,7 @@ export default function FriendsLayout() {
         },
         headerTintColor: colors.text,
         headerTitleStyle: {
-          fontFamily: "Inter_600SemiBold",
+          fontWeight: "600",
         },
         headerShadowVisible: false,
         contentStyle: {

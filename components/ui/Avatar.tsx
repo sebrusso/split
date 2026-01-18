@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle, TouchableOpacity, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, borderRadius } from "../../lib/theme";
+import { colors, borderRadius, avatarColors } from "../../lib/theme";
 import { getInitials } from "../../lib/utils";
 
 interface AvatarProps {
@@ -15,23 +15,12 @@ interface AvatarProps {
   showVenmoBadge?: boolean;
 }
 
-const AVATAR_COLORS = [
-  "#10B981", // emerald
-  "#3B82F6", // blue
-  "#8B5CF6", // purple
-  "#F59E0B", // amber
-  "#EF4444", // red
-  "#EC4899", // pink
-  "#06B6D4", // cyan
-  "#84CC16", // lime
-];
-
 function getColorForName(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
 export function Avatar({ name, size = "md", style, color, venmoUsername, showVenmoBadge = false }: AvatarProps) {
@@ -125,7 +114,7 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   text_sm: {
     fontSize: 12,

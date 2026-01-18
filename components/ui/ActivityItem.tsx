@@ -190,14 +190,14 @@ const styles = StyleSheet.create({
     borderRadius: AVATAR_SIZE / 2,
   },
   avatarPlaceholder: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accentLight,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: {
-    color: colors.primaryDark,
+    color: colors.accentDark,
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   iconBadge: {
     position: "absolute",
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   groupBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accentLight,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
@@ -254,8 +254,8 @@ const styles = StyleSheet.create({
   },
   groupName: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
-    color: colors.primaryDark,
+    fontWeight: "500",
+    color: colors.accentDark,
     maxWidth: 100,
   },
   actionIndicator: {

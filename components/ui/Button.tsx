@@ -6,8 +6,10 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
+  View,
 } from "react-native";
-import { colors, borderRadius, spacing } from "../../lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, borderRadius, spacing, gradients } from "../../lib/theme";
 
 interface ButtonProps {
   title: string;
@@ -19,6 +21,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   fullWidth?: boolean;
+  testID?: string;
 }
 
 export function Button({
@@ -31,15 +34,9 @@ export function Button({
   style,
   textStyle,
   fullWidth = true,
+  testID,
 }: ButtonProps) {
-  const buttonStyles = [
-    styles.base,
-    styles[variant],
-    styles[`size_${size}`],
-    fullWidth && styles.fullWidth,
-    disabled && styles.disabled,
-    style,
-  ];
+  const isPrimary = variant === "primary";
 
   const textStyles = [
     styles.text,
@@ -49,21 +46,60 @@ export function Button({
     textStyle,
   ];
 
+  const content = loading ? (
+    <ActivityIndicator
+      color={isPrimary || variant === "danger" ? colors.white : colors.accent}
+      size="small"
+    />
+  ) : (
+    <Text style={textStyles}>{title}</Text>
+  );
+
+  // Primary button uses gradient
+  if (isPrimary) {
+    return (
+      <TouchableOpacity
+        testID={testID}
+        onPress={onPress}
+        disabled={disabled || loading}
+        activeOpacity={0.9}
+        style={[fullWidth && styles.fullWidth, style]}
+      >
+        <LinearGradient
+          colors={gradients.primary.colors}
+          start={gradients.primary.start}
+          end={gradients.primary.end}
+          style={[
+            styles.base,
+            styles[`size_${size}`],
+            disabled && styles.disabled,
+          ]}
+        >
+          {content}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+
+  // Other variants use solid backgrounds
+  const buttonStyles = [
+    styles.base,
+    styles[variant],
+    styles[`size_${size}`],
+    fullWidth && styles.fullWidth,
+    disabled && styles.disabled,
+    style,
+  ];
+
   return (
     <TouchableOpacity
+      testID={testID}
       style={buttonStyles}
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.8}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === "primary" ? colors.white : colors.primary}
-          size="small"
-        />
-      ) : (
-        <Text style={textStyles}>{title}</Text>
-      )}
+      {content}
     </TouchableOpacity>
   );
 }
@@ -78,10 +114,10 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   primary: {
-    backgroundColor: colors.primary,
+    // Gradient applied via LinearGradient
   },
   secondary: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accentLight,
   },
   ghost: {
     backgroundColor: "transparent",
@@ -105,16 +141,16 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   text: {
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   text_primary: {
     color: colors.white,
   },
   text_secondary: {
-    color: colors.primary,
+    color: colors.accent,
   },
   text_ghost: {
-    color: colors.primary,
+    color: colors.accent,
   },
   text_danger: {
     color: colors.white,

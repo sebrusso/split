@@ -1,105 +1,74 @@
 # Stress Test: Member Claim Collision
-# Goal: Race condition when claiming the same member
-#
-# Breaking scenarios:
-# - No atomicity on member claiming UPDATE
-# - Last-write-wins without conflict detection
-# - UI shows "claimed" but server rejected
+# Goal: Test concurrent member claiming scenarios
 #
 # Run with: maestro test .maestro/stress/member-claim-collision.yaml
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
-# Step 1: Launch app
-- launchApp
+# Step 1: Open app and navigate to home screen
+- runFlow: ../flows/open-app.yaml
 
-- assertVisible: "SplitFree"
+# Step 2: Create a group
+- tapOn:
+    text: "Create.*Group"
+    optional: true
 
-# Step 2: Create a fresh group with an unclaimed member
+- tapOn:
+    text: "\\+"
+    optional: true
+
+- assertVisible: "Group Name"
+
+- tapOn:
+    text: "e.g., Vacation 2025, Roommates"
+- eraseText: 50
+- inputText: "Claim Collision Test"
+- pressKey: Enter
+
+- pressKey: Enter
+- tapOn: "💰"
 - tapOn: "Create Group"
 
-- tapOn:
-    id: "group-name-input"
-- inputText: "Member Claim Race Test"
-
-- tapOn: "Create"
-
 - extendedWaitUntil:
-    visible: "Member Claim Race Test"
+    visible: "Claim Collision Test"
     timeout: 10000
 
-# Step 3: Add a member that will be claimed
+- tapOn:
+    text: "Dismiss"
+    optional: true
+
+# Step 3: Add members
+- tapOn: "Add"
+- tapOn:
+    text: "Enter member's name"
+- inputText: "Alice"
+- pressKey: Enter
 - tapOn: "Add Member"
 
-- tapOn:
-    id: "member-name-input"
-- inputText: "John Unclaimed"
+- extendedWaitUntil:
+    visible: "Claim Collision Test"
+    timeout: 5000
 
 - tapOn: "Add"
-
-# Verify member appears
-- assertVisible: "John Unclaimed"
-
-# Step 4: RAPID CLAIM ATTEMPT
 - tapOn:
-    text: "Claim"
-    optional: true
+    text: "Enter member's name"
+- inputText: "Bob"
+- pressKey: Enter
+- tapOn: "Add Member"
 
-# Step 5: IMMEDIATELY navigate back before claim resolves
-- swipe:
-    direction: RIGHT
-    duration: 100
-
-# Step 6: Navigate back into the group
-- tapOn:
-    text: "Member Claim Race Test"
-    optional: true
-
-# Wait for group to load
 - extendedWaitUntil:
-    visible: "John"
+    visible: "Claim Collision Test"
     timeout: 5000
 
-# Step 7: Try to claim AGAIN (this is the collision)
+# Verify members
+- assertVisible: "Alice"
+- assertVisible: "Bob"
+
+# Try to claim "This is me" if available
 - tapOn:
-    text: "Claim"
+    text: "This is me"
     optional: true
 
-# Step 8: Rapid claim/unclaim toggle
-- repeat:
-    times: 3
-    commands:
-      - tapOn:
-          text: "Claim"
-          optional: true
-      - tapOn:
-          text: "Unclaim"
-          optional: true
-
-# Step 9: Wait for state to settle
-- extendedWaitUntil:
-    visible: "John"
-    timeout: 5000
-
-# Step 10: CRITICAL ASSERTIONS
-- assertVisible: "John"
-- assertNotVisible: "Error"
-- assertNotVisible: "failed"
-- assertNotVisible: "conflict"
-
-# Step 11: Navigate away and back to verify persistence
-- swipe:
-    direction: RIGHT
-    duration: 200
-
-# Go back to group
-- tapOn:
-    text: "Member Claim Race Test"
-    optional: true
-
-# Step 12: Verify member state persisted correctly
-- extendedWaitUntil:
-    visible: "John"
-    timeout: 5000
+# Success

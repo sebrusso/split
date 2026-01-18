@@ -1,0 +1,51 @@
+# Login Flow for E2E Testing
+#
+# IMPORTANT: This account has 2FA enabled. For automated testing:
+# 1. Log in MANUALLY once in the simulator using the test credentials
+# 2. Then run tests - they will reuse the existing session
+#
+# Run with: maestro test .maestro/flows/login.yaml
+#
+# Test Account:
+# - Email: sebalexrusso@gmail.com
+# - Password: t5Ncuv6ZhZMXb
+
+appId: host.exp.Exponent
+
+---
+
+# Step 1: Launch Expo Go
+- launchApp
+
+# Wait for Expo Go to load
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 15000
+
+# Step 2: If on Expo Go home screen, tap on SplitFree project
+- tapOn:
+    text: "SplitFree"
+    optional: true
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 20000
+
+# Step 3: Dismiss Expo debugger toast if present
+- tapOn:
+    point: "93%,96%"
+    optional: true
+
+# Wait for content
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 5000
+
+# Step 4: Check if already logged in - if we see Create Group, we're done
+- extendedWaitUntil:
+    visible: "Create Group"
+    timeout: 10000
+
+# Success - user is logged in (either was already logged in, or manual login completed)
+- assertVisible: "Create Group"

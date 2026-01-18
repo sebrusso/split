@@ -97,7 +97,7 @@ export function FriendCard({
     if (loading) {
       return (
         <View style={styles.actionsContainer}>
-          <ActivityIndicator size="small" color={colors.primary} />
+          <ActivityIndicator size="small" color={colors.accent} />
         </View>
       );
     }
@@ -227,14 +227,14 @@ const styles = StyleSheet.create({
     borderRadius: AVATAR_SIZE / 2,
   },
   avatarPlaceholder: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: {
     color: colors.white,
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   infoContainer: {
     flex: 1,
@@ -260,15 +260,15 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
   badgePending: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accentLight,
   },
   badgeOutgoing: {
     backgroundColor: colors.borderLight,
   },
   badgeText: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
-    color: colors.primaryDark,
+    fontWeight: "500",
+    color: colors.accentDark,
   },
   actionsContainer: {
     flexDirection: "row",
@@ -283,12 +283,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   acceptButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
   acceptButtonText: {
     color: colors.white,
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   rejectButton: {
     backgroundColor: colors.borderLight,
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   rejectButtonText: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   cancelButton: {
     backgroundColor: colors.borderLight,
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   removeButton: {
     backgroundColor: colors.dangerLight,
@@ -312,14 +312,14 @@ const styles = StyleSheet.create({
   removeButtonText: {
     color: colors.danger,
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   addButton: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accentLight,
   },
   addButtonText: {
-    color: colors.primaryDark,
+    color: colors.accentDark,
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
 });

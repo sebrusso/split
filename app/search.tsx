@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   },
   resultAmount: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   emptyState: {
     flex: 1,

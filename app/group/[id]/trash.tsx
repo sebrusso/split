@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Expense, Member } from "../../../lib/types";
 import logger from "../../../lib/logger";
 import { formatCurrency, formatRelativeDate } from "../../../lib/utils";
@@ -23,6 +23,7 @@ import { deleteReceipt } from "../../../lib/storage";
 
 export default function TrashScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { getSupabase } = useSupabase();
   const [deletedExpenses, setDeletedExpenses] = useState<Expense[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,7 @@ export default function TrashScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
       // Fetch deleted expenses and members in parallel
       const [expensesResult, membersResult] = await Promise.all([
         supabase
@@ -53,7 +55,7 @@ export default function TrashScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,6 +70,7 @@ export default function TrashScreen() {
 
   const handleRestore = async (expenseId: string) => {
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase
         .from("expenses")
         .update({ deleted_at: null })
@@ -94,9 +97,10 @@ export default function TrashScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               // Delete receipt if exists
               if (expense.receipt_url) {
-                await deleteReceipt(expense.receipt_url);
+                await deleteReceipt(supabase, expense.receipt_url);
               }
 
               const { error } = await supabase
@@ -130,10 +134,11 @@ export default function TrashScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               // Delete all receipts
               for (const expense of deletedExpenses) {
                 if (expense.receipt_url) {
-                  await deleteReceipt(expense.receipt_url);
+                  await deleteReceipt(supabase, expense.receipt_url);
                 }
               }
 
@@ -170,6 +175,7 @@ export default function TrashScreen() {
           text: "Restore All",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const { error } = await supabase
                 .from("expenses")
                 .update({ deleted_at: null })

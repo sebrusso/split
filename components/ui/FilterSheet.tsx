@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   },
   categoryNameSelected: {
     color: colors.primaryDark,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   checkIcon: {
     marginLeft: spacing.xs,
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   filterBadgeText: {
     fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.white,
   },
 });

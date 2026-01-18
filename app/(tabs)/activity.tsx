@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
   filterText: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
     color: colors.textSecondary,
   },
   filterTextActive: {
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   },
   clearFilterText: {
     color: colors.primaryDark,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     fontSize: 14,
   },
 });

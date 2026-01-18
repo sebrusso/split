@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   methodNameSelected: {
     color: colors.primary,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   checkmark: {
     width: 20,

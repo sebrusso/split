@@ -225,7 +225,7 @@ export const SentryErrorBoundary = Sentry.ErrorBoundary || FallbackErrorBoundary
  * Returns identity function if Sentry.wrap isn't available
  */
 export function withSentryScreen<T>(component: T): T {
-  return Sentry.wrap ? Sentry.wrap(component as any) : component;
+  return Sentry.wrap ? (Sentry.wrap(component as any) as T) : component;
 }
 
 // Re-export Sentry for advanced usage

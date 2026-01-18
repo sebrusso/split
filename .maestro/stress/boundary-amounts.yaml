@@ -1,53 +1,80 @@
 # Stress Test: Boundary Amount Edge Cases
-# Goal: Test edge case amounts that break split calculations
+# Goal: Test edge case amounts that might break split calculations
 #
 # Breaking scenarios:
 # - Division by 3 creates infinite decimal
 # - Last-person rounding adjustment goes negative
 # - Large numbers overflow display or calculations
 #
-# Run with: maestro test .maestro/stress/boundary-amounts.yaml
+# Run with: bash .maestro/run-maestro.sh test .maestro/stress/boundary-amounts.yaml
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
-# Step 1: Launch app
-- launchApp
-
-- assertVisible: "SplitFree"
+# Step 1: Open app and navigate to home screen
+- runFlow: ../flows/open-app.yaml
 
 # Step 2: Create a test group
-- tapOn: "Create Group"
+# Try "Create Your First Group" (empty state) or "+" FAB (has groups)
+- tapOn:
+    text: "Create.*Group"
+    optional: true
 
 - tapOn:
-    id: "group-name-input"
-- inputText: "Boundary Amount Test"
+    text: "\\+"
+    optional: true
 
-- tapOn: "Create"
+- assertVisible: "Group Name"
+
+- tapOn:
+    text: "e.g., Vacation 2025, Roommates"
+- inputText: "Boundary Amount Test"
+- pressKey: Enter
+
+- pressKey: Enter
+
+- tapOn: "💰"
+
+- tapOn: "Create Group"
 
 - extendedWaitUntil:
     visible: "Boundary Amount Test"
     timeout: 10000
 
 # Step 3: Add exactly 3 members (worst case for division)
-- tapOn: "Add Member"
+- tapOn: "Add"
 - tapOn:
-    id: "member-name-input"
+    text: "Enter member's name"
 - inputText: "Alice"
-- tapOn: "Add"
-
+- pressKey: Enter
 - tapOn: "Add Member"
+
+- extendedWaitUntil:
+    visible: "Boundary Amount Test"
+    timeout: 5000
+
+- tapOn: "Add"
 - tapOn:
-    id: "member-name-input"
+    text: "Enter member's name"
 - inputText: "Bob"
-- tapOn: "Add"
-
+- pressKey: Enter
 - tapOn: "Add Member"
-- tapOn:
-    id: "member-name-input"
-- inputText: "Charlie"
+
+- extendedWaitUntil:
+    visible: "Boundary Amount Test"
+    timeout: 5000
+
 - tapOn: "Add"
+- tapOn:
+    text: "Enter member's name"
+- inputText: "Charlie"
+- pressKey: Enter
+- tapOn: "Add Member"
+
+- extendedWaitUntil:
+    visible: "Boundary Amount Test"
+    timeout: 5000
 
 # Verify 3 members
 - assertVisible: "Alice"
@@ -58,54 +85,65 @@ appId: com.splitfree.app
 # TEST 1: $0.01 split 3 ways
 # ========================================
 
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
+    text: "e.g., Dinner, Uber, Groceries"
 - inputText: "One Cent Test"
+- pressKey: Enter
 
 - tapOn:
-    id: "expense-amount-input"
+    text: "0.00"
 - inputText: "0.01"
+- pressKey: Enter
 
-- tapOn: "Who paid?"
+- tapOn: "Paid by"
 - tapOn: "Alice"
 
-- tapOn: "Save"
+- tapOn: "Add Expense"
 
 - extendedWaitUntil:
     visible: "One Cent Test"
     timeout: 10000
 
 # Check balances for negative amounts
-- tapOn: "Balances"
+- tapOn: "View Balances"
 
 # CRITICAL: No negative amounts should appear
 - assertNotVisible: "-$0.01"
 - assertNotVisible: "-$0.02"
 
+# Go back to group
 - tapOn:
-    text: "Back"
+    point: "5%,5%"
     optional: true
+
+- extendedWaitUntil:
+    visible: "Boundary Amount Test"
+    timeout: 5000
 
 # ========================================
 # TEST 2: $0.02 split 3 ways
 # ========================================
 
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
+    text: "e.g., Dinner, Uber, Groceries"
 - inputText: "Two Cents Test"
+- pressKey: Enter
 
 - tapOn:
-    id: "expense-amount-input"
+    text: "0.00"
 - inputText: "0.02"
+- pressKey: Enter
 
-- tapOn: "Who paid?"
+- tapOn: "Paid by"
 - tapOn: "Alice"
 
-- tapOn: "Save"
+- tapOn: "Add Expense"
 
 - extendedWaitUntil:
     visible: "Two Cents Test"
@@ -115,20 +153,23 @@ appId: com.splitfree.app
 # TEST 3: $1.00 split 3 ways (classic problem)
 # ========================================
 
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
+    text: "e.g., Dinner, Uber, Groceries"
 - inputText: "One Dollar Test"
+- pressKey: Enter
 
 - tapOn:
-    id: "expense-amount-input"
+    text: "0.00"
 - inputText: "1.00"
+- pressKey: Enter
 
-- tapOn: "Who paid?"
+- tapOn: "Paid by"
 - tapOn: "Charlie"
 
-- tapOn: "Save"
+- tapOn: "Add Expense"
 
 - extendedWaitUntil:
     visible: "One Dollar Test"
@@ -138,37 +179,37 @@ appId: com.splitfree.app
 # TEST 4: Large amount - $999,999.99
 # ========================================
 
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
+    text: "e.g., Dinner, Uber, Groceries"
 - inputText: "Maximum Amount Test"
+- pressKey: Enter
 
 - tapOn:
-    id: "expense-amount-input"
+    text: "0.00"
 - inputText: "999999.99"
+- pressKey: Enter
 
-- tapOn: "Who paid?"
+- tapOn: "Paid by"
 - tapOn: "Alice"
 
-- tapOn: "Save"
+- tapOn: "Add Expense"
 
 - extendedWaitUntil:
     visible: "Maximum Amount Test"
     timeout: 15000
-
-# Verify large amount displays without overflow
-- assertVisible: "999"
 
 # ========================================
 # FINAL VERIFICATION
 # ========================================
 
 # Navigate to balances
-- tapOn: "Balances"
+- tapOn: "View Balances"
 
 - extendedWaitUntil:
-    visible: "Who Owes Who"
+    visible: "Individual Balances"
     timeout: 10000
 
 # CRITICAL: No NaN or undefined

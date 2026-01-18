@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     marginBottom: spacing.sm,
   },
   editLink: {
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   moreItems: {
     ...typography.small,
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.primary,
     marginTop: spacing.xs,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   actionButtons: {
     width: "100%",

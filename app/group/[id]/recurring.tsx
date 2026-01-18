@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Member, Group } from "../../../lib/types";
 import logger from "../../../lib/logger";
 import { formatCurrency } from "../../../lib/utils";
@@ -43,6 +43,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
 
 export default function RecurringExpensesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +51,7 @@ export default function RecurringExpensesScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
       const [groupResult, recurringResult] = await Promise.all([
         supabase.from("groups").select("*").eq("id", id).single(),
         supabase
@@ -71,7 +73,7 @@ export default function RecurringExpensesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,6 +88,7 @@ export default function RecurringExpensesScreen() {
 
   const handleToggleActive = async (expense: RecurringExpense) => {
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase
         .from("recurring_expenses")
         .update({ is_active: !expense.is_active })
@@ -110,6 +113,7 @@ export default function RecurringExpensesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const { error } = await supabase
                 .from("recurring_expenses")
                 .delete()
@@ -396,7 +400,7 @@ const styles = StyleSheet.create({
   pausedText: {
     ...typography.caption,
     color: colors.warning,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   expenseActions: {
     flexDirection: "row",

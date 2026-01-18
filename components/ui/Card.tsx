@@ -10,6 +10,7 @@ interface CardProps {
 }
 
 export function Card({ children, style, onPress, padded = true }: CardProps) {
+  // Borderless card with stronger shadow
   const cardStyle = [styles.card, shadows.md, padded && styles.padded, style];
 
   if (onPress) {
@@ -27,6 +28,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.md,
+    // No border - relies on shadow for depth
   },
   padded: {
     padding: spacing.lg,

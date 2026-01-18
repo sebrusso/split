@@ -3,7 +3,7 @@
  * Functions for claiming guest members and linking them to user accounts
  */
 
-import { supabase } from "./supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { Member } from "./types";
 import { handleAsync, AsyncResult } from "./utils";
 import logger from "./logger";
@@ -13,17 +13,19 @@ import logger from "./logger";
  * This allows a user to associate themselves with a member that was created
  * by someone else in the group (e.g., "John" added by the group creator)
  *
+ * @param client The authenticated Supabase client
  * @param memberId The ID of the member to claim
  * @param userId The Clerk user ID to link to this member
  * @returns Success result with the updated member
  */
 export async function claimMember(
+  client: SupabaseClient,
   memberId: string,
   userId: string
 ): Promise<AsyncResult<Member>> {
   return handleAsync(async () => {
     // Update the member's clerk_user_id (TEXT column for Clerk IDs)
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("members")
       .update({ clerk_user_id: userId })
       .eq("id", memberId)
@@ -46,16 +48,18 @@ export async function claimMember(
  * Get a member in a group by user ID
  * This checks if a user already has a claimed member in a specific group
  *
+ * @param client The authenticated Supabase client
  * @param groupId The group ID to search in
  * @param userId The Clerk user ID to search for
  * @returns The member if found, null otherwise
  */
 export async function getMemberByUserId(
+  client: SupabaseClient,
   groupId: string,
   userId: string
 ): Promise<Member | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("members")
       .select("*")
       .eq("group_id", groupId)
@@ -83,17 +87,19 @@ export async function getMemberByUserId(
  * 1. The member doesn't have a user_id yet (it's unclaimed)
  * 2. The user doesn't already have a claimed member in this group
  *
+ * @param client The authenticated Supabase client
  * @param memberId The member ID to check
  * @param userId The Clerk user ID
  * @returns Whether the user can claim this member
  */
 export async function canClaimMember(
+  client: SupabaseClient,
   memberId: string,
   userId: string
 ): Promise<{ canClaim: boolean; reason?: string }> {
   try {
     // Get the member to check if it's already claimed
-    const { data: member, error: memberError } = await supabase
+    const { data: member, error: memberError } = await client
       .from("members")
       .select("*")
       .eq("id", memberId)
@@ -109,7 +115,7 @@ export async function canClaimMember(
     }
 
     // Check if user already has a claimed member in this group
-    const existingMember = await getMemberByUserId(member.group_id, userId);
+    const existingMember = await getMemberByUserId(client, member.group_id, userId);
     if (existingMember) {
       return {
         canClaim: false,

@@ -1,0 +1,33 @@
+# Shared Flow: Skip Welcome Carousel
+# Skips through the welcome screen to reach sign-in
+# Include with: - runFlow: flows/skip-welcome.yaml
+
+appId: host.exp.Exponent
+
+---
+
+# Check if we're on welcome screen and skip it
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 5000
+
+# Try to skip welcome (if visible)
+- tapOn:
+    text: "Skip"
+    optional: true
+
+# Or tap through carousel
+- tapOn:
+    text: "Next"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
+
+# Now we should be on sign-in or home
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 3000

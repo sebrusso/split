@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Group, Member, SettlementRecord } from "../../../lib/types";
 import {
   formatCurrency,
@@ -54,6 +54,7 @@ interface ExpenseWithSplits {
 export default function BalancesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [settlementRecords, setSettlementRecords] = useState<SettlementRecord[]>([]);
@@ -82,6 +83,8 @@ export default function BalancesScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
+
       // Fetch group
       const { data: groupData, error: groupError } = await supabase
         .from("groups")
@@ -180,7 +183,7 @@ export default function BalancesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -230,6 +233,7 @@ export default function BalancesScreen() {
     setShowSettlementModal(false);
 
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase.from("settlements").insert({
         group_id: id,
         from_member_id: selectedSettlement.from,
@@ -302,6 +306,7 @@ export default function BalancesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              const supabase = await getSupabase();
               const { error } = await supabase
                 .from("settlements")
                 .delete()
@@ -927,7 +932,7 @@ const styles = StyleSheet.create({
   settlementAmount: {
     ...typography.bodyMedium,
     color: colors.text,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     marginBottom: spacing.xs,
   },
   settlementButtons: {
@@ -946,7 +951,7 @@ const styles = StyleSheet.create({
   remindButtonText: {
     color: colors.primary,
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   settleButton: {
     backgroundColor: colors.primary,
@@ -957,7 +962,7 @@ const styles = StyleSheet.create({
   settleButtonText: {
     color: colors.white,
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   historyCard: {
     marginBottom: spacing.sm,
@@ -982,7 +987,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   historyName: {
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   historyMethodIcon: {
     fontSize: 18,
@@ -1184,6 +1189,6 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     ...typography.bodyMedium,
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
 });

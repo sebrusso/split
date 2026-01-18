@@ -5,16 +5,18 @@ import {
   Text,
   StyleSheet,
   TextInputProps,
+  StyleProp,
   ViewStyle,
 } from "react-native";
-import { colors, borderRadius, spacing, typography } from "../../lib/theme";
+import { colors, borderRadius, spacing, typography, shadows } from "../../lib/theme";
 
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
-  containerStyle?: ViewStyle;
+  containerStyle?: StyleProp<ViewStyle>;
   prefix?: string;
   suffix?: string;
+  inputTestID?: string;
 }
 
 export function Input({
@@ -26,6 +28,7 @@ export function Input({
   style,
   multiline,
   numberOfLines,
+  inputTestID,
   ...props
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
@@ -36,13 +39,15 @@ export function Input({
       <View
         style={[
           styles.inputContainer,
+          shadows.sm,
           multiline && styles.inputContainerMultiline,
           isFocused && styles.inputFocused,
           error && styles.inputError,
         ]}
       >
-        {prefix && <Text style={styles.prefix}>{prefix}</Text>}
+        {prefix && <Text style={[styles.prefix, isFocused && styles.prefixFocused]}>{prefix}</Text>}
         <TextInput
+          testID={inputTestID}
           style={[
             styles.input,
             multiline && styles.inputMultiline,
@@ -54,9 +59,11 @@ export function Input({
           multiline={multiline}
           numberOfLines={numberOfLines}
           textAlignVertical={multiline ? "top" : "center"}
+          autoCorrect={false}
+          autoCapitalize="words"
           {...props}
         />
-        {suffix && <Text style={styles.suffix}>{suffix}</Text>}
+        {suffix && <Text style={[styles.suffix, isFocused && styles.suffixFocused]}>{suffix}</Text>}
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
@@ -68,15 +75,17 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   label: {
-    ...typography.bodyMedium,
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.text,
     marginBottom: spacing.sm,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
     height: 48,
-    borderWidth: 1,
-    borderColor: colors.border,
+    // Borderless by default - uses shadow
+    borderWidth: 0,
     borderRadius: borderRadius.md,
     backgroundColor: colors.card,
     paddingHorizontal: spacing.lg,
@@ -88,16 +97,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   inputFocused: {
-    borderColor: colors.primary,
+    // Add accent border on focus
     borderWidth: 2,
+    borderColor: colors.accent,
   },
   inputError: {
+    borderWidth: 2,
     borderColor: colors.danger,
   },
   input: {
     flex: 1,
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     color: colors.text,
   },
   inputMultiline: {
@@ -106,18 +117,25 @@ const styles = StyleSheet.create({
   },
   prefix: {
     fontSize: 16,
-    fontFamily: "Inter_500Medium",
-    color: colors.textSecondary,
+    fontWeight: "500",
+    color: colors.textMuted,
     marginRight: spacing.xs,
+  },
+  prefixFocused: {
+    color: colors.text,
   },
   suffix: {
     fontSize: 16,
-    fontFamily: "Inter_500Medium",
-    color: colors.textSecondary,
+    fontWeight: "500",
+    color: colors.textMuted,
     marginLeft: spacing.xs,
   },
+  suffixFocused: {
+    color: colors.text,
+  },
   error: {
-    ...typography.small,
+    fontSize: 12,
+    fontWeight: "500",
     color: colors.danger,
     marginTop: spacing.xs,
   },

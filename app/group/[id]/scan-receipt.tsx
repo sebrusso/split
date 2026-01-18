@@ -24,7 +24,7 @@ import { colors, spacing, typography, borderRadius } from '../../../lib/theme';
 import { Button } from '../../../components/ui';
 import { useReceiptUpload } from '../../../lib/useReceipts';
 import { useAuth } from '../../../lib/auth-context';
-import { supabase } from '../../../lib/supabase';
+import { useSupabase } from '../../../lib/supabase';
 import { Member } from '../../../lib/types';
 import { useAnalytics, AnalyticsEvents } from '../../../lib/analytics-provider';
 
@@ -32,6 +32,7 @@ export default function ScanReceiptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
   const { trackEvent } = useAnalytics();
+  const { getSupabase } = useSupabase();
   const cameraRef = useRef<CameraView>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -51,6 +52,7 @@ export default function ScanReceiptScreen() {
       }
 
       try {
+        const supabase = await getSupabase();
         const { data: member } = await supabase
           .from('members')
           .select('*')

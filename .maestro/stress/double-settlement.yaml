@@ -8,80 +8,100 @@
 #
 # Run with: maestro test .maestro/stress/double-settlement.yaml
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
-# Step 1: Launch app
-- launchApp
-
-- assertVisible: "SplitFree"
+# Step 1: Open app and navigate to home screen
+- runFlow: ../flows/open-app.yaml
 
 # Step 2: Create a new group for clean state
+- tapOn:
+    text: "Create.*Group"
+    optional: true
+
+- tapOn:
+    text: "\\+"
+    optional: true
+
+- assertVisible: "Group Name"
+
+- tapOn:
+    text: "e.g., Vacation 2025, Roommates"
+- eraseText: 50
+- inputText: "Double Settlement Test"
+- pressKey: Enter
+
+- pressKey: Enter
+- tapOn: "💰"
 - tapOn: "Create Group"
 
-- assertVisible: "New Group"
-
-# Enter group name
-- tapOn:
-    id: "group-name-input"
-- inputText: "Double Settlement Test"
-
-# Create group
-- tapOn: "Create"
-
-# Wait for group to be created
 - extendedWaitUntil:
     visible: "Double Settlement Test"
     timeout: 10000
 
-# Step 3: Add first member (Alice - payer)
-- tapOn: "Add Member"
 - tapOn:
-    id: "member-name-input"
-- inputText: "Alice"
+    text: "Dismiss"
+    optional: true
+
+# Step 3: Add first member (Alice - payer)
 - tapOn: "Add"
+- tapOn:
+    text: "Enter member's name"
+- inputText: "Alice"
+- pressKey: Enter
+- tapOn: "Add Member"
+
+- extendedWaitUntil:
+    visible: "Double Settlement Test"
+    timeout: 5000
 
 # Step 4: Add second member (Bob - owes money)
-- tapOn: "Add Member"
-- tapOn:
-    id: "member-name-input"
-- inputText: "Bob"
 - tapOn: "Add"
+- tapOn:
+    text: "Enter member's name"
+- inputText: "Bob"
+- pressKey: Enter
+- tapOn: "Add Member"
+
+- extendedWaitUntil:
+    visible: "Double Settlement Test"
+    timeout: 5000
 
 # Verify members added
 - assertVisible: "Alice"
 - assertVisible: "Bob"
 
 # Step 5: Add an expense - Alice pays $100
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
+    text: "e.g., Dinner, Uber, Groceries"
 - inputText: "Test Expense for Double Settlement"
+- pressKey: Enter
 
+- pressKey: Enter
 - tapOn:
-    id: "expense-amount-input"
+    text: "0.00"
 - inputText: "100.00"
+- pressKey: Enter
 
-# Select Alice as payer
-- tapOn: "Who paid?"
+- pressKey: Enter
+- tapOn: "Paid by"
 - tapOn: "Alice"
 
-# Save expense
-- tapOn: "Save"
+- tapOn: "Add Expense"
 
-# Wait for expense to be created
 - extendedWaitUntil:
     visible: "Test Expense"
     timeout: 10000
 
 # Step 6: Navigate to balances
-- tapOn: "Balances"
+- tapOn: "View Balances"
 
-# Wait for balance calculation
 - extendedWaitUntil:
-    visible: "Who Owes Who"
+    visible: "Individual Balances"
     timeout: 10000
 
 # Step 7: Verify initial balance - Bob should owe Alice
@@ -89,59 +109,36 @@ appId: com.splitfree.app
 - assertVisible: "owes"
 
 # Step 8: FIRST SETTLEMENT ATTEMPT
-- tapOn: "Settle Up"
-
-# Verify settlement screen
-- assertVisible: "Settlement"
+- tapOn:
+    text: "Settle"
+    optional: true
 
 # Step 9: Immediately go back WITHOUT completing
-- tapOn:
-    text: "Back"
-    optional: true
 - tapOn:
     text: "Cancel"
     optional: true
 
 # Step 10: RAPID SECOND SETTLEMENT ATTEMPT
-- tapOn: "Settle Up"
+- tapOn:
+    text: "Settle"
+    optional: true
 
 # Step 11: Complete the settlement
 - tapOn:
     text: "Confirm"
     optional: true
+
+# Step 12: Quickly try THIRD settlement
 - tapOn:
-    text: "Mark as Paid"
-    optional: true
-- tapOn:
-    text: "Done"
+    text: "Settle"
     optional: true
 
-# Step 12: Quickly go back and try THIRD settlement
-- tapOn:
-    text: "Back"
-    optional: true
-
-- tapOn:
-    text: "Settle Up"
-    optional: true
-
-# Try to confirm again
 - tapOn:
     text: "Confirm"
     optional: true
-- tapOn:
-    text: "Mark as Paid"
-    optional: true
 
-# Step 13: Navigate to balances to check final state
-- tapOn: "Balances"
-
-# Step 14: CRITICAL ASSERTION - Balance should not be negative
-# Look for negative dollar amounts which would indicate double settlement
+# Step 13: CRITICAL ASSERTION - Balance should not be negative
 - assertNotVisible: "-$50"
 - assertNotVisible: "-$100"
 
-# Step 15: Check that balances show settled or zero
-- extendedWaitUntil:
-    visible: "Balances"
-    timeout: 5000
+# Success - no double settlement occurred

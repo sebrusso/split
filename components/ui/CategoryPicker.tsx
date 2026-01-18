@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   categoryNameSelected: {
     color: colors.primary,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   checkmark: {
     width: 18,

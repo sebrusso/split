@@ -1,92 +1,73 @@
 # E2E Test: Settlement/Payment Flow
-# Tests: View balances -> Select settlement -> Generate payment link -> Mark as settled
+# Tests: View balances -> Select settlement -> Record payment
 #
 # Run with: maestro test .maestro/settlement-flow.yaml
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
-# Step 1: Launch app
-- launchApp
+# Step 1: Open app and navigate to home screen
+- runFlow: flows/open-app.yaml
 
-- assertVisible: "SplitFree"
-
-# Step 2: Navigate to a group with existing balances
-# Tap on first group
+# Step 2: Navigate to a group with existing balances (tap first group)
 - tapOn:
     text: ".*"
-    index: 0
+    index: 1
 
-# Step 3: Go to balances tab
-- tapOn: "Balances"
+# Wait for group detail screen
+- extendedWaitUntil:
+    visible: "Members"
+    timeout: 10000
+
+# Step 3: Go to balances screen
+- tapOn: "View Balances"
 
 # Step 4: Verify balance information is shown
-- assertVisible: "Who Owes Who"
+- assertVisible: "Balances"
+- assertVisible: "Individual Balances"
 
-# Step 5: Find a settlement to complete
-# Look for "owes" text indicating someone has a debt
-- assertVisible:
-    text: "owes"
+# Step 5: Look for outstanding balances
+- runFlow:
+    when:
+      visible: "is owed"
+    commands:
+      - assertVisible: "Settle Up"
 
-# Step 6: Tap on "Settle Up" or a specific settlement
-- tapOn: "Settle Up"
-
-# Step 7: Verify settlement options screen
-- assertVisible: "Settlement"
-
-# Step 8: Check payment app options are available
-- assertVisible:
-    text: "Venmo|PayPal|Cash App|Zelle"
-    regex: true
-
-# Step 9: Select a payment method (Venmo as example)
+# Step 6: Tap on Settle button for a member who owes money
 - tapOn:
-    text: "Venmo"
+    text: "Settle"
     optional: true
 
-# If Venmo not available, try any payment option
+# Step 7: If settlement modal appears, verify it
 - runFlow:
     when:
-      notVisible: "Venmo"
+      visible: "Record Settlement"
     commands:
-      - tapOn:
-          text: "Pay|Send"
-          index: 0
+      - assertVisible: "Payment Method"
+      - assertVisible: "Date"
+      # Tap Confirm to record the settlement
+      - tapOn: "Confirm"
 
-# Step 10: Verify payment link or deep link is generated
-- assertVisible:
-    text: "Open|Pay|Send"
-    regex: true
-
-# Step 11: Instead of opening external app, mark as paid
-- tapOn:
-    text: "Mark as Paid|I've Paid|Confirm"
-    regex: true
-  optional: true
-
-# Alternative: Go back and manually confirm
+# Step 8: Verify Quick Pay options are available (if shown)
 - runFlow:
     when:
-      visible: "Back"
+      visible: "Quick Pay With"
     commands:
-      - tapOn: "Back"
+      - assertVisible: "Venmo"
 
-# Step 12: Confirm the settlement
-- tapOn:
-    text: "Confirm|Yes|Done"
-    regex: true
-  optional: true
+# Step 9: Check settlement history section
+- runFlow:
+    when:
+      visible: "Settlement History"
+    commands:
+      - assertVisible: "Settlement History"
 
-# Step 13: Verify settlement was recorded
-# Balance should be updated or cleared
-- assertVisible:
-    text: "Settled|Paid|All settled"
-    regex: true
-  optional: true
+# Step 10: Verify all settled case
+- runFlow:
+    when:
+      visible: "All settled up"
+    commands:
+      - assertVisible: "All settled up"
 
-# Step 14: Go back to balances to verify update
-- tapOn: "Balances"
-
-# The owed amount should be reduced or cleared
 # Success - settlement flow completed

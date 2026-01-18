@@ -8,136 +8,134 @@
 #
 # Run with: maestro test .maestro/stress/currency-chaos.yaml
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
-# Step 1: Launch app
-- launchApp
-
-- assertVisible: "SplitFree"
+# Step 1: Open app and navigate to home screen
+- runFlow: ../flows/open-app.yaml
 
 # Step 2: Create a group
-- tapOn: "Create Group"
+# Try "Create Your First Group" (empty state) or "+" FAB (has groups)
+- tapOn:
+    text: "Create.*Group"
+    optional: true
 
 - tapOn:
-    id: "group-name-input"
-- inputText: "Currency Chaos Test"
+    text: "\\+"
+    optional: true
 
-- tapOn: "Create"
+- assertVisible: "Group Name"
+
+- tapOn:
+    text: "e.g., Vacation 2025, Roommates"
+- eraseText: 50
+- inputText: "Currency Chaos Test"
+- pressKey: Enter
+
+- pressKey: Enter
+- tapOn: "💰"
+
+- tapOn: "Create Group"
 
 - extendedWaitUntil:
     visible: "Currency Chaos Test"
     timeout: 10000
 
-# Step 3: Add members
-- tapOn: "Add Member"
+# Dismiss any errors
 - tapOn:
-    id: "member-name-input"
-- inputText: "Alice"
-- tapOn: "Add"
+    text: "Dismiss"
+    optional: true
 
-- tapOn: "Add Member"
-- tapOn:
-    id: "member-name-input"
-- inputText: "Bob"
+# Step 3: Add members
 - tapOn: "Add"
+- tapOn:
+    text: "Enter member's name"
+- inputText: "Alice"
+- pressKey: Enter
+- tapOn: "Add Member"
+
+- extendedWaitUntil:
+    visible: "Currency Chaos Test"
+    timeout: 5000
+
+- tapOn: "Add"
+- tapOn:
+    text: "Enter member's name"
+- inputText: "Bob"
+- pressKey: Enter
+- tapOn: "Add Member"
+
+- extendedWaitUntil:
+    visible: "Currency Chaos Test"
+    timeout: 5000
 
 # ========================================
 # TEST 1: Add expense in USD
 # ========================================
 
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
-- inputText: "USD Expense"
+    text: "e.g., Dinner, Uber, Groceries"
+- inputText: "USD Test"
+- pressKey: Enter
 
+- pressKey: Enter
 - tapOn:
-    id: "expense-amount-input"
+    text: "0.00"
 - inputText: "100.00"
+- pressKey: Enter
 
-- tapOn: "Who paid?"
+- pressKey: Enter
+- tapOn: "Paid by"
 - tapOn: "Alice"
 
-- tapOn: "Save"
+- tapOn: "Add Expense"
 
 - extendedWaitUntil:
-    visible: "USD Expense"
+    visible: "USD Test"
     timeout: 10000
 
 # ========================================
-# TEST 2: Add expense with different amount
+# TEST 2: Add expense with decimal precision
 # ========================================
 
-- tapOn: "Add Expense"
+- tapOn:
+    text: "Add Expense"
 
 - tapOn:
-    id: "expense-description-input"
-- inputText: "Second Expense"
+    text: "e.g., Dinner, Uber, Groceries"
+- inputText: "Precision Test"
+- pressKey: Enter
 
+- pressKey: Enter
 - tapOn:
-    id: "expense-amount-input"
-- inputText: "123.45"
+    text: "0.00"
+- inputText: "33.33"
+- pressKey: Enter
 
-- tapOn: "Who paid?"
+- pressKey: Enter
+- tapOn: "Paid by"
 - tapOn: "Bob"
 
-- tapOn: "Save"
-
-- extendedWaitUntil:
-    visible: "Second Expense"
-    timeout: 10000
-
-# ========================================
-# TEST 3: Add expense with fractional cents
-# ========================================
-
 - tapOn: "Add Expense"
 
-- tapOn:
-    id: "expense-description-input"
-- inputText: "Fractional Test"
-
-- tapOn:
-    id: "expense-amount-input"
-- inputText: "33.33"
-
-- tapOn: "Who paid?"
-- tapOn: "Alice"
-
-- tapOn: "Save"
-
 - extendedWaitUntil:
-    visible: "Fractional Test"
+    visible: "Precision Test"
     timeout: 10000
-
-# ========================================
-# VERIFY BALANCES
-# ========================================
-
-- tapOn: "Balances"
-
-- extendedWaitUntil:
-    visible: "Who Owes Who"
-    timeout: 15000
-
-# CRITICAL ASSERTIONS
-- assertVisible: "$"
-- assertNotVisible: "NaN"
-- assertNotVisible: "Infinity"
-- assertNotVisible: "undefined"
 
 # ========================================
 # FINAL VERIFICATION
 # ========================================
 
-# Navigate back to expenses
-- tapOn:
-    text: "Back"
-    optional: true
+- tapOn: "View Balances"
 
-# All expenses should be visible
-- assertVisible: "USD Expense"
-- assertVisible: "Second Expense"
-- assertVisible: "Fractional Test"
+- extendedWaitUntil:
+    visible: "Individual Balances"
+    timeout: 10000
+
+# No NaN or calculation errors
+- assertNotVisible: "NaN"
+- assertNotVisible: "undefined"

@@ -13,7 +13,7 @@ import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../lib/supabase";
+import { useSupabase } from "../../lib/supabase";
 import { Group, GlobalBalance } from "../../lib/types";
 import logger from "../../lib/logger";
 import {
@@ -32,6 +32,7 @@ import { useAuth } from "../../lib/auth-context";
 export default function GroupsScreen() {
   const { user } = useUser();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,6 +50,8 @@ export default function GroupsScreen() {
         setRefreshing(false);
         return;
       }
+
+      const supabase = await getSupabase();
 
       // First, get all group IDs where the user is a member
       const { data: memberData, error: memberError } = await supabase
@@ -108,7 +111,7 @@ export default function GroupsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId]);
+  }, [userId, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -361,7 +364,7 @@ const styles = StyleSheet.create({
   },
   balanceValue: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     marginTop: 2,
   },
   balanceOwed: {
@@ -511,7 +514,7 @@ const styles = StyleSheet.create({
   fabSecondaryText: {
     fontSize: 16,
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   fab: {
     width: 56,
@@ -525,7 +528,7 @@ const styles = StyleSheet.create({
   fabText: {
     fontSize: 28,
     color: colors.white,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     marginTop: -2,
   },
 });

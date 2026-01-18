@@ -26,7 +26,7 @@ import {
   borderRadius,
   shadows,
 } from "../../lib/theme";
-import { supabase } from "../../lib/supabase";
+import { useSupabase } from "../../lib/supabase";
 import { Group } from "../../lib/types";
 
 interface GroupPickerProps {
@@ -48,6 +48,7 @@ export function GroupPicker({
   onClose,
   title = "Select Group",
 }: GroupPickerProps) {
+  const { getSupabase } = useSupabase();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,6 +62,7 @@ export function GroupPicker({
     }
 
     try {
+      const supabase = await getSupabase();
       // Get all group IDs where user is a member
       const { data: memberData, error: memberError } = await supabase
         .from("members")
@@ -94,7 +96,7 @@ export function GroupPicker({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [clerkUserId]);
+  }, [clerkUserId, getSupabase]);
 
   useEffect(() => {
     if (visible) {
@@ -349,7 +351,7 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     flex: 1,
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   searchContainer: {
     flexDirection: "row",
@@ -398,7 +400,7 @@ const styles = StyleSheet.create({
   },
   groupName: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   groupNameSelected: {
     color: colors.primary,

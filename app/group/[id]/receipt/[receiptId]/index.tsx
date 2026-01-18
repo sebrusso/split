@@ -40,12 +40,13 @@ import {
   groupItemsWithModifiers,
 } from '../../../../../lib/receipts';
 import { useAuth } from '../../../../../lib/auth-context';
-import { supabase } from '../../../../../lib/supabase';
+import { useSupabase } from '../../../../../lib/supabase';
 import { Member, ReceiptItem } from '../../../../../lib/types';
 
 export default function ReceiptClaimingScreen() {
   const { id, receiptId } = useLocalSearchParams<{ id: string; receiptId: string }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
 
   const { receipt, items, claims, members, summary, loading, error, refetch } =
     useReceiptSummary(receiptId);
@@ -116,6 +117,7 @@ export default function ReceiptClaimingScreen() {
         console.log('Fetching member for group/user:', { groupId: id, userId });
 
         try {
+          const supabase = await getSupabase();
           const { data: member, error } = await supabase
             .from('members')
             .select('*')
@@ -271,6 +273,7 @@ export default function ReceiptClaimingScreen() {
     // Generate share code if not exists
     let shareCode = receipt.share_code;
     if (!shareCode) {
+      const supabase = await getSupabase();
       shareCode = generateReceiptShareCode();
       await supabase
         .from('receipts')

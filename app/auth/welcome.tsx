@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   highlightText: {
     ...typography.small,
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   slideTitle: {
     ...typography.h1,

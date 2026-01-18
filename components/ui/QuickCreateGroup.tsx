@@ -26,7 +26,7 @@ import {
   typography,
   borderRadius,
 } from "../../lib/theme";
-import { supabase } from "../../lib/supabase";
+import { useSupabase } from "../../lib/supabase";
 import { generateShareCode } from "../../lib/utils";
 import { Input } from "./Input";
 import { Button } from "./Button";
@@ -57,6 +57,7 @@ export function QuickCreateGroup({
   onCancel,
 }: QuickCreateGroupProps) {
   const { user } = useUser();
+  const { getSupabase } = useSupabase();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("💰");
   const [currency, setCurrency] = useState("USD");
@@ -73,6 +74,7 @@ export function QuickCreateGroup({
     setError("");
 
     try {
+      const supabase = await getSupabase();
       const shareCode = await generateShareCode();
 
       const { data: group, error: groupError } = await supabase
@@ -281,7 +283,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
     marginBottom: spacing.sm,
     marginTop: spacing.lg,
   },
@@ -327,7 +329,7 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     fontSize: 20,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.text,
   },
   currencySymbolSelected: {

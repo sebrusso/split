@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   statusText: {
     ...typography.small,
     fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   reminderDate: {
     ...typography.small,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   },
   reminderAmount: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.success,
   },
   deleteButton: {
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   paidButtonText: {
     ...typography.small,
     color: colors.success,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   emptyState: {
     flex: 1,

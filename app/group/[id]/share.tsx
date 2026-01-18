@@ -13,7 +13,7 @@ import { useLocalSearchParams, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import QRCode from "react-native-qrcode-svg";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Group } from "../../../lib/types";
 import {
   colors,
@@ -26,12 +26,14 @@ import { Card, Button } from "../../../components/ui";
 
 export default function ShareScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
   const fetchGroup = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase
         .from("groups")
         .select("*")
@@ -45,7 +47,7 @@ export default function ShareScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -227,7 +229,7 @@ const styles = StyleSheet.create({
   },
   codeText: {
     fontSize: 36,
-    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     color: colors.primary,
     letterSpacing: 4,
   },

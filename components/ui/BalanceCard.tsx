@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, typography, borderRadius, shadows } from "../../lib/theme";
+import { colors, spacing, borderRadius, shadows } from "../../lib/theme";
 import { formatCurrency } from "../../lib/utils";
 import { Avatar } from "./Avatar";
 
@@ -17,6 +17,9 @@ interface BalanceCardProps {
 
 /**
  * Balance card for displaying group or friend balances
+ * Uses blue/gray semantic colors:
+ * - Blue: positive balance (you're owed)
+ * - Gray: negative balance (you owe)
  */
 export function BalanceCard({
   name,
@@ -31,11 +34,12 @@ export function BalanceCard({
   const isNegative = balance < -0.01;
   const isSettled = !isPositive && !isNegative;
 
+  // Blue for positive (owed), Gray for negative (owing)
   const balanceColor = isPositive
-    ? colors.success
+    ? colors.positive
     : isNegative
-      ? colors.danger
-      : colors.textSecondary;
+      ? colors.negative
+      : colors.settled;
 
   const statusText = isPositive
     ? "is owed"
@@ -162,11 +166,12 @@ export function BalanceIndicator({
   const isNegative = balance < -0.01;
   const isSettled = !isPositive && !isNegative;
 
+  // Blue for positive, Gray for negative
   const balanceColor = isPositive
-    ? colors.success
+    ? colors.positive
     : isNegative
-      ? colors.danger
-      : colors.textSecondary;
+      ? colors.negative
+      : colors.settled;
 
   const fontSize =
     size === "sm" ? 12 : size === "lg" ? 18 : 14;
@@ -225,14 +230,18 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   name: {
-    ...typography.bodyMedium,
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.text,
   },
   status: {
-    ...typography.small,
+    fontSize: 12,
+    fontWeight: "500",
     marginTop: 2,
   },
   subtitle: {
-    ...typography.small,
+    fontSize: 12,
+    fontWeight: "500",
     color: colors.textMuted,
     marginTop: 2,
   },
@@ -241,15 +250,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   amount: {
-    ...typography.amountMedium,
     fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: -0.5,
   },
   chevron: {
     marginLeft: spacing.xs,
   },
-  // Summary card styles
+  // Summary card styles - uses gradient accent background
   summaryCard: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.accentLight,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
@@ -265,23 +275,25 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 40,
-    backgroundColor: colors.primaryDark,
-    opacity: 0.2,
+    backgroundColor: colors.accent,
+    opacity: 0.3,
   },
   summaryLabel: {
-    ...typography.small,
-    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.accentDark,
     marginBottom: spacing.xs,
   },
   summaryAmount: {
-    ...typography.amountMedium,
     fontSize: 24,
+    fontWeight: "700",
+    letterSpacing: -0.5,
   },
   summaryOwed: {
-    color: colors.success,
+    color: colors.positive, // Blue
   },
   summaryOwing: {
-    color: colors.danger,
+    color: colors.negative, // Gray
   },
   netRow: {
     flexDirection: "row",
@@ -290,26 +302,28 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: "rgba(16, 185, 129, 0.2)",
+    borderTopColor: "rgba(59, 130, 246, 0.2)", // Blue with opacity
   },
   netLabel: {
-    ...typography.bodyMedium,
-    color: colors.primaryDark,
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.accentDark,
   },
   netAmount: {
-    ...typography.amountMedium,
     fontSize: 20,
-    color: colors.textSecondary,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    color: colors.settled,
   },
   netPositive: {
-    color: colors.success,
+    color: colors.positive, // Blue
   },
   netNegative: {
-    color: colors.danger,
+    color: colors.negative, // Gray
   },
   // Indicator styles
   indicator: {
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   // Empty state styles
   emptyState: {
@@ -321,12 +335,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   emptyTitle: {
-    ...typography.h3,
+    fontSize: 20,
+    fontWeight: "600",
     color: colors.text,
     marginBottom: spacing.xs,
   },
   emptySubtitle: {
-    ...typography.caption,
+    fontSize: 14,
+    fontWeight: "400",
     color: colors.textSecondary,
   },
 });

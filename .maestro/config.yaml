@@ -2,7 +2,7 @@
 # https://maestro.mobile.dev/
 
 # App configuration
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 # ========================================
 # HAPPY PATH TESTS (Quick verification)
@@ -31,8 +31,10 @@ flows:
 #   - receipt-ocr-timeout.yaml     (OCR processing timeout)
 
 # Environment variables for tests
+# Test account credentials:
 env:
-  TEST_USER_EMAIL: test@splitfree.app
+  TEST_EMAIL: "sebalexrusso@gmail.com"
+  TEST_PASSWORD: "t5Ncuv6ZhZMXb"
   STRESS_MODE: false
 
 # Screenshots on failure

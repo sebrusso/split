@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
+import { useColorScheme } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../../lib/theme";
+import { lightColors, darkColors } from "../../lib/theme";
 
 /**
  * Bottom Tab Navigation Layout
@@ -8,21 +9,24 @@ import { colors } from "../../lib/theme";
  * Profile is accessed via icon in each screen's header
  */
 export default function TabLayout() {
+  const colorScheme = useColorScheme();
+  const colors = colorScheme === "dark" ? darkColors : lightColors;
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           backgroundColor: colors.card,
-          borderTopColor: colors.borderLight,
+          borderTopColor: colors.border,
           borderTopWidth: 1,
           paddingTop: 8,
           paddingBottom: 8,
           height: 88,
         },
         tabBarLabelStyle: {
-          fontFamily: "Inter_500Medium",
+          fontWeight: "500",
           fontSize: 11,
           marginTop: 4,
         },

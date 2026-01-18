@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   summaryAmount: {
     fontSize: 40,
-    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     letterSpacing: -1,
     marginBottom: spacing.lg,
   },
@@ -424,14 +424,14 @@ const styles = StyleSheet.create({
   payAllText: {
     ...typography.small,
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   personRight: {
     alignItems: "flex-end",
   },
   balanceAmount: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   balanceLabel: {
     ...typography.small,

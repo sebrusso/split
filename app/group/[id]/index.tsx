@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Group, Member, Expense, SettlementRecord, Receipt } from "../../../lib/types";
 import logger from "../../../lib/logger";
 import { formatCurrency, formatRelativeDate, calculateBalancesWithSettlements } from "../../../lib/utils";
@@ -47,6 +47,7 @@ type ListItem =
 export default function GroupDetailScreen() {
   const { id, name: initialName } = useLocalSearchParams<{ id: string; name?: string }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<MemberWithProfile[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -60,6 +61,8 @@ export default function GroupDetailScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
+
       // Fetch group
       const { data: groupData, error: groupError } = await supabase
         .from("groups")
@@ -162,7 +165,7 @@ export default function GroupDetailScreen() {
 
       // Check if the current user has a claimed member in this group
       if (userId) {
-        const claimedMember = await getMemberByUserId(id, userId);
+        const claimedMember = await getMemberByUserId(supabase, id, userId);
         setUserClaimedMember(claimedMember);
       }
     } catch (error) {
@@ -171,7 +174,7 @@ export default function GroupDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id, userId]);
+  }, [id, userId, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -195,7 +198,8 @@ export default function GroupDetailScreen() {
     }
 
     try {
-      const result = await claimMember(memberId, userId);
+      const supabase = await getSupabase();
+      const result = await claimMember(supabase, memberId, userId);
       if (result.error) {
         Alert.alert("Error", result.error);
       } else {
@@ -213,6 +217,7 @@ export default function GroupDetailScreen() {
     if (!group) return;
 
     try {
+      const supabase = await getSupabase();
       const newPinnedState = !group.pinned;
       const { error } = await supabase
         .from("groups")
@@ -475,6 +480,7 @@ export default function GroupDetailScreen() {
           );
         })}
         <TouchableOpacity
+          testID="add-member-button"
           style={styles.addMemberButton}
           onPress={() => router.push(`/group/${id}/add-member`)}
         >
@@ -797,7 +803,7 @@ const styles = StyleSheet.create({
   },
   claimButtonText: {
     fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.white,
     textAlign: "center",
   },
@@ -816,7 +822,7 @@ const styles = StyleSheet.create({
   addMemberPlus: {
     fontSize: 24,
     color: colors.primary,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     marginTop: -2,
   },
   expenseCard: {
@@ -837,7 +843,7 @@ const styles = StyleSheet.create({
   receiptBadgeText: {
     ...typography.small,
     color: colors.primaryDark,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   receiptBadgeComplete: {
     backgroundColor: colors.successLight || "#D1FAE5",
@@ -909,7 +915,7 @@ const styles = StyleSheet.create({
   fabText: {
     color: colors.white,
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   balanceButtonContainer: {
     marginTop: spacing.lg,

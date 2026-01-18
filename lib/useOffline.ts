@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { supabase } from "./supabase";
+import { useSupabase, supabase } from "./supabase";
 import { Group, Member, Expense, SettlementRecord } from "./types";
 import type { TableName, OperationType } from "./offline";
 
@@ -234,6 +234,7 @@ export function useGroups(): {
   refreshing: boolean;
   refresh: () => Promise<void>;
 } {
+  const { getSupabase } = useSupabase();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -242,6 +243,7 @@ export function useGroups(): {
     if (isRefresh) setRefreshing(true);
 
     try {
+      const supabase = await getSupabase();
       // Always try network first (or if offline support unavailable)
       const { data, error } = await supabase
         .from("groups")
@@ -274,7 +276,7 @@ export function useGroups(): {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [getSupabase]);
 
   useEffect(() => {
     fetchGroups();
@@ -297,6 +299,7 @@ export function useGroupDetails(groupId: string): {
   refreshing: boolean;
   refresh: () => Promise<void>;
 } {
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -309,6 +312,7 @@ export function useGroupDetails(groupId: string): {
       if (isRefresh) setRefreshing(true);
 
       try {
+        const supabase = await getSupabase();
         // Fetch from network
         const [groupRes, membersRes, expensesRes, settlementsRes] =
           await Promise.all([
@@ -383,7 +387,7 @@ export function useGroupDetails(groupId: string): {
         setRefreshing(false);
       }
     },
-    [groupId],
+    [groupId, getSupabase],
   );
 
   useEffect(() => {

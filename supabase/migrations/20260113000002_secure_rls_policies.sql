@@ -617,6 +617,8 @@ ALTER TABLE public.reminder_history ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow public read access to reminder_history" ON public.reminder_history;
 DROP POLICY IF EXISTS "Allow public insert access to reminder_history" ON public.reminder_history;
+DROP POLICY IF EXISTS "Users can read reminder history for their groups" ON public.reminder_history;
+DROP POLICY IF EXISTS "System can insert reminder history" ON public.reminder_history;
 
 -- Helper: Check if user can access a reminder
 CREATE OR REPLACE FUNCTION can_access_reminder(rem_id UUID)

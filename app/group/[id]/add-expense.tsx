@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Member, Group, SplitMethod } from "../../../lib/types";
 import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
 import {
@@ -47,6 +47,7 @@ export default function AddExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
   const { trackEvent } = useAnalytics();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [amount, setAmount] = useState("");
@@ -84,6 +85,8 @@ export default function AddExpenseScreen() {
 
   const fetchData = async () => {
     try {
+      const supabase = await getSupabase();
+
       const { data: groupData } = await supabase
         .from("groups")
         .select("*")
@@ -265,6 +268,8 @@ export default function AddExpenseScreen() {
     setError("");
 
     try {
+      const supabase = await getSupabase();
+
       // Prepare currency data
       const groupCurrency = group?.currency || "USD";
       const actualCurrency = expenseCurrency || groupCurrency;
@@ -293,8 +298,8 @@ export default function AddExpenseScreen() {
 
       // Upload receipt if present
       let receiptUrl: string | null = null;
-      if (receiptUri) {
-        const uploadResult = await uploadReceipt(receiptUri, id!, expense.id);
+      if (receiptUri && userId) {
+        const uploadResult = await uploadReceipt(supabase, receiptUri, id!, expense.id, userId);
         if (uploadResult.data) {
           receiptUrl = uploadResult.data;
           // Update expense with receipt URL
@@ -438,6 +443,7 @@ export default function AddExpenseScreen() {
           <View style={styles.amountContainer}>
             <View style={styles.amountRow}>
               <AmountInput
+                testID="expense-amount-input"
                 value={amount}
                 onChangeText={setAmount}
                 currency={expenseCurrency || group?.currency || "USD"}
@@ -464,6 +470,7 @@ export default function AddExpenseScreen() {
 
           {/* Description */}
           <Input
+            inputTestID="expense-description-input"
             label="What's it for?"
             value={description}
             onChangeText={setDescription}
@@ -590,6 +597,7 @@ export default function AddExpenseScreen() {
 
         <View style={styles.footer}>
           <Button
+            testID="submit-add-expense"
             title="Add Expense"
             onPress={handleSubmit}
             loading={loading}
@@ -717,7 +725,7 @@ const styles = StyleSheet.create({
   },
   memberButtonTextSelected: {
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   previewCard: {
     backgroundColor: colors.primaryLight,

@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   appNameSelected: {
     color: colors.primary,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   qrContainer: {
     alignItems: "center",
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   doneButtonText: {
     ...typography.bodyMedium,
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   emptyState: {
     alignItems: "center",
@@ -367,6 +367,6 @@ const styles = StyleSheet.create({
   closeButtonText: {
     ...typography.bodyMedium,
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
 });

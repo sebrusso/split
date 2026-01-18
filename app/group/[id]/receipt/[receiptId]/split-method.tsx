@@ -22,7 +22,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../../../
 import { Button, Card, Avatar } from '../../../../../components/ui';
 import { useReceiptSummary, useItemClaims } from '../../../../../lib/useReceipts';
 import { formatReceiptAmount } from '../../../../../lib/receipts';
-import { supabase } from '../../../../../lib/supabase';
+import { useSupabase } from '../../../../../lib/supabase';
 import { Member } from '../../../../../lib/types';
 
 export default function SplitMethodScreen() {

@@ -31,13 +31,14 @@ import {
 import { getVenmoQRCodeUrl, getVenmoRequestLink } from '../../../../../lib/payment-links';
 import { getVenmoUsernamesForMembers } from '../../../../../lib/user-profile';
 import { useAuth } from '../../../../../lib/auth-context';
-import { supabase } from '../../../../../lib/supabase';
+import { supabase, useSupabase } from '../../../../../lib/supabase';
 import { Member, ReceiptMemberCalculation } from '../../../../../lib/types';
 import { getVenmoUsernameForMember } from '../../../../../lib/user-profile';
 
 export default function ReceiptSettleScreen() {
   const { id, receiptId } = useLocalSearchParams<{ id: string; receiptId: string }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
 
   const { receipt, summary, loading, error } = useReceiptSummary(receiptId);
 
@@ -258,7 +259,7 @@ export default function ReceiptSettleScreen() {
   };
 
   // Request money from a member who owes you (for payer)
-  const handleRequestVenmo = async (memberTotal: typeof summary.memberTotals[0]) => {
+  const handleRequestVenmo = async (memberTotal: ReceiptMemberCalculation) => {
     const memberVenmo = memberVenmoUsernames.get(memberTotal.memberId);
 
     if (!memberVenmo) {
@@ -314,7 +315,7 @@ export default function ReceiptSettleScreen() {
   };
 
   // Copy request link for a specific member (for payer)
-  const handleCopyRequestLink = async (memberTotal: typeof summary.memberTotals[0]) => {
+  const handleCopyRequestLink = async (memberTotal: ReceiptMemberCalculation) => {
     const memberVenmo = memberVenmoUsernames.get(memberTotal.memberId);
     if (!memberVenmo) return;
 
@@ -335,8 +336,11 @@ export default function ReceiptSettleScreen() {
     try {
       setSettling(true);
 
+      // Get authenticated Supabase client for RLS
+      const authSupabase = await getSupabase();
+
       const receiptMarker = `[receipt:${receiptId}]`;
-      const { data: existingExpenses } = await supabase
+      const { data: existingExpenses } = await authSupabase
         .from('expenses')
         .select('id')
         .eq('group_id', id)
@@ -349,7 +353,7 @@ export default function ReceiptSettleScreen() {
         const expenseAmount = summary.total;
         const notesText = `From receipt scan${receipt.merchant_address ? ` at ${receipt.merchant_address}` : ''} ${receiptMarker}`;
 
-        const { data: expense, error: expenseError } = await supabase
+        const { data: expense, error: expenseError } = await authSupabase
           .from('expenses')
           .insert({
             group_id: id,
@@ -375,12 +379,12 @@ export default function ReceiptSettleScreen() {
         }));
 
         if (splits.length > 0) {
-          const { error: splitsError } = await supabase.from('splits').insert(splits);
+          const { error: splitsError } = await authSupabase.from('splits').insert(splits);
           if (splitsError) throw splitsError;
         }
       }
 
-      await supabase
+      await authSupabase
         .from('receipts')
         .update({ status: 'settled' })
         .eq('id', receiptId);

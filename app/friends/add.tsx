@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     color: colors.text,
   },
   clearButton: {

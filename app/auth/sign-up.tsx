@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
   },
   oauthIcon: {
     fontSize: 20,
-    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     color: colors.text,
     marginRight: spacing.sm,
   },
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
   },
   emailHighlight: {
     color: colors.text,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   verifyButton: {
     marginTop: spacing.md,

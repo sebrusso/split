@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Member, Group, SplitMethod } from "../../../lib/types";
 import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
 import {
@@ -51,6 +51,7 @@ const DAYS_OF_WEEK = [
 export default function AddRecurringScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,6 +84,8 @@ export default function AddRecurringScreen() {
 
   const fetchData = async () => {
     try {
+      const supabase = await getSupabase();
+
       const { data: groupData } = await supabase
         .from("groups")
         .select("*")
@@ -198,6 +201,7 @@ export default function AddRecurringScreen() {
     setError("");
 
     try {
+      const supabase = await getSupabase();
       const nextDueDate = calculateNextDueDate();
 
       // Create recurring expense
@@ -527,7 +531,7 @@ const styles = StyleSheet.create({
   },
   memberButtonTextSelected: {
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   frequencyGrid: {
     flexDirection: "row",
@@ -554,7 +558,7 @@ const styles = StyleSheet.create({
   },
   frequencyLabelSelected: {
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   daysRow: {
     flexDirection: "row",
@@ -581,7 +585,7 @@ const styles = StyleSheet.create({
   },
   dayTextSelected: {
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   error: {
     ...typography.caption,

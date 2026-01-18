@@ -21,11 +21,12 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../../../
 import { Button, Card, Avatar } from '../../../../../components/ui';
 import { useReceiptSummary } from '../../../../../lib/useReceipts';
 import { formatReceiptAmount, roundCurrency } from '../../../../../lib/receipts';
-import { supabase } from '../../../../../lib/supabase';
+import { useSupabase } from '../../../../../lib/supabase';
 import { Member } from '../../../../../lib/types';
 
 export default function SplitEvenlyScreen() {
   const { id, receiptId } = useLocalSearchParams<{ id: string; receiptId: string }>();
+  const { getSupabase } = useSupabase();
 
   const { receipt, items, members, summary, loading, error, refetch } = useReceiptSummary(receiptId);
 
@@ -81,6 +82,7 @@ export default function SplitEvenlyScreen() {
 
   const clearAllClaims = async () => {
     try {
+      const supabase = await getSupabase();
       // Get all item IDs for this receipt
       const itemIds = items.map((i) => i.id);
 
@@ -123,6 +125,7 @@ export default function SplitEvenlyScreen() {
       );
 
       if (claims.length > 0) {
+        const supabase = await getSupabase();
         const { error: claimError } = await supabase
           .from('item_claims')
           .insert(claims);

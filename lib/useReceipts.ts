@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from './supabase';
+import { useSupabase } from './supabase';
 import {
   Receipt,
   ReceiptItem,
@@ -27,6 +27,7 @@ import { prepareImageForUpload } from './imageUtils';
  * Hook to fetch a single receipt with all related data
  */
 export function useReceipt(receiptId: string | undefined) {
+  const { getSupabase } = useSupabase();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [items, setItems] = useState<ReceiptItem[]>([]);
   const [claims, setClaims] = useState<ItemClaim[]>([]);
@@ -43,6 +44,8 @@ export function useReceipt(receiptId: string | undefined) {
     try {
       setLoading(true);
       setError(null);
+
+      const supabase = await getSupabase();
 
       // Fetch receipt
       const { data: receiptData, error: receiptError } = await supabase
@@ -90,7 +93,7 @@ export function useReceipt(receiptId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [receiptId]);
+  }, [receiptId, getSupabase]);
 
   // Initial fetch
   useEffect(() => {
@@ -105,26 +108,35 @@ export function useReceipt(receiptId: string | undefined) {
   useEffect(() => {
     if (!receiptId) return;
 
-    const channel = supabase
-      .channel(`receipt-claims:${receiptId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'item_claims',
-        },
-        (payload) => {
-          // Refetch when claims change
-          fetchReceipt();
-        }
-      )
-      .subscribe();
+    let channel: ReturnType<Awaited<ReturnType<typeof getSupabase>>['channel']> | null = null;
+
+    const setupSubscription = async () => {
+      const supabase = await getSupabase();
+      channel = supabase
+        .channel(`receipt-claims:${receiptId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'item_claims',
+          },
+          (payload) => {
+            // Refetch when claims change
+            fetchReceipt();
+          }
+        )
+        .subscribe();
+    };
+
+    setupSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        getSupabase().then(supabase => supabase.removeChannel(channel!));
+      }
     };
-  }, [receiptId, fetchReceipt]);
+  }, [receiptId, fetchReceipt, getSupabase]);
 
   return {
     receipt,
@@ -141,6 +153,7 @@ export function useReceipt(receiptId: string | undefined) {
  * Hook to fetch receipts for a group
  */
 export function useGroupReceipts(groupId: string | undefined) {
+  const { getSupabase } = useSupabase();
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +167,8 @@ export function useGroupReceipts(groupId: string | undefined) {
     try {
       setLoading(true);
       setError(null);
+
+      const supabase = await getSupabase();
 
       const { data, error: fetchError } = await supabase
         .from('receipts')
@@ -169,7 +184,7 @@ export function useGroupReceipts(groupId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [groupId]);
+  }, [groupId, getSupabase]);
 
   useEffect(() => {
     fetchReceipts();
@@ -187,6 +202,7 @@ export function useGroupReceipts(groupId: string | undefined) {
  * Hook for managing item claims
  */
 export function useItemClaims(receiptId: string | undefined) {
+  const { getSupabase } = useSupabase();
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -201,6 +217,7 @@ export function useItemClaims(receiptId: string | undefined) {
         splitCount?: number;
         shareFraction?: number;
         claimedVia?: ClaimSource;
+        maxFraction?: number;
       } = {}
     ) => {
       console.log('claimItem hook called:', { receiptId, itemId, memberId, options });
@@ -211,6 +228,7 @@ export function useItemClaims(receiptId: string | undefined) {
         setClaiming(true);
         setError(null);
 
+        const supabase = await getSupabase();
         const claimData = createClaim(itemId, memberId, options);
         console.log('Created claim data:', claimData);
 
@@ -235,7 +253,7 @@ export function useItemClaims(receiptId: string | undefined) {
         setClaiming(false);
       }
     },
-    [receiptId]
+    [receiptId, getSupabase]
   );
 
   /**
@@ -248,6 +266,8 @@ export function useItemClaims(receiptId: string | undefined) {
       try {
         setClaiming(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         const { error: deleteError, count } = await supabase
           .from('item_claims')
@@ -269,7 +289,7 @@ export function useItemClaims(receiptId: string | undefined) {
         setClaiming(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   /**
@@ -288,6 +308,8 @@ export function useItemClaims(receiptId: string | undefined) {
       try {
         setClaiming(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Delete existing claims for this item
         await supabase.from('item_claims').delete().eq('receipt_item_id', itemId);
@@ -316,7 +338,7 @@ export function useItemClaims(receiptId: string | undefined) {
         setClaiming(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   /**
@@ -333,6 +355,7 @@ export function useItemClaims(receiptId: string | undefined) {
           return { success: true };
         }
 
+        const supabase = await getSupabase();
         const itemIds = items.map((i) => i.id);
 
         const { error: deleteError } = await supabase
@@ -352,7 +375,7 @@ export function useItemClaims(receiptId: string | undefined) {
         setClaiming(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   return {
@@ -369,6 +392,7 @@ export function useItemClaims(receiptId: string | undefined) {
  * Hook for creating and uploading receipts
  */
 export function useReceiptUpload(groupId: string | undefined) {
+  const { getSupabase } = useSupabase();
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -384,6 +408,8 @@ export function useReceiptUpload(groupId: string | undefined) {
       try {
         setUploading(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Compress image and create thumbnail
         const { compressed, thumbnail } = await prepareImageForUpload(imageUri);
@@ -455,7 +481,7 @@ export function useReceiptUpload(groupId: string | undefined) {
         setUploading(false);
       }
     },
-    [groupId]
+    [groupId, getSupabase]
   );
 
   /**
@@ -466,6 +492,8 @@ export function useReceiptUpload(groupId: string | undefined) {
       try {
         setProcessing(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Import OCR dynamically to avoid loading it unnecessarily
         const { processReceiptImage, validateOCRResult } = await import('./ocr');
@@ -626,17 +654,22 @@ export function useReceiptUpload(groupId: string | undefined) {
         const errorMsg = err.message || 'Failed to process receipt';
         setError(errorMsg);
 
-        await supabase
-          .from('receipts')
-          .update({ ocr_status: 'failed' })
-          .eq('id', receiptId);
+        try {
+          const supabase = await getSupabase();
+          await supabase
+            .from('receipts')
+            .update({ ocr_status: 'failed' })
+            .eq('id', receiptId);
+        } catch {
+          // Ignore update error
+        }
 
         return { success: false, error: errorMsg };
       } finally {
         setProcessing(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   return {
@@ -683,6 +716,7 @@ export function useReceiptSummary(receiptId: string | undefined) {
  * P0: Allows users to claim individual items from "3 x Burger = $27" as separate $9 items
  */
 export function useItemExpansion(receiptId: string | undefined) {
+  const { getSupabase } = useSupabase();
   const [expanding, setExpanding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -697,6 +731,8 @@ export function useItemExpansion(receiptId: string | undefined) {
       try {
         setExpanding(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Fetch the item to expand
         const { data: item, error: fetchError } = await supabase
@@ -775,7 +811,7 @@ export function useItemExpansion(receiptId: string | undefined) {
         setExpanding(false);
       }
     },
-    [receiptId]
+    [receiptId, getSupabase]
   );
 
   /**
@@ -788,6 +824,8 @@ export function useItemExpansion(receiptId: string | undefined) {
       try {
         setExpanding(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Fetch the original item
         const { data: originalItem, error: fetchError } = await supabase
@@ -856,7 +894,7 @@ export function useItemExpansion(receiptId: string | undefined) {
         setExpanding(false);
       }
     },
-    [receiptId]
+    [receiptId, getSupabase]
   );
 
   /**
@@ -888,6 +926,7 @@ export function useItemExpansion(receiptId: string | undefined) {
  * Hook to update receipt details (merchant, date, amounts)
  */
 export function useReceiptUpdate() {
+  const { getSupabase } = useSupabase();
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -910,6 +949,8 @@ export function useReceiptUpdate() {
         setUpdating(true);
         setError(null);
 
+        const supabase = await getSupabase();
+
         const { error: updateError } = await supabase
           .from('receipts')
           .update(updates)
@@ -927,7 +968,7 @@ export function useReceiptUpdate() {
         setUpdating(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   const updateItem = useCallback(
@@ -938,6 +979,8 @@ export function useReceiptUpdate() {
       try {
         setUpdating(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         const { error: updateError } = await supabase
           .from('receipt_items')
@@ -956,13 +999,15 @@ export function useReceiptUpdate() {
         setUpdating(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   const deleteItem = useCallback(async (itemId: string) => {
     try {
       setUpdating(true);
       setError(null);
+
+      const supabase = await getSupabase();
 
       const { error: deleteError } = await supabase
         .from('receipt_items')
@@ -980,7 +1025,7 @@ export function useReceiptUpdate() {
     } finally {
       setUpdating(false);
     }
-  }, []);
+  }, [getSupabase]);
 
   const addItem = useCallback(
     async (
@@ -990,6 +1035,8 @@ export function useReceiptUpdate() {
       try {
         setUpdating(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Get the next line number
         const { data: existingItems } = await supabase
@@ -1028,7 +1075,7 @@ export function useReceiptUpdate() {
         setUpdating(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   return {
@@ -1046,6 +1093,7 @@ export function useReceiptUpdate() {
  * Used for the group-agnostic scanning flow where users scan first, assign group later
  */
 export function useReceiptUploadNoGroup() {
+  const { getSupabase } = useSupabase();
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1059,6 +1107,8 @@ export function useReceiptUploadNoGroup() {
       try {
         setUploading(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Compress image and create thumbnail
         const { compressed, thumbnail } = await prepareImageForUpload(imageUri);
@@ -1130,7 +1180,7 @@ export function useReceiptUploadNoGroup() {
         setUploading(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   /**
@@ -1141,6 +1191,8 @@ export function useReceiptUploadNoGroup() {
       try {
         setProcessing(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Import OCR dynamically
         const { processReceiptImage, validateOCRResult } = await import('./ocr');
@@ -1278,17 +1330,22 @@ export function useReceiptUploadNoGroup() {
         setError(errorMsg);
 
         // Mark as failed
-        await supabase
-          .from('receipts')
-          .update({ ocr_status: 'failed' })
-          .eq('id', receiptId);
+        try {
+          const supabase = await getSupabase();
+          await supabase
+            .from('receipts')
+            .update({ ocr_status: 'failed' })
+            .eq('id', receiptId);
+        } catch {
+          // Ignore update error
+        }
 
         return { success: false, error: errorMsg };
       } finally {
         setProcessing(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   return { uploadReceipt, processReceipt, uploading, processing, error };
@@ -1299,6 +1356,7 @@ export function useReceiptUploadNoGroup() {
  * Used after scanning and reviewing OCR results
  */
 export function useReceiptGroupAssignment() {
+  const { getSupabase } = useSupabase();
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1310,6 +1368,8 @@ export function useReceiptGroupAssignment() {
       try {
         setAssigning(true);
         setError(null);
+
+        const supabase = await getSupabase();
 
         // Find or create member record for user in this group
         let { data: member } = await supabase
@@ -1358,7 +1418,7 @@ export function useReceiptGroupAssignment() {
         setAssigning(false);
       }
     },
-    []
+    [getSupabase]
   );
 
   return { assignGroup, assigning, error };
@@ -1368,6 +1428,7 @@ export function useReceiptGroupAssignment() {
  * Hook to fetch unassigned receipts for a user
  */
 export function useUnassignedReceipts(clerkUserId: string | undefined) {
+  const { getSupabase } = useSupabase();
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1382,6 +1443,8 @@ export function useUnassignedReceipts(clerkUserId: string | undefined) {
     try {
       setLoading(true);
       setError(null);
+
+      const supabase = await getSupabase();
 
       const { data, error: fetchError } = await supabase
         .from('receipts')
@@ -1398,7 +1461,7 @@ export function useUnassignedReceipts(clerkUserId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [clerkUserId]);
+  }, [clerkUserId, getSupabase]);
 
   useEffect(() => {
     fetchReceipts();

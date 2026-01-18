@@ -8,7 +8,7 @@
 #
 # Run with: maestro test .maestro/stress/rapid-expense-creation.yaml
 
-appId: com.splitfree.app
+appId: host.exp.Exponent
 
 ---
 
@@ -34,9 +34,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 1"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "12.34"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 2 - DON'T wait for save to complete
@@ -44,9 +46,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 2"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "56.78"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 3
@@ -54,9 +58,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 3"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "90.12"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 4
@@ -64,9 +70,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 4"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "34.56"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 5
@@ -74,9 +82,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 5"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "78.90"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 6
@@ -84,9 +94,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 6"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "23.45"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 7
@@ -94,9 +106,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 7"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "67.89"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 8
@@ -104,9 +118,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 8"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "0.01"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 9
@@ -114,9 +130,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 9"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "999.99"
+- pressKey: Enter
 - tapOn: "Save"
 
 # Expense 10
@@ -124,9 +142,11 @@ appId: com.splitfree.app
 - tapOn:
     id: "expense-description-input"
 - inputText: "Stress 10"
+- pressKey: Enter
 - tapOn:
     id: "expense-amount-input"
 - inputText: "0.10"
+- pressKey: Enter
 - tapOn: "Save"
 
 # ========================================

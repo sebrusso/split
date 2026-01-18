@@ -7,6 +7,7 @@
 
 import React, { createContext, useContext, useMemo } from "react";
 import { useAuth as useClerkAuth, useUser } from "@clerk/clerk-expo";
+import type { GetToken } from "@clerk/shared/types";
 import { UserProfile } from "./types";
 import logger from "./logger";
 
@@ -21,6 +22,9 @@ interface AuthContextValue {
 
   // Auth actions
   signOut: () => Promise<void>;
+
+  // Token access for Supabase RLS
+  getToken: GetToken;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -34,7 +38,7 @@ interface AuthProviderProps {
  * Wrap your app with this to access auth state anywhere
  */
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { isLoaded, isSignedIn, userId, signOut: clerkSignOut } = useClerkAuth();
+  const { isLoaded, isSignedIn, userId, signOut: clerkSignOut, getToken } = useClerkAuth();
   const { user: clerkUser } = useUser();
 
   // Transform Clerk user to our UserProfile format
@@ -72,6 +76,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     userId: userId ?? null,
     user,
     signOut,
+    getToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     ...typography.bodyMedium,
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   notCompletedButton: {
     backgroundColor: colors.card,

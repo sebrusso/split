@@ -11,7 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { Group, Expense, SettlementRecord, Member } from "../../../lib/types";
 import logger from "../../../lib/logger";
 import { formatCurrency, formatRelativeDate } from "../../../lib/utils";
@@ -40,6 +40,7 @@ type FilterType = "all" | "expenses" | "settlements";
 
 export default function LedgerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { getSupabase } = useSupabase();
   const [group, setGroup] = useState<Group | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -48,6 +49,8 @@ export default function LedgerScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
+
       // Fetch group, expenses, and settlements in parallel
       const [groupResult, expensesResult, settlementsResult] = await Promise.all([
         supabase.from("groups").select("*").eq("id", id).single(),
@@ -110,7 +113,7 @@ export default function LedgerScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -326,7 +329,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     marginTop: spacing.xs,
   },
   expenseValue: {
@@ -364,7 +367,7 @@ const styles = StyleSheet.create({
   },
   filterTextActive: {
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   list: {
     paddingHorizontal: spacing.lg,
@@ -423,12 +426,12 @@ const styles = StyleSheet.create({
   },
   expenseAmount: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.danger,
   },
   settlementAmount: {
     ...typography.bodyMedium,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.success,
   },
   typeLabel: {

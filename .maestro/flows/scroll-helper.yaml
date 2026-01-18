@@ -1,0 +1,7 @@
+# Helper: Scroll the current screen
+appId: host.exp.Exponent
+
+---
+- scroll
+- scroll
+- scroll

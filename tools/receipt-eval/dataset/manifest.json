@@ -1,7 +1,112 @@
 {
   "name": "SplitFree Receipt Evaluation Dataset",
-  "description": "Receipt images for OCR accuracy evaluation",
+  "description": "13 receipt images for OCR evaluation",
   "version": "1.0.0",
-  "created": "2026-01-12",
-  "receipts": []
+  "created": "2026-01-13",
+  "receipts": [
+    {
+      "id": "receipt-001",
+      "imagePath": "receipt_001_swiss.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-002",
+      "imagePath": "receipt_004.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-003",
+      "imagePath": "receipt_005.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-004",
+      "imagePath": "receipt_006.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-005",
+      "imagePath": "receipt_007.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-006",
+      "imagePath": "receipt_008.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-007",
+      "imagePath": "receipt_009.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-008",
+      "imagePath": "receipt_010.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-009",
+      "imagePath": "receipt_011.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-010",
+      "imagePath": "receipt_012.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-011",
+      "imagePath": "receipt_013.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-012",
+      "imagePath": "receipt_014.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    },
+    {
+      "id": "receipt-013",
+      "imagePath": "receipt_015.jpg",
+      "tags": [
+        "untagged"
+      ],
+      "source": "local"
+    }
+  ]
 }

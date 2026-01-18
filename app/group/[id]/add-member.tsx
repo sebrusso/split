@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { supabase } from "../../../lib/supabase";
+import { useSupabase } from "../../../lib/supabase";
 import { colors, spacing, typography } from "../../../lib/theme";
 import { Button, Input, Avatar } from "../../../components/ui";
 import { useAnalytics, AnalyticsEvents } from "../../../lib/analytics-provider";
@@ -16,6 +16,7 @@ import { useAnalytics, AnalyticsEvents } from "../../../lib/analytics-provider";
 export default function AddMemberScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { trackEvent } = useAnalytics();
+  const { getSupabase } = useSupabase();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -30,6 +31,7 @@ export default function AddMemberScreen() {
     setError("");
 
     try {
+      const supabase = await getSupabase();
       const { error: memberError } = await supabase.from("members").insert({
         group_id: id,
         name: name.trim(),
@@ -60,6 +62,7 @@ export default function AddMemberScreen() {
           </View>
 
           <Input
+            inputTestID="member-name-input"
             label="Name"
             value={name}
             onChangeText={setName}
@@ -75,6 +78,7 @@ export default function AddMemberScreen() {
 
         <View style={styles.footer}>
           <Button
+            testID="submit-add-member"
             title="Add Member"
             onPress={handleSubmit}
             loading={loading}

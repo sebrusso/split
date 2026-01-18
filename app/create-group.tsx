@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
-import { supabase } from "../lib/supabase";
+import { useSupabase } from "../lib/supabase";
 import { generateShareCode } from "../lib/utils";
 import logger from "../lib/logger";
 import { colors, spacing, typography, borderRadius } from "../lib/theme";
@@ -38,6 +38,7 @@ export default function CreateGroupScreen() {
   const { user } = useUser();
   const { userId } = useAuth();
   const { trackEvent } = useAnalytics();
+  const { getSupabase } = useSupabase();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("💰");
   const [loading, setLoading] = useState(false);
@@ -53,6 +54,8 @@ export default function CreateGroupScreen() {
     setError("");
 
     try {
+      const supabase = await getSupabase();
+
       const shareCode = await generateShareCode();
 
       const { data: group, error: groupError } = await supabase

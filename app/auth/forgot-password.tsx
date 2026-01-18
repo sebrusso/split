@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   },
   emailHighlight: {
     color: colors.text,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   form: {
     gap: spacing.lg,

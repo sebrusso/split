@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   },
   tabIcon: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.textSecondary,
     marginRight: spacing.xs,
   },
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
   tabLabelSelected: {
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   description: {
     ...typography.caption,
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   },
   memberNameSelected: {
     color: colors.primary,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
   memberAmount: {
     ...typography.bodyMedium,
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   shareButtonText: {
     fontSize: 20,
     color: colors.primary,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   sharesValue: {
     ...typography.bodyMedium,
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   methodIcon: {
     fontSize: 20,
     color: colors.primary,
-    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
   },
   methodInfo: {
     flex: 1,

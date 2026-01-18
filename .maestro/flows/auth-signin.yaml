@@ -1,0 +1,73 @@
+# Shared Flow: Sign In with Test Credentials
+# Handles welcome screen and signs in with configured credentials
+#
+# Prerequisites:
+# - Test account must exist (see README.md for setup)
+# - Credentials configured in config.yaml
+#
+# Include in other flows with: - runFlow: flows/auth-signin.yaml
+
+appId: host.exp.Exponent
+
+---
+
+# Handle welcome screen if present
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 10000
+
+# Dismiss Expo debugger toast (tap X at bottom right)
+- tapOn:
+    point: "93%,96%"
+    optional: true
+
+# Tap Skip to bypass onboarding carousel (if visible)
+- tapOn:
+    text: "Skip"
+    optional: true
+
+# Wait a moment for screen transition
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 3000
+
+# Tap Sign In link (if on welcome screen with "Already have an account?")
+- tapOn:
+    text: "Sign In"
+    optional: true
+
+# Wait for sign-in screen or home screen
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 5000
+
+# Enter email (if on sign-in screen)
+- tapOn:
+    text: "your@email.com"
+    optional: true
+
+- inputText: "splitfree.test@example.com"
+- pressKey: Enter
+
+- pressKey: Enter
+
+# Enter password - tap on password placeholder to focus
+- tapOn:
+    text: "Enter your password"
+    optional: true
+
+- inputText: "TestPassword123!876"
+- pressKey: Enter
+
+- pressKey: Enter
+
+# Tap Sign In button
+- tapOn:
+    text: "Sign In"
+    index: 0
+    optional: true
+
+# Wait for home screen
+- extendedWaitUntil:
+    visible: "Create Group"
+    timeout: 15000

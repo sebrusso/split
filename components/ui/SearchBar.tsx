@@ -98,7 +98,7 @@ export function SearchBar({
       <Ionicons
         name="search"
         size={20}
-        color={isFocused ? colors.primary : colors.textMuted}
+        color={isFocused ? colors.accent : colors.textMuted}
         style={styles.searchIcon}
       />
       <TextInput
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   containerFocused: {
-    borderColor: colors.primary,
+    borderColor: colors.accent,
     borderWidth: 2,
   },
   searchIcon: {
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     color: colors.text,
     height: "100%",
   },
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   },
   compactPlaceholder: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     color: colors.textMuted,
   },
 });

@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonSymbol: {
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     color: colors.text,
   },
   buttonSymbol_sm: {
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   buttonCode: {
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
     color: colors.textSecondary,
   },
   buttonCode_sm: {
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   pillCode: {
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
     color: colors.textSecondary,
   },
   pillCode_sm: {

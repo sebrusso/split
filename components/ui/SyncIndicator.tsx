@@ -103,6 +103,6 @@ const styles = StyleSheet.create({
   },
   text: {
     ...typography.small,
-    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
   },
 });

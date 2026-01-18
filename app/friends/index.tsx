@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontWeight: "400",
     color: colors.text,
   },
   clearButton: {
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   requestsBadgeText: {
     color: colors.white,
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
   sectionTitle: {
     ...typography.bodyMedium,
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: colors.white,
-    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
     fontSize: 16,
   },
 });

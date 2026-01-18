@@ -27,7 +27,7 @@ import { Button, Card, Avatar } from '../../../../../components/ui';
 import { useReceiptSummary, useItemClaims } from '../../../../../lib/useReceipts';
 import { formatReceiptAmount, roundCurrency } from '../../../../../lib/receipts';
 import { useAuth } from '../../../../../lib/auth-context';
-import { supabase } from '../../../../../lib/supabase';
+import { useSupabase } from '../../../../../lib/supabase';
 import { Member, ReceiptItem } from '../../../../../lib/types';
 
 type SplitMethod = 'equal' | 'percent' | 'exact';
@@ -39,6 +39,7 @@ export default function SplitItemScreen() {
     itemId: string;
   }>();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
 
   const { receipt, items, members, loading, error } = useReceiptSummary(receiptId);
   const { claiming } = useItemClaims(receiptId);
@@ -81,6 +82,7 @@ export default function SplitItemScreen() {
       if (!id || !userId) return;
 
       try {
+        const supabase = await getSupabase();
         const { data: member } = await supabase
           .from('members')
           .select('*')
@@ -174,6 +176,7 @@ export default function SplitItemScreen() {
 
     try {
       setSaving(true);
+      const supabase = await getSupabase();
 
       // Delete all existing claims for this item
       await supabase.from('item_claims').delete().eq('receipt_item_id', itemId);

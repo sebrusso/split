@@ -33,7 +33,7 @@ module.exports = {
   },
   // Transform Expo and React Native packages that use ESM
   transformIgnorePatterns: [
-    'node_modules/(?!(expo-crypto|expo-file-system|expo-sharing|expo-modules-core|@expo|base64-js|react-native|@react-native)/)',
+    'node_modules/(?!(expo-crypto|expo-file-system|expo-sharing|expo-modules-core|expo-linear-gradient|@expo|base64-js|react-native|@react-native)/)',
   ],
   // Mock React Native modules for component tests
   moduleNameMapper: {
@@ -43,6 +43,8 @@ module.exports = {
     '^expo-file-system/next$': '<rootDir>/__tests__/__mocks__/expo-file-system.ts',
     '^expo-file-system$': '<rootDir>/__tests__/__mocks__/expo-file-system.ts',
     '^expo-sharing$': '<rootDir>/__tests__/__mocks__/expo-sharing.ts',
+    '^expo-linear-gradient$': '<rootDir>/__tests__/__mocks__/expo-linear-gradient.ts',
+    '^@expo/vector-icons$': '<rootDir>/__tests__/__mocks__/expo-vector-icons.ts',
     '^(\\.\\./)+lib/clerk$': '<rootDir>/__tests__/__mocks__/clerk.ts',
   },
 };
