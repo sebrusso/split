@@ -11,7 +11,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useSupabase } from "../../lib/supabase";
+import { useAuth } from "../../lib/auth-context";
 import { Group } from "../../lib/types";
+import { notifyMemberJoined } from "../../lib/notifications";
 import {
   colors,
   spacing,
@@ -26,6 +28,7 @@ export default function JoinGroupScreen() {
   const { code: deepLinkCode } = useLocalSearchParams<{ code?: string }>();
   const { trackEvent } = useAnalytics();
   const { getSupabase } = useSupabase();
+  const { userId } = useAuth();
 
   const [shareCode, setShareCode] = useState(deepLinkCode || "");
   const [memberName, setMemberName] = useState("");
@@ -123,6 +126,15 @@ export default function JoinGroupScreen() {
         .single();
 
       if (memberError) throw memberError;
+
+      // Notify existing group members about the new member
+      notifyMemberJoined(
+        supabase,
+        foundGroup.id,
+        name,
+        foundGroup.name,
+        userId || undefined
+      ).catch((err) => console.error("Failed to send member joined notification:", err));
 
       trackEvent(AnalyticsEvents.GROUP_JOINED, {
         groupId: foundGroup.id,
