@@ -289,6 +289,18 @@ export default function BalancesScreen() {
     // Get recipient's Venmo username if paying via Venmo
     const recipientVenmo = toMember ? venmoUsernames.get(toMember.id) : undefined;
 
+    // Check if recipient has linked their payment account for Venmo
+    if (app === 'venmo' && !recipientVenmo) {
+      Alert.alert(
+        "Venmo Not Linked",
+        `${toMember?.name || 'This person'} hasn't linked their Venmo account yet. You can still send them a payment reminder or ask them to add their Venmo username in the app.`,
+        [
+          { text: "OK", style: "default" },
+        ]
+      );
+      return;
+    }
+
     await openPaymentApp(app, {
       amount: selectedSettlement.amount,
       note,
