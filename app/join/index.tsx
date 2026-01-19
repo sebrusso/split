@@ -115,12 +115,13 @@ export default function JoinGroupScreen() {
         return;
       }
 
-      // Create member
+      // Create member with clerk_user_id linked
       const { data: newMember, error: memberError } = await supabase
         .from("members")
         .insert({
           group_id: foundGroup.id,
           name: name,
+          clerk_user_id: userId, // Link to authenticated user
         })
         .select()
         .single();

@@ -1,91 +1,70 @@
-import { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { useSupabase } from "../../../lib/supabase";
-import { colors, spacing, typography } from "../../../lib/theme";
-import { Button, Input, Avatar } from "../../../components/ui";
-import { useAnalytics, AnalyticsEvents } from "../../../lib/analytics-provider";
+import { Ionicons } from "@expo/vector-icons";
+import { colors, spacing, typography, borderRadius } from "../../../lib/theme";
+import { Button, Card } from "../../../components/ui";
 
+/**
+ * Add Member Screen
+ *
+ * Instead of creating "dummy" members (which can't receive notifications,
+ * claim receipts, or use payment features), we now guide users to invite
+ * people via the share link. This ensures all members have proper accounts.
+ */
 export default function AddMemberScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { trackEvent } = useAnalytics();
-  const { getSupabase } = useSupabase();
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      setError("Please enter a name");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const supabase = await getSupabase();
-      const { error: memberError } = await supabase.from("members").insert({
-        group_id: id,
-        name: name.trim(),
-      });
-
-      if (memberError) throw memberError;
-
-      trackEvent(AnalyticsEvents.MEMBER_INVITED, { groupId: id });
-      router.back();
-    } catch (err) {
-      console.error("Error adding member:", err);
-      setError("Failed to add member. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  const handleInvite = () => {
+    // Navigate to share screen to invite members
+    router.replace(`/group/${id}/share`);
   };
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          <View style={styles.previewContainer}>
-            <Avatar name={name || "?"} size="lg" />
-            <Text style={styles.previewName}>{name || "New Member"}</Text>
-          </View>
-
-          <Input
-            inputTestID="member-name-input"
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Enter member's name"
-            autoFocus
-            error={error}
-          />
-
-          <Text style={styles.hint}>
-            They don't need an account to be part of the group
-          </Text>
+      <View style={styles.content}>
+        <View style={styles.iconContainer}>
+          <Ionicons name="person-add-outline" size={64} color={colors.primary} />
         </View>
+
+        <Text style={styles.title}>Invite Members</Text>
+        <Text style={styles.subtitle}>
+          Share your group link to invite friends. They'll create their own profile when they join.
+        </Text>
+
+        <Card style={styles.benefitsCard}>
+          <Text style={styles.benefitsTitle}>Why invite instead of add?</Text>
+          <View style={styles.benefitRow}>
+            <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+            <Text style={styles.benefitText}>They'll receive push notifications</Text>
+          </View>
+          <View style={styles.benefitRow}>
+            <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+            <Text style={styles.benefitText}>They can claim items on receipts</Text>
+          </View>
+          <View style={styles.benefitRow}>
+            <Ionicons name="logo-venmo" size={20} color={colors.primary} />
+            <Text style={styles.benefitText}>You can request payments directly</Text>
+          </View>
+        </Card>
 
         <View style={styles.footer}>
           <Button
-            testID="submit-add-member"
-            title="Add Member"
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={!name.trim()}
+            title="Share Invite Link"
+            onPress={handleInvite}
+          />
+          <Button
+            title="Cancel"
+            variant="ghost"
+            onPress={() => router.back()}
+            style={styles.cancelButton}
           />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -95,30 +74,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  keyboardView: {
-    flex: 1,
-  },
   content: {
     flex: 1,
     padding: spacing.lg,
-  },
-  previewContainer: {
     alignItems: "center",
-    marginVertical: spacing.xxl,
   },
-  previewName: {
-    ...typography.h3,
-    marginTop: spacing.md,
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
   },
-  hint: {
-    ...typography.caption,
+  title: {
+    ...typography.h2,
     textAlign: "center",
-    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  benefitsCard: {
+    width: "100%",
+    marginBottom: spacing.xl,
+  },
+  benefitsTitle: {
+    ...typography.bodyMedium,
+    marginBottom: spacing.md,
+  },
+  benefitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  benefitText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    flex: 1,
   },
   footer: {
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    backgroundColor: colors.background,
+    width: "100%",
+    marginTop: "auto",
+    paddingTop: spacing.lg,
+  },
+  cancelButton: {
+    marginTop: spacing.sm,
   },
 });
