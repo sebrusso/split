@@ -204,7 +204,12 @@ export default function ReceiptClaimingScreen() {
 
           if (error) {
             console.error('Error fetching member:', error);
-            setMemberError('You are not a member of this group');
+            // Provide helpful guidance on how to fix this
+            setMemberError(
+              'Your account is not linked to this group. ' +
+              'Please ask the group creator to share the invite link, ' +
+              'then join using the share code to claim items.'
+            );
             return;
           }
 
@@ -448,10 +453,17 @@ export default function ReceiptClaimingScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="person-remove" size={64} color={colors.danger} />
-          <Text style={styles.errorTitle}>Cannot Claim Items</Text>
+          <Ionicons name="link-outline" size={64} color={colors.warning} />
+          <Text style={styles.errorTitle}>Account Not Linked</Text>
           <Text style={styles.errorText}>{memberError}</Text>
-          <Button title="Go Back" onPress={() => router.back()} variant="secondary" />
+          <View style={{ gap: spacing.sm, width: '100%', paddingHorizontal: spacing.xl }}>
+            <Button
+              title="View Receipt Only"
+              onPress={() => setMemberError(null)}
+              variant="primary"
+            />
+            <Button title="Go Back" onPress={() => router.back()} variant="secondary" />
+          </View>
         </View>
       </SafeAreaView>
     );

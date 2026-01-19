@@ -294,14 +294,6 @@ export default function ExpenseDetailScreen() {
 
       if (updateError) throw updateError;
 
-      // Delete old splits and create new ones
-      const { error: deleteError } = await supabase
-        .from("splits")
-        .delete()
-        .eq("expense_id", expenseId);
-
-      if (deleteError) throw deleteError;
-
       // Calculate new splits
       const newSplits = calculateSplits(splitMethod, amountNum, {
         memberIds: selectedMemberIds,
@@ -310,13 +302,16 @@ export default function ExpenseDetailScreen() {
         shares: shares,
       });
 
-      const splitsToInsert = newSplits.map((split) => ({
-        expense_id: expenseId,
+      // Atomically update splits (delete old + insert new in single transaction)
+      const splitsData = newSplits.map((split) => ({
         member_id: split.member_id,
         amount: split.amount,
       }));
 
-      const { error: splitsError } = await supabase.from("splits").insert(splitsToInsert);
+      const { error: splitsError } = await supabase.rpc("update_expense_splits", {
+        p_expense_id: expenseId,
+        p_splits: splitsData,
+      });
 
       if (splitsError) throw splitsError;
 
