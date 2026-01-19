@@ -1,9 +1,9 @@
-# SplitFree - App Store Listing
+# split it. - App Store Listing
 
 ## App Information
 
 ### App Name
-**SplitFree**
+**split it.**
 
 ### Subtitle (30 characters max)
 Split expenses. 100% free.
@@ -16,11 +16,11 @@ Split expenses. 100% free.
 
 ## App Description (4000 characters max)
 
-SplitFree is the expense-splitting app that actually stays free. No premium subscriptions. No transaction limits. No paywalls. Just a simple, powerful way to split bills with friends, roommates, and travel companions.
+split it. is the expense-splitting app that actually stays free. No premium subscriptions. No transaction limits. No paywalls. Just a simple, powerful way to split bills with friends, roommates, and travel companions.
 
-**Why SplitFree?**
+**Why split it.?**
 
-Tired of expense-splitting apps that nickel-and-dime you for basic features? We built SplitFree because splitting costs with friends should be simple and free - forever.
+Tired of expense-splitting apps that nickel-and-dime you for basic features? We built split it. because splitting costs with friends should be simple and free - forever.
 
 **Key Features:**
 
@@ -47,18 +47,18 @@ Tired of expense-splitting apps that nickel-and-dime you for basic features? We 
 1. Create a group and give it a name
 2. Add your friends as members
 3. Log expenses as they happen
-4. Let SplitFree calculate who owes what
+4. Let split it. calculate who owes what
 5. Settle up with one-tap payment suggestions
 
 **Our Promise:**
 
-SplitFree is free. Not "free with limits" or "free trial" - actually free. We keep the lights on with occasional, non-intrusive ads. That's it. No hidden fees, no premium tiers, no surprise charges.
+split it. is free. Not "free with limits" or "free trial" - actually free. We keep the lights on with occasional, non-intrusive ads. That's it. No hidden fees, no premium tiers, no surprise charges.
 
 **Privacy First:**
 
 Your expense data is yours. We don't sell your financial information to third parties. We use industry-standard encryption to keep your data secure.
 
-Download SplitFree today and stop arguing about who owes what. Start splitting expenses the fair way - the free way.
+Download split it. today and stop arguing about who owes what. Start splitting expenses the fair way - the free way.
 
 ---
 
@@ -70,7 +70,7 @@ split expenses,bill splitter,expense tracker,roommate,trip costs,IOU,shared expe
 
 ## What's New (Version 1.0.0)
 
-Welcome to SplitFree!
+Welcome to split it.!
 
 - Create groups for any shared expense situation
 - Add and track expenses with flexible split options
@@ -111,7 +111,7 @@ Start splitting expenses the free way today!
 This app does not require login. Users can create groups and track expenses without an account.
 
 ### Notes for Review
-SplitFree is a free expense-splitting app. The app displays occasional interstitial ads (non-intrusive, shown only when closing the app). No in-app purchases or subscriptions are offered.
+split it. is a free expense-splitting app. The app displays occasional interstitial ads (non-intrusive, shown only when closing the app). No in-app purchases or subscriptions are offered.
 
 ---
 

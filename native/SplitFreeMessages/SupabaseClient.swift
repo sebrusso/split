@@ -1,5 +1,5 @@
 /**
- * SplitFree iMessage Extension - Supabase Client
+ * split it. iMessage Extension - Supabase Client
  *
  * Handles communication with the Supabase backend for receipt operations.
  */

@@ -85,11 +85,11 @@ export function groupPaymentsByRecipient(
       const breakdown = debtsToThisPerson
         .map(d => `${d.groupName}: $${d.amount.toFixed(2)}`)
         .join(' + ');
-      suggestedNote = `SplitFree - ${breakdown}`;
+      suggestedNote = `split it. - ${breakdown}`;
     } else if (debtsToThisPerson.length === 1) {
-      suggestedNote = `SplitFree - ${debtsToThisPerson[0].groupName}`;
+      suggestedNote = `split it. - ${debtsToThisPerson[0].groupName}`;
     } else {
-      suggestedNote = 'SplitFree payment';
+      suggestedNote = 'split it. payment';
     }
 
     // Truncate note if too long for Venmo

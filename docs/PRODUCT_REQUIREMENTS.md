@@ -1,8 +1,8 @@
-# SplitFree Product Requirements Document
+# split it. Product Requirements Document
 
 ## Vision Statement
 
-SplitFree is the perfect free tool for splitting expenses at dinner. The grand vision: take a picture of a receipt, the app extracts items via OCR, people select their items, and totals are calculated automatically. Share via iMessage or in-app to settle up instantly.
+split it. is the perfect free tool for splitting expenses at dinner. The grand vision: take a picture of a receipt, the app extracts items via OCR, people select their items, and totals are calculated automatically. Share via iMessage or in-app to settle up instantly.
 
 **Core Value Proposition**: 100% free, no account required for basic use, removes the need for a calculator entirely.
 

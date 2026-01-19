@@ -95,7 +95,7 @@ async function generateSampleDataset(): Promise<void> {
 
   // Create a sample manifest with instructions
   const manifest = {
-    name: 'SplitFree Receipt Evaluation Dataset',
+    name: 'split it. Receipt Evaluation Dataset',
     description: 'Add receipt images to the images/ folder and update this manifest',
     version: '1.0.0',
     created: new Date().toISOString().split('T')[0],
@@ -145,7 +145,7 @@ async function scanAndCreateManifest(): Promise<void> {
   }));
 
   const manifest = {
-    name: 'SplitFree Receipt Evaluation Dataset',
+    name: 'split it. Receipt Evaluation Dataset',
     description: `${files.length} receipt images for OCR evaluation`,
     version: '1.0.0',
     created: new Date().toISOString().split('T')[0],

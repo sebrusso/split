@@ -1,4 +1,4 @@
-# Shared Flow: Open SplitFree App and Navigate to Home
+# Shared Flow: Open split it. App and Navigate to Home
 # Use this at the start of each test to ensure we're on the home screen
 #
 # Include in other flows with: - runFlow: flows/open-app.yaml
@@ -15,7 +15,8 @@ appId: host.exp.Exponent
     visible: ".*"
     timeout: 10000
 
-# Step 2: If on Expo Go home screen, tap SplitFree to open the project
+# Step 2: If on Expo Go home screen, tap the project to open it
+# Note: Expo Go shows "SplitFree" (the project slug) in the recently opened list
 - tapOn:
     text: "SplitFree"
     optional: true
@@ -37,9 +38,9 @@ appId: host.exp.Exponent
     timeout: 5000
 
 # Step 4: Verify we're on the home screen
-# Look for SplitFree header (present in both empty and groups-exist states)
+# Look for split it. header (present in both empty and groups-exist states)
 - extendedWaitUntil:
-    visible: "SplitFree"
+    visible: "split it."
     timeout: 10000
 
 # Dismiss any error overlays that might appear

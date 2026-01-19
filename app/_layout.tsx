@@ -15,6 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../lib/theme";
 import { CLERK_PUBLISHABLE_KEY, tokenCache, isClerkConfigured } from "../lib/clerk";
 import { AuthProvider } from "../lib/auth-context";
+import { useSupabase } from "../lib/supabase";
 import { AnalyticsProvider, useAnalytics } from "../lib/analytics-provider";
 import {
   configureNotificationHandler,
@@ -46,6 +47,7 @@ SplashScreen.preventAutoHideAsync();
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn, userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const segments = useSegments();
   const router = useRouter();
   const [welcomeChecked, setWelcomeChecked] = useState(false);
@@ -94,25 +96,35 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   // Register for push notifications and set Sentry user context when user signs in
   useEffect(() => {
     if (isSignedIn && userId) {
-      // Register push token in the background
-      registerPushToken(userId).catch((error) => {
-        logger.error("Failed to register push token:", error);
-      });
+      // Register push token in the background with authenticated client
+      (async () => {
+        try {
+          const supabaseClient = await getSupabase();
+          await registerPushToken(supabaseClient, userId);
+        } catch (error) {
+          logger.error("Failed to register push token:", error);
+        }
+      })();
 
       // Set Sentry user context for error tracking
       setSentryUser({ id: userId });
       addBreadcrumb("auth", "User signed in", { userId });
     } else if (!isSignedIn && userId) {
-      // Remove push token when user signs out
-      removePushToken(userId).catch((error) => {
-        logger.error("Failed to remove push token:", error);
-      });
+      // Remove push token when user signs out with authenticated client
+      (async () => {
+        try {
+          const supabaseClient = await getSupabase();
+          await removePushToken(supabaseClient, userId);
+        } catch (error) {
+          logger.error("Failed to remove push token:", error);
+        }
+      })();
 
       // Clear Sentry user context
       clearSentryUser();
       addBreadcrumb("auth", "User signed out");
     }
-  }, [isSignedIn, userId]);
+  }, [isSignedIn, userId, getSupabase]);
 
   return <>{children}</>;
 }

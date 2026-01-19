@@ -1,8 +1,8 @@
-# SplitFree Database Architecture Documentation
+# split it. Database Architecture Documentation
 
 ## 1. Current Database Schema Overview
 
-The SplitFree backend uses Supabase (PostgreSQL) with **17 tables** organized into these functional areas:
+The split it. backend uses Supabase (PostgreSQL) with **17 tables** organized into these functional areas:
 
 ### Core Expense-Splitting Tables
 
@@ -310,7 +310,7 @@ CREATE POLICY "Group members can create expenses" ON expenses
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-This document provides a comprehensive overview of the SplitFree database architecture, its integration with the app, and actionable recommendations for improvement.
+This document provides a comprehensive overview of the split it. database architecture, its integration with the app, and actionable recommendations for improvement.
 
 ---
 

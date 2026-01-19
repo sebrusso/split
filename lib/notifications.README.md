@@ -1,6 +1,6 @@
 # Push Notification Infrastructure
 
-This document describes the push notification infrastructure for SplitFree.
+This document describes the push notification infrastructure for split it..
 
 ## Overview
 

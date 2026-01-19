@@ -493,6 +493,7 @@ export default function GroupDetailScreen() {
 
       <View style={styles.balanceButtonContainer}>
         <TouchableOpacity
+          testID="view-balances-button"
           style={styles.balanceButton}
           onPress={() => router.push(`/group/${id}/balances`)}
           activeOpacity={0.7}

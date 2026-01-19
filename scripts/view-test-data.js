@@ -20,7 +20,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function viewTestData() {
-  console.log("\n=== SplitFree Database Overview ===\n");
+  console.log("\n=== split it. Database Overview ===\n");
 
   // 1. Fetch all groups
   const { data: groups, error: groupsError } = await supabase

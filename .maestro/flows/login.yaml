@@ -22,9 +22,9 @@ appId: host.exp.Exponent
     visible: ".*"
     timeout: 15000
 
-# Step 2: If on Expo Go home screen, tap on SplitFree project
+# Step 2: If on Expo Go home screen, tap on split it. project
 - tapOn:
-    text: "SplitFree"
+    text: "split it."
     optional: true
 
 # Wait for app to load

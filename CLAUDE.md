@@ -1,8 +1,8 @@
-# SplitFree - CLAUDE.md
+# split it. - CLAUDE.md
 
 ## Project Overview
 
-**SplitFree** is a 100% free, ad-supported expense-splitting mobile app built as a Splitwise alternative. Users frustrated with paywalls and transaction limits can create groups, track shared expenses, and settle debts without restrictions.
+**split it.** is a 100% free, ad-supported expense-splitting mobile app built as a Splitwise alternative. Users frustrated with paywalls and transaction limits can create groups, track shared expenses, and settle debts without restrictions.
 
 ### Tech Stack
 - **Framework**: React Native + Expo (SDK 54)

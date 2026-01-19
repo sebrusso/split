@@ -28,6 +28,7 @@ import {
   shadows,
 } from "../../lib/theme";
 import { useAuth } from "../../lib/auth-context";
+import { useSupabase } from "../../lib/supabase";
 import {
   PaymentReminder,
   getRemindersByCreator,
@@ -42,6 +43,7 @@ type TabType = "sent" | "received";
 
 export default function MyRemindersScreen() {
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [activeTab, setActiveTab] = useState<TabType>("sent");
   const [sentReminders, setSentReminders] = useState<PaymentReminder[]>([]);
   const [receivedReminders, setReceivedReminders] = useState<PaymentReminder[]>([]);
@@ -55,9 +57,10 @@ export default function MyRemindersScreen() {
     }
 
     try {
+      const supabase = await getSupabase();
       const [sent, received] = await Promise.all([
-        getRemindersByCreator(userId),
-        getRemindersForDebtor(userId),
+        getRemindersByCreator(supabase, userId),
+        getRemindersForDebtor(supabase, userId),
       ]);
       setSentReminders(sent);
       setReceivedReminders(received);
@@ -67,7 +70,7 @@ export default function MyRemindersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId]);
+  }, [userId, getSupabase]);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,7 +93,8 @@ export default function MyRemindersScreen() {
           text: "Dismiss",
           style: "destructive",
           onPress: async () => {
-            const success = await updateReminderStatus(reminder.id, "dismissed");
+            const supabase = await getSupabase();
+            const success = await updateReminderStatus(supabase, reminder.id, "dismissed");
             if (success) {
               fetchReminders();
             } else {
@@ -111,7 +115,8 @@ export default function MyRemindersScreen() {
         {
           text: "Mark Paid",
           onPress: async () => {
-            const success = await updateReminderStatus(reminder.id, "paid");
+            const supabase = await getSupabase();
+            const success = await updateReminderStatus(supabase, reminder.id, "paid");
             if (success) {
               fetchReminders();
             } else {
@@ -133,7 +138,8 @@ export default function MyRemindersScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const success = await deleteReminder(reminder.id);
+            const supabase = await getSupabase();
+            const success = await deleteReminder(supabase, reminder.id);
             if (success) {
               fetchReminders();
             } else {

@@ -197,7 +197,7 @@ export default function SignInScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>SplitFree</Text>
+            <Text style={styles.logo}>split it.</Text>
             <Text style={styles.tagline}>Split expenses, stay friends</Text>
           </View>
 

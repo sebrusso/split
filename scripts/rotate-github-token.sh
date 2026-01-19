@@ -9,7 +9,7 @@ set -e
 KEYCHAIN_SERVICE="claude-github-pat-splitfree"
 TODAY=$(date +%Y-%m)
 
-echo "🔄 GitHub PAT Rotation Guide for SplitFree"
+echo "🔄 GitHub PAT Rotation Guide for split it."
 echo "==========================================="
 echo ""
 

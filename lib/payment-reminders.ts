@@ -5,7 +5,7 @@
  * Sends push notifications to remind debtors about outstanding payments.
  */
 
-import { supabase } from "./supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { sendPushNotifications, scheduleLocalNotification } from "./notifications";
 import { formatCurrency } from "./utils";
 import logger from "./logger";
@@ -63,14 +63,17 @@ export interface ReminderHistory {
 
 /**
  * Create a new payment reminder
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param params - Reminder creation parameters
  */
 export async function createReminder(
+  supabaseClient: SupabaseClient,
   params: CreateReminderParams
 ): Promise<PaymentReminder | null> {
   try {
     const scheduledAt = params.scheduledAt || new Date();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("payment_reminders")
       .insert({
         group_id: params.groupId,
@@ -100,12 +103,15 @@ export async function createReminder(
 
 /**
  * Get all pending reminders for a group
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param groupId - The group ID
  */
 export async function getPendingReminders(
+  supabaseClient: SupabaseClient,
   groupId: string
 ): Promise<PaymentReminder[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("payment_reminders")
       .select(`
         *,
@@ -131,12 +137,15 @@ export async function getPendingReminders(
 
 /**
  * Get reminders created by a specific user
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param createdBy - The creator's Clerk user ID
  */
 export async function getRemindersByCreator(
+  supabaseClient: SupabaseClient,
   createdBy: string
 ): Promise<PaymentReminder[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("payment_reminders")
       .select(`
         *,
@@ -161,13 +170,16 @@ export async function getRemindersByCreator(
 
 /**
  * Get reminders where a user owes money
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param clerkUserId - The user's Clerk ID
  */
 export async function getRemindersForDebtor(
+  supabaseClient: SupabaseClient,
   clerkUserId: string
 ): Promise<PaymentReminder[]> {
   try {
     // First get member IDs for this user
-    const { data: members, error: membersError } = await supabase
+    const { data: members, error: membersError } = await supabaseClient
       .from("members")
       .select("id")
       .eq("clerk_user_id", clerkUserId);
@@ -176,9 +188,9 @@ export async function getRemindersForDebtor(
       return [];
     }
 
-    const memberIds = members.map((m) => m.id);
+    const memberIds = members.map((m: { id: string }) => m.id);
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("payment_reminders")
       .select(`
         *,
@@ -204,8 +216,12 @@ export async function getRemindersForDebtor(
 
 /**
  * Update reminder status
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param reminderId - The reminder ID
+ * @param status - The new status
  */
 export async function updateReminderStatus(
+  supabaseClient: SupabaseClient,
   reminderId: string,
   status: ReminderStatus
 ): Promise<boolean> {
@@ -220,7 +236,7 @@ export async function updateReminderStatus(
       updateFields.paid_at = new Date().toISOString();
     }
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from("payment_reminders")
       .update(updateFields)
       .eq("id", reminderId);
@@ -239,10 +255,15 @@ export async function updateReminderStatus(
 
 /**
  * Delete a reminder
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param reminderId - The reminder ID
  */
-export async function deleteReminder(reminderId: string): Promise<boolean> {
+export async function deleteReminder(
+  supabaseClient: SupabaseClient,
+  reminderId: string
+): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from("payment_reminders")
       .delete()
       .eq("id", reminderId);
@@ -265,8 +286,11 @@ export async function deleteReminder(reminderId: string): Promise<boolean> {
 
 /**
  * Send a payment reminder notification
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param reminder - The payment reminder to send
  */
 export async function sendReminder(
+  supabaseClient: SupabaseClient,
   reminder: PaymentReminder
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -285,6 +309,7 @@ export async function sendReminder(
     const body = `You owe ${creditorName} ${amount} in ${groupName}. Tap to pay now!`;
 
     const result = await sendPushNotifications(
+      supabaseClient,
       [debtorUserId],
       title,
       body,
@@ -297,28 +322,33 @@ export async function sendReminder(
     );
 
     if (result.success) {
-      await updateReminderStatus(reminder.id, "sent");
-      await logReminderHistory(reminder.id, "push", true);
+      await updateReminderStatus(supabaseClient, reminder.id, "sent");
+      await logReminderHistory(supabaseClient, reminder.id, "push", true);
     } else {
-      await logReminderHistory(reminder.id, "push", false, result.error);
+      await logReminderHistory(supabaseClient, reminder.id, "push", false, result.error);
     }
 
     return result;
   } catch (error) {
     const errorMsg = String(error);
-    await logReminderHistory(reminder.id, "push", false, errorMsg);
+    await logReminderHistory(supabaseClient, reminder.id, "push", false, errorMsg);
     return { success: false, error: errorMsg };
   }
 }
 
 /**
  * Send reminders for all due payments in a group
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param groupId - The group ID
  */
-export async function sendDueReminders(groupId: string): Promise<{
+export async function sendDueReminders(
+  supabaseClient: SupabaseClient,
+  groupId: string
+): Promise<{
   sent: number;
   failed: number;
 }> {
-  const reminders = await getPendingReminders(groupId);
+  const reminders = await getPendingReminders(supabaseClient, groupId);
   const now = new Date();
 
   let sent = 0;
@@ -327,7 +357,7 @@ export async function sendDueReminders(groupId: string): Promise<{
   for (const reminder of reminders) {
     const scheduledAt = new Date(reminder.scheduledAt);
     if (scheduledAt <= now) {
-      const result = await sendReminder(reminder);
+      const result = await sendReminder(supabaseClient, reminder);
       if (result.success) {
         sent++;
       } else {
@@ -359,15 +389,17 @@ export async function scheduleLocalReminder(
 
 /**
  * Log reminder send history
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  */
 async function logReminderHistory(
+  supabaseClient: SupabaseClient,
   reminderId: string,
   channel: "push" | "local",
   success: boolean,
   errorMessage?: string
 ): Promise<void> {
   try {
-    await supabase.from("reminder_history").insert({
+    await supabaseClient.from("reminder_history").insert({
       reminder_id: reminderId,
       channel,
       success,

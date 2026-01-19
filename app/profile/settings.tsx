@@ -237,7 +237,7 @@ export default function SettingsScreen() {
           <Card style={styles.settingCard}>
             <View style={styles.settingItem}>
               <View style={styles.settingContent}>
-                <Text style={styles.settingLabel}>Help Improve SplitFree</Text>
+                <Text style={styles.settingLabel}>Help Improve split it.</Text>
                 <Text style={styles.settingDescription}>
                   Share anonymous usage data to help us improve the app
                 </Text>
@@ -331,14 +331,14 @@ export default function SettingsScreen() {
               style={styles.settingItem}
               onPress={() => {
                 Linking.openURL(
-                  "mailto:feedback@splitfree.app?subject=SplitFree%20Feedback"
+                  "mailto:feedback@splitfree.app?subject=split%20it.%20Feedback"
                 );
               }}
             >
               <View style={styles.settingContent}>
                 <Text style={styles.settingLabel}>Send Feedback</Text>
                 <Text style={styles.settingDescription}>
-                  Help us improve SplitFree
+                  Help us improve split it.
                 </Text>
               </View>
               <Text style={styles.menuArrow}>→</Text>
@@ -402,7 +402,7 @@ export default function SettingsScreen() {
 
         {/* App Info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appName}>SplitFree</Text>
+          <Text style={styles.appName}>split it.</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
           <Text style={styles.appTagline}>
             100% free expense splitting.{"\n"}No limits. No paywalls.

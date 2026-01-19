@@ -1,4 +1,4 @@
-# E2E Testing Plan for SplitFree
+# E2E Testing Plan for split it.
 
 ## Test Account Credentials
 - **Email:** sebalexrusso@gmail.com
@@ -79,8 +79,8 @@ module.exports = {
   apps: {
     'ios.debug': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/SplitFree.app',
-      build: 'xcodebuild -workspace ios/SplitFree.xcworkspace -scheme SplitFree -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build'
+      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/split it..app',
+      build: 'xcodebuild -workspace ios/split it..xcworkspace -scheme split it. -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build'
     }
   },
   devices: {

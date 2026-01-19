@@ -1,4 +1,4 @@
-# SplitFree
+# split it.
 
 A 100% free expense-splitting mobile app. Split bills with friends, roommates, and travel companions without limits or paywalls.
 

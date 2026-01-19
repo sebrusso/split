@@ -181,7 +181,7 @@ export default function SearchScreen() {
       return (
         <View style={styles.emptyState}>
           <Ionicons name="search" size={64} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Search SplitFree</Text>
+          <Text style={styles.emptyTitle}>Search split it.</Text>
           <Text style={styles.emptyText}>
             Find expenses by description, merchant, or notes.{"\n"}
             Search groups by name or share code.

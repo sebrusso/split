@@ -1,8 +1,8 @@
-# SplitFree Marketing Website - Design Document
+# split it. Marketing Website - Design Document
 
 ## Overview
 
-A simple, single-page marketing website to promote the SplitFree mobile app. The site will highlight the app's core value proposition (100% free expense splitting) and drive downloads from the App Store and Google Play.
+A simple, single-page marketing website to promote the split it. mobile app. The site will highlight the app's core value proposition (100% free expense splitting) and drive downloads from the App Store and Google Play.
 
 ---
 
@@ -33,7 +33,7 @@ A simple, single-page marketing website to promote the SplitFree mobile app. The
 
 ### 2. Problem/Solution Section
 - **Problem**: "Tired of hitting paywalls just to split a dinner bill?"
-- **Solution**: Brief explanation of how SplitFree solves this
+- **Solution**: Brief explanation of how split it. solves this
 - Why free? Ad-supported model explanation (transparent)
 
 ### 3. Features Section (3-4 key features)
@@ -138,7 +138,7 @@ For MVP, buttons can link to `#coming-soon` or show "Coming Soon" state.
 
 ## SEO Considerations
 
-- Title: "SplitFree - Split Expenses 100% Free | No Paywalls"
+- Title: "split it. - Split Expenses 100% Free | No Paywalls"
 - Meta description: "The free expense-splitting app for roommates, trips, and friends. No transaction limits, no premium tiers. Download for iOS and Android."
 - Keywords: expense splitting app, split bills, splitwise alternative, free expense tracker
 - Open Graph tags for social sharing
@@ -160,7 +160,7 @@ For MVP, buttons can link to `#coming-soon` or show "Coming Soon" state.
 2. Animated feature demos
 3. Blog/content section
 4. Localization (Spanish, French, etc.)
-5. Comparison page (SplitFree vs Splitwise)
+5. Comparison page (split it. vs Splitwise)
 
 ---
 

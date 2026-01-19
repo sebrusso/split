@@ -521,7 +521,7 @@ export default function SignUpScreen() {
         >
           <Text style={styles.title}>Create your account</Text>
           <Text style={styles.subtitle}>
-            Join SplitFree to split expenses with friends
+            Join split it. to split expenses with friends
           </Text>
 
           {/* OAuth Buttons */}

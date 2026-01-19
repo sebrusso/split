@@ -1,4 +1,4 @@
-// SplitFree Marketing Website - Main JavaScript
+// split it. Marketing Website - Main JavaScript
 
 (function() {
   'use strict';

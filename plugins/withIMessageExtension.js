@@ -1,5 +1,5 @@
 /**
- * Expo Config Plugin for SplitFree iMessage Extension
+ * Expo Config Plugin for split it. iMessage Extension
  *
  * This plugin adds the iMessage extension target to the Xcode project,
  * configures App Groups for data sharing, and sets up the necessary
@@ -87,7 +87,7 @@ function withMessagesExtensionTarget(config) {
 
     // Create Info.plist for extension
     const infoPlistContent = createExtensionInfoPlist(
-      config.name || "SplitFree",
+      config.name || "split it.",
       extensionBundleId,
       config.version || "1.0.0",
       config.ios?.buildNumber || "1"

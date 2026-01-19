@@ -1,5 +1,5 @@
 /**
- * SplitFree iMessage Extension - UI Views
+ * split it. iMessage Extension - UI Views
  *
  * Custom UIKit views for displaying receipt information.
  */

@@ -15,7 +15,7 @@ appId: host.exp.Exponent
 # Step 1: Launch app
 - launchApp
 
-- assertVisible: "SplitFree"
+- assertVisible: "split it."
 
 # Step 2: Navigate to existing group or create one
 - tapOn:

@@ -64,7 +64,7 @@ export default function ShareScreen() {
     try {
       const deepLink = getDeepLink();
       await Share.share({
-        message: `Join my expense group "${group.name}" on SplitFree!\n\n${deepLink}\n\nOr enter code: ${group.share_code}`,
+        message: `Join my expense group "${group.name}" on split it.!\n\n${deepLink}\n\nOr enter code: ${group.share_code}`,
       });
     } catch (error) {
       console.error("Error sharing:", error);

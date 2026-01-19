@@ -1,5 +1,5 @@
 /**
- * SplitFree iMessage Extension
+ * split it. iMessage Extension
  *
  * Allows users to view and claim receipt items directly within iMessage.
  * Syncs with the main app's Supabase backend for real-time updates.

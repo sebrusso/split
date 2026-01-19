@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented Phase 2B P0 Push Notification Infrastructure for SplitFree app.
+Successfully implemented Phase 2B P0 Push Notification Infrastructure for split it. app.
 
 ## What Was Implemented
 

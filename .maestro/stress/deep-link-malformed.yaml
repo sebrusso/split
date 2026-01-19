@@ -11,7 +11,7 @@ appId: host.exp.Exponent
 - runFlow: ../flows/open-app.yaml
 
 # Step 2: Verify app loads correctly
-- assertVisible: "SplitFree"
+- assertVisible: "split it."
 
 # Step 3: Test navigation stability
 # Navigate to different tabs
@@ -28,7 +28,7 @@ appId: host.exp.Exponent
     optional: true
 
 - extendedWaitUntil:
-    visible: "SplitFree"
+    visible: "split it."
     timeout: 5000
 
 # Verify no crashes

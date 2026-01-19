@@ -1,5 +1,5 @@
 #!/bin/bash
-# E2E Test Runner for SplitFree
+# E2E Test Runner for split it.
 #
 # This script implements Plan A from E2E_TESTING_PLAN.md:
 # 1. Run login flow first to establish authentication
@@ -23,7 +23,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${YELLOW}========================================${NC}"
-echo -e "${YELLOW}SplitFree E2E Test Runner${NC}"
+echo -e "${YELLOW}split it. E2E Test Runner${NC}"
 echo -e "${YELLOW}========================================${NC}"
 echo ""
 

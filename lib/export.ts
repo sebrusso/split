@@ -1,5 +1,5 @@
 /**
- * CSV Export utilities for SplitFree
+ * CSV Export utilities for split it.
  * Uses React Native Share API for sharing files
  */
 
@@ -405,7 +405,7 @@ export async function exportAllUserData(userId: string): Promise<boolean> {
 
     // Generate combined CSV
     const sections: string[] = [];
-    sections.push("# SplitFree Data Export");
+    sections.push("# split it. Data Export");
     sections.push(`# Exported: ${new Date().toISOString()}`);
     sections.push(`# Total Groups: ${groups?.length || 0}`);
     sections.push(`# Total Expenses: ${expenses?.length || 0}`);

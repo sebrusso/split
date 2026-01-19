@@ -3,7 +3,7 @@
  * Receipt Scanning Evaluation CLI
  *
  * Evaluates receipt scanning accuracy using the same OCR
- * infrastructure as the SplitFree app.
+ * infrastructure as the split it. app.
  *
  * Usage:
  *   npx ts-node tools/receipt-eval/src/index.ts

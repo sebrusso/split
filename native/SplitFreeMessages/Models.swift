@@ -1,5 +1,5 @@
 /**
- * SplitFree iMessage Extension - Data Models
+ * split it. iMessage Extension - Data Models
  *
  * Swift structs for receipt data, matching the Supabase schema.
  */

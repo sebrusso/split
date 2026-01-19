@@ -160,7 +160,7 @@ export default function GroupsScreen() {
     <View style={styles.emptyState}>
       <View style={styles.emptyHero}>
         <Text style={styles.emptyEmoji}>💸</Text>
-        <Text style={styles.emptyTitle}>Welcome to SplitFree!</Text>
+        <Text style={styles.emptyTitle}>Welcome to split it.</Text>
         <Text style={styles.emptySubtitle}>
           The easiest way to split expenses with friends, roommates, and travel buddies
         </Text>
@@ -225,7 +225,7 @@ export default function GroupsScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.title}>SplitFree</Text>
+            <Text style={styles.title}>split it.</Text>
             <Text style={styles.subtitle}>Split expenses, stay friends</Text>
           </View>
           <TouchableOpacity

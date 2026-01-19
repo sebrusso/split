@@ -15,7 +15,7 @@ appId: host.exp.Exponent
 # Step 1: Launch app
 - launchApp
 
-- assertVisible: "SplitFree"
+- assertVisible: "split it."
 
 # ========================================
 # RAPID GROUP SWITCHING
@@ -118,4 +118,4 @@ appId: host.exp.Exponent
     duration: 200
 
 # Final assertion - home screen loads
-- assertVisible: "SplitFree"
+- assertVisible: "split it."

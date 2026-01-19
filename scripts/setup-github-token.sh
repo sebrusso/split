@@ -10,7 +10,7 @@ set -e
 
 KEYCHAIN_SERVICE="claude-github-pat-splitfree"
 
-echo "🔐 GitHub Fine-grained PAT Setup for SplitFree"
+echo "🔐 GitHub Fine-grained PAT Setup for split it."
 echo "=============================================="
 echo ""
 
@@ -66,7 +66,7 @@ echo '  export GITHUB_TOKEN=$(security find-generic-password -a "$USER" -s "clau
 echo ""
 echo "Or add this to your ~/.zshrc or ~/.bashrc:"
 echo ""
-echo '  # SplitFree GitHub Token'
+echo '  # split it. GitHub Token'
 echo '  export GITHUB_TOKEN=$(security find-generic-password -a "$USER" -s "claude-github-pat-splitfree" -w 2>/dev/null)'
 echo ""
 echo "To configure git to use the token:"

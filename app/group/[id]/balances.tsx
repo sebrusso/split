@@ -251,6 +251,7 @@ export default function BalancesScreen() {
       const toMember = getMemberById(selectedSettlement.to);
       if (fromMember && toMember && toMember.clerk_user_id && group) {
         notifySettlementRecorded(
+          supabase,
           {
             fromName: fromMember.name,
             toUserId: toMember.clerk_user_id,
@@ -364,7 +365,8 @@ export default function BalancesScreen() {
           onPress: async () => {
             setSendingReminderIndex(index);
             try {
-              const reminder = await createReminder({
+              const supabase = await getSupabase();
+              const reminder = await createReminder(supabase, {
                 groupId: id!,
                 fromMemberId,
                 toMemberId,
@@ -395,8 +397,9 @@ export default function BalancesScreen() {
           onPress: async () => {
             setSendingReminderIndex(index);
             try {
+              const supabase = await getSupabase();
               const suggestedTime = suggestReminderTime();
-              const reminder = await createReminder({
+              const reminder = await createReminder(supabase, {
                 groupId: id!,
                 fromMemberId,
                 toMemberId,

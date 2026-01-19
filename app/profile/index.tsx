@@ -264,7 +264,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                Alert.alert("About SplitFree", "Version 1.0.0\n\n100% free expense splitting.\nNo limits. No paywalls.\n\nMade with love for friends who split bills.");
+                Alert.alert("About split it.", "Version 1.0.0\n\n100% free expense splitting.\nNo limits. No paywalls.\n\nMade with love for friends who split bills.");
               }}
             >
               <View style={styles.menuItemContent}>

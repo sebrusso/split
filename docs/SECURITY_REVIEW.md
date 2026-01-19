@@ -1,4 +1,4 @@
-# Security Review - SplitFree
+# Security Review - split it.
 
 **Review Date:** 2026-01-06
 **Reviewer:** Claude Code Security Analysis
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This security review identified **11 security concerns** across the SplitFree codebase. The most critical issues relate to **hardcoded API credentials**, **SQL injection vulnerabilities**, and **insufficient authorization controls** in database access.
+This security review identified **11 security concerns** across the split it. codebase. The most critical issues relate to **hardcoded API credentials**, **SQL injection vulnerabilities**, and **insufficient authorization controls** in database access.
 
 ---
 

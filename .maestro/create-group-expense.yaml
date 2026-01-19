@@ -185,24 +185,26 @@ appId: host.exp.Exponent
     visible: "Paid by"
     timeout: 3000
 
-# Enter amount - tap on the amount display
+# The amount "$0.00" is visible - tap on it directly
+# Based on screenshot: amount is at roughly 30% from left, 43% from top
 - tapOn:
-    text: "0.00"
-- eraseText: 10
-- inputText: "75.00"
-- pressKey: Enter
+    point: "30%,43%"
 
+# Wait for keyboard to appear
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 2000
+
+# Type the amount
+- inputText: "75"
 - pressKey: Enter
 
 # Wait for keyboard to dismiss
 - extendedWaitUntil:
-    visible: "Split between"
-    timeout: 3000
+    visible: "Paid by"
+    timeout: 5000
 
-# Select Alice as payer (first member shown)
-- tapOn: "Alice"
-
-# Scroll down to see submit button
+# Scroll down to see the submit button
 - scroll
 
 # Wait and save expense
@@ -218,8 +220,14 @@ appId: host.exp.Exponent
     visible: "Pizza and drinks"
     timeout: 10000
 
-# Step 9: Check balances
-- tapOn: "View Balances"
+# Step 9: Check balances - wait a moment for the view to settle
+- extendedWaitUntil:
+    visible: "Expenses"
+    timeout: 5000
+
+# Tap on View Balances using testID
+- tapOn:
+    id: "view-balances-button"
 
 # Verify balance screen
 - assertVisible: "Balances"

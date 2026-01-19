@@ -46,7 +46,7 @@ const SLIDES: WelcomeSlide[] = [
     id: "2",
     icon: "infinite-outline",
     title: "No Limits. Ever.",
-    description: "Unlike other apps, SplitFree has no paywalls, no transaction limits, and no premium tiers.",
+    description: "Unlike other apps, split it. has no paywalls, no transaction limits, and no premium tiers.",
     highlight: "Unlimited Groups",
   },
   {

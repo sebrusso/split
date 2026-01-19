@@ -2,7 +2,7 @@
  * Sentry Error Monitoring Configuration
  *
  * Provides production error tracking, performance monitoring,
- * and crash reporting for the SplitFree app.
+ * and crash reporting for the split it. app.
  */
 
 import * as Sentry from "@sentry/react-native";

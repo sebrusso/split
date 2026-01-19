@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explores the technical architecture and user experience design for SplitFree's vision feature: photograph a receipt, extract items via OCR, let friends claim their items, and automatically calculate each person's share including tax and tip.
+This document explores the technical architecture and user experience design for split it.'s vision feature: photograph a receipt, extract items via OCR, let friends claim their items, and automatically calculate each person's share including tax and tip.
 
 ---
 
@@ -655,7 +655,7 @@ function roundCurrency(amount: number): number {
 │                           [8:45 PM] │
 │                                     │
 │ ┌─────────────────────────────────┐ │
-│ │ 🧾 SplitFree Receipt            │ │
+│ │ 🧾 split it. Receipt            │ │
 │ │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│ │
 │ │ Joe's Diner                     │ │
 │ │ Total: $105.36                  │ │
@@ -679,7 +679,7 @@ function roundCurrency(amount: number): number {
       ▼ Tapping "Open Receipt"
 
 ┌─────────────────────────────────────┐
-│ SplitFree              [Done]       │
+│ split it.              [Done]       │
 │─────────────────────────────────────│
 │                                     │
 │ Joe's Diner                         │
@@ -711,7 +711,7 @@ function roundCurrency(amount: number): number {
 #### Implementation Details
 
 ```swift
-// iOS/SplitFreeMessages/MessagesViewController.swift
+// iOS/split it. Messages/MessagesViewController.swift
 
 import Messages
 import UIKit
@@ -824,7 +824,7 @@ For maximum reach, generate a shareable web link that works in any messaging app
 
 ```
 ┌─────────────────────────────────────┐
-│ 🧾 SplitFree                        │
+│ 🧾 split it.                        │
 │─────────────────────────────────────│
 │                                     │
 │ Joe's Diner                         │
@@ -1029,7 +1029,7 @@ Based on the analysis, here's my recommended phased approach:
 1. Full iMessage extension with claiming UI
 2. Real-time updates in chat
 3. Inline payment requests
-4. Identity linking (iMessage ↔ SplitFree account)
+4. Identity linking (iMessage ↔ split it. account)
 
 **Why:** The "magical" experience, but requires significant investment.
 
@@ -1115,7 +1115,7 @@ CREATE TABLE anonymous_claims (
 
 ## Appendix: Competitive Analysis
 
-| Feature | Splitwise | Tab | SplitFree (Proposed) |
+| Feature | Splitwise | Tab | split it. (Proposed) |
 |---------|-----------|-----|----------------------|
 | Receipt OCR | ❌ | ✅ | ✅ |
 | Item claiming | ❌ | ✅ | ✅ |

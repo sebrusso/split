@@ -332,6 +332,7 @@ export default function AddExpenseScreen() {
       const payer = members.find((m) => m.id === paidBy);
       if (group && payer) {
         notifyExpenseAdded(
+          supabase,
           id!,
           {
             description: description.trim(),

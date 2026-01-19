@@ -1,4 +1,4 @@
-# SplitFree E2E Testing with Maestro
+# split it. E2E Testing with Maestro
 
 ## Quick Start
 

@@ -11,7 +11,7 @@
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
-import { supabase } from "./supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Push token storage in user profile
@@ -74,16 +74,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
 /**
  * Save push token to database
  * Stores the token in the push_tokens table
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param userId - The user's Clerk ID
  * @param token - The Expo push token
  */
 export async function savePushToken(
+  supabaseClient: SupabaseClient,
   userId: string,
   token: string
 ): Promise<void> {
   try {
     // Check if token already exists for this user
-    const { data: existingToken } = await supabase
+    const { data: existingToken } = await supabaseClient
       .from("push_tokens")
       .select("id, token")
       .eq("user_id", userId)
@@ -92,7 +94,7 @@ export async function savePushToken(
 
     if (existingToken) {
       // Token already exists, just update the timestamp
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from("push_tokens")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", existingToken.id);
@@ -106,7 +108,7 @@ export async function savePushToken(
     }
 
     // Insert new token
-    const { error } = await supabase.from("push_tokens").insert({
+    const { error } = await supabaseClient.from("push_tokens").insert({
       user_id: userId,
       token,
       platform: Platform.OS,
@@ -125,15 +127,17 @@ export async function savePushToken(
 /**
  * Remove push token from database
  * Call this when the user signs out or revokes notification permissions
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param userId - The user's Clerk ID
  * @param token - Optional specific token to remove (if not provided, removes all tokens for user)
  */
 export async function removePushToken(
+  supabaseClient: SupabaseClient,
   userId: string,
   token?: string
 ): Promise<void> {
   try {
-    let query = supabase.from("push_tokens").delete().eq("user_id", userId);
+    let query = supabaseClient.from("push_tokens").delete().eq("user_id", userId);
 
     if (token) {
       // Remove specific token
@@ -183,17 +187,19 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 /**
  * Register push token and save to database
  * Convenience function that combines token registration and saving
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param userId - The user's Clerk ID
  * @returns The push token if successful, null otherwise
  */
 export async function registerPushToken(
+  supabaseClient: SupabaseClient,
   userId: string
 ): Promise<string | null> {
   try {
     const token = await registerForPushNotifications();
 
     if (token) {
-      await savePushToken(userId, token);
+      await savePushToken(supabaseClient, userId, token);
       return token;
     }
 
@@ -443,12 +449,14 @@ export function addNotificationResponseListener(
 
 /**
  * Send push notifications to specified users via Supabase Edge Function
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param userIds - Array of Clerk user IDs to send notifications to
  * @param title - Notification title
  * @param body - Notification body
  * @param data - Optional additional data
  */
 export async function sendPushNotifications(
+  supabaseClient: SupabaseClient,
   userIds: string[],
   title: string,
   body: string,
@@ -459,7 +467,7 @@ export async function sendPushNotifications(
       return { success: true, sent: 0 };
     }
 
-    const { data: response, error } = await supabase.functions.invoke("send-push-notification", {
+    const { data: response, error } = await supabaseClient.functions.invoke("send-push-notification", {
       body: {
         userIds,
         title,
@@ -482,11 +490,14 @@ export async function sendPushNotifications(
 
 /**
  * Send expense notification to group members
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param groupId - The group ID
  * @param expense - Expense details
+ * @param groupName - The group name
  * @param excludeUserId - User ID to exclude (typically the user who added the expense)
  */
 export async function notifyExpenseAdded(
+  supabaseClient: SupabaseClient,
   groupId: string,
   expense: { description: string; amount: number; payerName: string },
   groupName: string,
@@ -494,7 +505,7 @@ export async function notifyExpenseAdded(
 ): Promise<void> {
   try {
     // Get all members of the group with Clerk user IDs
-    const { data: members, error } = await supabase
+    const { data: members, error } = await supabaseClient
       .from("members")
       .select("clerk_user_id")
       .eq("group_id", groupId)
@@ -507,7 +518,7 @@ export async function notifyExpenseAdded(
 
     // Filter out the excluded user and get user IDs
     const userIds = members
-      .map((m) => m.clerk_user_id)
+      .map((m: { clerk_user_id: string | null }) => m.clerk_user_id)
       .filter((id): id is string => id !== null && id !== excludeUserId);
 
     if (userIds.length === 0) return;
@@ -515,7 +526,7 @@ export async function notifyExpenseAdded(
     const title = `New expense in ${groupName}`;
     const body = `${expense.payerName} added "${expense.description}" - $${expense.amount.toFixed(2)}`;
 
-    await sendPushNotifications(userIds, title, body, {
+    await sendPushNotifications(supabaseClient, userIds, title, body, {
       type: "expense_added",
       groupId,
     });
@@ -526,10 +537,13 @@ export async function notifyExpenseAdded(
 
 /**
  * Send settlement notification to the recipient
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param settlement - Settlement details
  * @param groupName - The group name
+ * @param groupId - The group ID
  */
 export async function notifySettlementRecorded(
+  supabaseClient: SupabaseClient,
   settlement: { fromName: string; toUserId: string; amount: number },
   groupName: string,
   groupId: string
@@ -540,7 +554,7 @@ export async function notifySettlementRecorded(
     const title = `Payment received in ${groupName}`;
     const body = `${settlement.fromName} paid you $${settlement.amount.toFixed(2)}`;
 
-    await sendPushNotifications([settlement.toUserId], title, body, {
+    await sendPushNotifications(supabaseClient, [settlement.toUserId], title, body, {
       type: "settlement_recorded",
       groupId,
     });
@@ -551,12 +565,14 @@ export async function notifySettlementRecorded(
 
 /**
  * Send notification when a new member joins a group
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param groupId - The group ID
  * @param memberName - Name of the new member
  * @param groupName - Name of the group
  * @param excludeUserId - User ID to exclude (the new member)
  */
 export async function notifyMemberJoined(
+  supabaseClient: SupabaseClient,
   groupId: string,
   memberName: string,
   groupName: string,
@@ -564,7 +580,7 @@ export async function notifyMemberJoined(
 ): Promise<void> {
   try {
     // Get all members of the group with Clerk user IDs
-    const { data: members, error } = await supabase
+    const { data: members, error } = await supabaseClient
       .from("members")
       .select("clerk_user_id")
       .eq("group_id", groupId)
@@ -577,7 +593,7 @@ export async function notifyMemberJoined(
 
     // Filter out the excluded user and get user IDs
     const userIds = members
-      .map((m) => m.clerk_user_id)
+      .map((m: { clerk_user_id: string | null }) => m.clerk_user_id)
       .filter((id): id is string => id !== null && id !== excludeUserId);
 
     if (userIds.length === 0) return;
@@ -585,7 +601,7 @@ export async function notifyMemberJoined(
     const title = `New member in ${groupName}`;
     const body = `${memberName} joined the group`;
 
-    await sendPushNotifications(userIds, title, body, {
+    await sendPushNotifications(supabaseClient, userIds, title, body, {
       type: "member_joined",
       groupId,
     });
