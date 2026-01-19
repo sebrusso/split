@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support - split it.</title>
+  <meta name="description" content="Get help with split it. - FAQ, contact support, and troubleshooting guides.">
+  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .support-content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: calc(64px + var(--space-xxxl)) var(--container-padding) var(--space-xxxl);
+    }
+    .support-content h1 {
+      margin-bottom: var(--space-lg);
+    }
+    .support-intro {
+      color: var(--text-secondary);
+      font-size: 1.125rem;
+      margin-bottom: var(--space-xxl);
+    }
+    .contact-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
+      margin-bottom: var(--space-xxl);
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+    }
+    .contact-card h2 {
+      margin-bottom: var(--space-md);
+    }
+    .contact-card p {
+      color: var(--text-secondary);
+      margin-bottom: var(--space-lg);
+    }
+    .contact-email {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      padding: var(--space-md) var(--space-xl);
+      border-radius: var(--radius-full);
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .contact-email:hover {
+      background: var(--primary-dark);
+    }
+    .faq-section h2 {
+      margin-bottom: var(--space-xl);
+    }
+    .faq-item {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-md);
+      box-shadow: var(--shadow-sm);
+    }
+    .faq-item h3 {
+      font-size: 1rem;
+      margin-bottom: var(--space-sm);
+      color: var(--text-primary);
+    }
+    .faq-item p {
+      color: var(--text-secondary);
+      margin: 0;
+      font-size: 0.9375rem;
+    }
+    .response-time {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-top: var(--space-sm);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <img src="images/icon.png" alt="split it." class="logo-icon">
+          <span class="logo-text">split it.</span>
+        </a>
+        <a href="/#download" class="btn btn-primary btn-sm">Download</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="support-content">
+    <h1>Support</h1>
+    <p class="support-intro">Need help with split it.? We're here to help you split expenses with ease.</p>
+
+    <div class="contact-card">
+      <h2>Contact Us</h2>
+      <p>Have a question, found a bug, or want to suggest a feature? Send us an email and we'll get back to you.</p>
+      <a href="mailto:support@split-it.net" class="contact-email">support@split-it.net</a>
+      <p class="response-time">We typically respond within 24-48 hours</p>
+    </div>
+
+    <section class="faq-section">
+      <h2>Frequently Asked Questions</h2>
+
+      <div class="faq-item">
+        <h3>Is split it. really free?</h3>
+        <p>Yes! split it. is 100% free with no premium tiers, no transaction limits, and no paywalls. We support the app through occasional, non-intrusive ads.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I add friends to a group?</h3>
+        <p>Open your group and tap the share button. You can share a QR code or invite link via text, email, or any messaging app. Friends can join instantly by scanning or tapping the link.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How are balances calculated?</h3>
+        <p>split it. tracks all expenses in your group and calculates who paid what versus who owes what. The app then simplifies debts to minimize the number of payments needed to settle up.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Can I use split it. offline?</h3>
+        <p>Yes! You can add expenses and view your groups while offline. Changes will sync automatically when you're back online.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I delete my account?</h3>
+        <p>Go to Profile > Settings > Delete Account. This will permanently remove your account and all associated data. Note: This won't delete groups you've shared with others.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Is my data secure?</h3>
+        <p>Yes. We use industry-standard encryption and secure cloud infrastructure (Supabase) to protect your data. We never sell your personal information to third parties.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What currencies are supported?</h3>
+        <p>split it. supports multiple currencies including USD, EUR, GBP, CAD, AUD, and more. Each group can have its own currency setting.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>How do I report a bug?</h3>
+        <p>Email us at support@split-it.net with a description of the issue, your device type, and app version. Screenshots are helpful!</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <a href="/" class="logo">
+            <img src="images/icon.png" alt="split it." class="logo-icon">
+            <span class="logo-text">split it.</span>
+          </a>
+          <p>Split expenses. 100% free.</p>
+        </div>
+        <div class="footer-links">
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="terms.html">Terms of Service</a>
+          <a href="support.html">Support</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 split it. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

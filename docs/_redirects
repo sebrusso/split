@@ -1,0 +1,11 @@
+# Cloudflare Pages redirects
+# https://developers.cloudflare.com/pages/configuration/redirects/
+
+# SPA fallback (if you add client-side routing later)
+# /*    /index.html   200
+
+# Deep link redirects for app
+/join/*  splitfree://join/:splat  302
+
+# Old domain redirects
+https://splitfree.app/*  https://split-it.net/:splat  301
