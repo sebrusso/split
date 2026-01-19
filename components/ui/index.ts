@@ -39,3 +39,7 @@ export { QuickCreateGroup } from "./QuickCreateGroup";
 
 // Receipt components
 export { QuickSplitModal } from "./QuickSplitModal";
+
+// Voice dictation components
+export { VoiceDictationButton } from "./VoiceDictationButton";
+export { VoiceDictationModal } from "./VoiceDictationModal";
