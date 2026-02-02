@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   colors,
   spacing,
@@ -23,14 +24,25 @@ import {
 } from "../../lib/theme";
 import { Button, Input, Card } from "../../components/ui";
 import { useAuth } from "../../lib/auth-context";
+import { useSupabase } from "../../lib/supabase";
 import { updateVenmoProfile } from "../../lib/user-profile";
+import { VENMO_ONBOARDING_KEY } from "../_layout";
 
 export default function VenmoOnboardingScreen() {
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [venmoUsername, setVenmoUsername] = useState("");
   const [venmoDisplayName, setVenmoDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const markOnboardingComplete = async () => {
+    try {
+      await AsyncStorage.setItem(VENMO_ONBOARDING_KEY, "true");
+    } catch {
+      // Ignore storage errors - user can still proceed
+    }
+  };
 
   const handleSave = async () => {
     if (!userId) return;
@@ -46,12 +58,16 @@ export default function VenmoOnboardingScreen() {
     setError("");
 
     try {
+      // Get authenticated Supabase client for RLS
+      const supabaseClient = await getSupabase();
       const success = await updateVenmoProfile(
+        supabaseClient,
         userId,
         cleanUsername || null,
         venmoDisplayName.trim() || null
       );
       if (success) {
+        await markOnboardingComplete();
         router.replace("/(tabs)");
       } else {
         setError("Failed to save Venmo profile. Please try again.");
@@ -63,7 +79,8 @@ export default function VenmoOnboardingScreen() {
     }
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    await markOnboardingComplete();
     router.replace("/(tabs)");
   };
 

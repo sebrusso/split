@@ -22,6 +22,7 @@ import {
 } from "../../lib/theme";
 import { Button, Input, Avatar, Card } from "../../components/ui";
 import { useAuth } from "../../lib/auth-context";
+import { useSupabase } from "../../lib/supabase";
 import { getVenmoUsername, updateVenmoUsername } from "../../lib/user-profile";
 
 /**
@@ -31,6 +32,7 @@ import { getVenmoUsername, updateVenmoUsername } from "../../lib/user-profile";
 export default function EditProfileScreen() {
   const { user, isLoaded } = useUser();
   const { userId } = useAuth();
+  const { getSupabase } = useSupabase();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [venmoUsername, setVenmoUsername] = useState("");
@@ -70,8 +72,10 @@ export default function EditProfileScreen() {
         lastName: lastName.trim() || undefined,
       });
 
-      // Update Venmo username in Supabase
+      // Update Venmo username in Supabase with authenticated client
+      const supabaseClient = await getSupabase();
       const venmoUpdated = await updateVenmoUsername(
+        supabaseClient,
         userId,
         venmoUsername.trim() || null
       );
@@ -85,11 +89,12 @@ export default function EditProfileScreen() {
         Alert.alert("Success", "Profile updated successfully");
       }
       router.back();
-    } catch (error: any) {
-      console.error("Error updating profile:", error);
+    } catch (error: unknown) {
+      __DEV__ && console.error("Error updating profile:", error);
+      const clerkError = error as { errors?: Array<{ message?: string }> };
       Alert.alert(
         "Error",
-        error.errors?.[0]?.message || "Failed to update profile"
+        clerkError.errors?.[0]?.message || "Failed to update profile"
       );
     } finally {
       setSaving(false);
@@ -134,11 +139,12 @@ export default function EditProfileScreen() {
 
       await user.setProfileImage({ file: base64 });
       Alert.alert("Success", "Profile photo updated");
-    } catch (error: any) {
-      console.error("Error uploading image:", error);
+    } catch (error: unknown) {
+      __DEV__ && console.error("Error uploading image:", error);
+      const clerkError = error as { errors?: Array<{ message?: string }> };
       Alert.alert(
         "Error",
-        error.errors?.[0]?.message || "Failed to upload photo"
+        clerkError.errors?.[0]?.message || "Failed to upload photo"
       );
     } finally {
       setUploadingImage(false);

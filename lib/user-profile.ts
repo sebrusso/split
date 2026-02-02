@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "./supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 import logger from "./logger";
 
 /**
@@ -34,8 +35,12 @@ export async function getVenmoUsername(clerkUserId: string): Promise<string | nu
 
 /**
  * Update user's Venmo username
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param clerkUserId - The user's Clerk ID
+ * @param venmoUsername - Venmo username (without @ prefix)
  */
 export async function updateVenmoUsername(
+  supabaseClient: SupabaseClient,
   clerkUserId: string,
   venmoUsername: string | null
 ): Promise<boolean> {
@@ -50,10 +55,14 @@ export async function updateVenmoUsername(
       throw new Error("Invalid Venmo username format");
     }
 
-    const { error } = await supabase
+    // Use upsert to create the profile if it doesn't exist
+    // Note: Must use authenticated client for RLS policies
+    const { error } = await supabaseClient
       .from("user_profiles")
-      .update({ venmo_username: cleanUsername })
-      .eq("clerk_id", clerkUserId);
+      .upsert(
+        { clerk_id: clerkUserId, venmo_username: cleanUsername },
+        { onConflict: "clerk_id" }
+      );
 
     if (error) throw error;
     return true;
@@ -190,8 +199,13 @@ export async function getVenmoProfile(clerkUserId: string): Promise<{
 
 /**
  * Update user's Venmo profile (username and display name)
+ * @param supabaseClient - Authenticated Supabase client (required for RLS)
+ * @param clerkUserId - The user's Clerk ID
+ * @param venmoUsername - Venmo username (without @ prefix)
+ * @param venmoDisplayName - Display name for Venmo
  */
 export async function updateVenmoProfile(
+  supabaseClient: SupabaseClient,
   clerkUserId: string,
   venmoUsername: string | null,
   venmoDisplayName: string | null
@@ -212,13 +226,18 @@ export async function updateVenmoProfile(
       ? venmoDisplayName.trim().slice(0, 50)
       : null;
 
-    const { error } = await supabase
+    // Use upsert to create the profile if it doesn't exist
+    // Note: Must use authenticated client for RLS policies
+    const { error } = await supabaseClient
       .from("user_profiles")
-      .update({
-        venmo_username: cleanUsername,
-        venmo_display_name: cleanDisplayName,
-      })
-      .eq("clerk_id", clerkUserId);
+      .upsert(
+        {
+          clerk_id: clerkUserId,
+          venmo_username: cleanUsername,
+          venmo_display_name: cleanDisplayName,
+        },
+        { onConflict: "clerk_id" }
+      );
 
     if (error) throw error;
     return true;

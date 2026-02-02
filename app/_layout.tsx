@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Stack, useSegments, useRouter, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
+import { View, ActivityIndicator, StyleSheet, Text, Platform } from "react-native";
+
+// Initialize Reactotron in development (native only)
+if (__DEV__ && Platform.OS !== "web") {
+  require("../ReactotronConfig");
+}
 import {
   useFonts,
   Inter_400Regular,
@@ -12,7 +17,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors } from "../lib/theme";
+import { colors, ThemeProvider, useTheme } from "../lib/theme";
 import { CLERK_PUBLISHABLE_KEY, tokenCache, isClerkConfigured } from "../lib/clerk";
 import { AuthProvider } from "../lib/auth-context";
 import { useSupabase } from "../lib/supabase";
@@ -24,6 +29,9 @@ import {
 } from "../lib/notifications";
 import { logger } from "../lib/logger";
 import { WELCOME_SEEN_KEY } from "./auth/welcome";
+
+// Key to track if user has completed/skipped Venmo onboarding
+export const VENMO_ONBOARDING_KEY = "@splitfree/venmo_onboarding_completed";
 import {
   initSentry,
   setSentryUser,
@@ -52,6 +60,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [welcomeChecked, setWelcomeChecked] = useState(false);
   const [hasSeenWelcome, setHasSeenWelcome] = useState(true); // Default to true to avoid flicker
+  const [venmoOnboardingChecked, setVenmoOnboardingChecked] = useState(false);
+  const [hasCompletedVenmoOnboarding, setHasCompletedVenmoOnboarding] = useState(true); // Default to true to avoid flicker
 
   // Check if user has seen welcome screen
   useEffect(() => {
@@ -67,13 +77,29 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     checkWelcome();
   }, []);
 
+  // Check if user has completed/skipped Venmo onboarding (only when signed in)
   useEffect(() => {
-    if (!isLoaded || !welcomeChecked) return;
+    const checkVenmoOnboarding = async () => {
+      if (!isSignedIn || !userId) {
+        setVenmoOnboardingChecked(true);
+        return;
+      }
+      try {
+        const completed = await AsyncStorage.getItem(VENMO_ONBOARDING_KEY);
+        setHasCompletedVenmoOnboarding(completed === "true");
+      } catch {
+        setHasCompletedVenmoOnboarding(true); // On error, skip onboarding
+      }
+      setVenmoOnboardingChecked(true);
+    };
+    checkVenmoOnboarding();
+  }, [isSignedIn, userId]);
+
+  useEffect(() => {
+    if (!isLoaded || !welcomeChecked || !venmoOnboardingChecked) return;
 
     const inAuthGroup = segments[0] === "auth";
-    // Cast to string[] to access potential second segment
-    const segmentsArray = segments as string[];
-    const onWelcomeScreen = segmentsArray.length > 1 && segmentsArray[1] === "welcome";
+    const inOnboardingGroup = segments[0] === "onboarding";
 
     if (!isSignedIn && !inAuthGroup) {
       // Not signed in and not in auth flow
@@ -84,14 +110,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         // Returning user - go to sign-in
         router.replace("/auth/sign-in");
       }
-    } else if (!isSignedIn && inAuthGroup && !hasSeenWelcome && !onWelcomeScreen) {
-      // In auth but hasn't seen welcome yet - redirect to welcome
-      router.replace("/auth/welcome");
     } else if (isSignedIn && inAuthGroup) {
-      // Redirect to home if authenticated but still in auth flow
-      router.replace("/");
+      // Just signed in - check if needs Venmo onboarding
+      if (!hasCompletedVenmoOnboarding) {
+        router.replace("/onboarding/venmo");
+      } else {
+        router.replace("/");
+      }
     }
-  }, [isLoaded, isSignedIn, segments, router, welcomeChecked, hasSeenWelcome]);
+    // Note: We intentionally don't redirect back to Venmo onboarding if user
+    // is already in the main app. This prevents navigation loops when the
+    // AsyncStorage state hasn't updated yet after completing onboarding.
+  }, [isLoaded, isSignedIn, segments, router, welcomeChecked, hasSeenWelcome, venmoOnboardingChecked, hasCompletedVenmoOnboarding]);
 
   // Register for push notifications and set Sentry user context when user signs in
   useEffect(() => {
@@ -167,22 +197,33 @@ function ScreenTracker({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Themed StatusBar that responds to theme changes
+ */
+function ThemedStatusBar() {
+  const { effectiveScheme } = useTheme();
+  return <StatusBar style={effectiveScheme === "dark" ? "light" : "dark"} />;
+}
+
+/**
  * Main Navigation Stack
+ * Uses theme-aware colors from the ThemeProvider
  */
 function RootNavigator() {
+  const { colors: themeColors } = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: colors.background,
+          backgroundColor: themeColors.background,
         },
-        headerTintColor: colors.text,
+        headerTintColor: themeColors.text,
         headerTitleStyle: {
           fontFamily: "Inter_600SemiBold",
         },
         headerShadowVisible: false,
         contentStyle: {
-          backgroundColor: colors.background,
+          backgroundColor: themeColors.background,
         },
       }}
     >
@@ -417,7 +458,7 @@ export default function RootLayout() {
   // Verify Clerk is properly configured for production
   if (!isClerkConfigured()) {
     if (__DEV__) {
-      console.warn(
+      logger.warn(
         "Clerk is not configured. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your environment."
       );
     } else {
@@ -443,23 +484,25 @@ export default function RootLayout() {
 
   return (
     <SentryErrorBoundary fallback={errorFallback}>
-      <ClerkProvider
-        publishableKey={CLERK_PUBLISHABLE_KEY}
-        tokenCache={tokenCache}
-      >
-        <ClerkLoaded>
-          <AuthProvider>
-            <AnalyticsProvider>
-              <StatusBar style="dark" />
-              <AuthGuard>
-                <ScreenTracker>
-                  <RootNavigator />
-                </ScreenTracker>
-              </AuthGuard>
-            </AnalyticsProvider>
-          </AuthProvider>
-        </ClerkLoaded>
-      </ClerkProvider>
+      <ThemeProvider>
+        <ClerkProvider
+          publishableKey={CLERK_PUBLISHABLE_KEY}
+          tokenCache={tokenCache}
+        >
+          <ClerkLoaded>
+            <AuthProvider>
+              <AnalyticsProvider>
+                <ThemedStatusBar />
+                <AuthGuard>
+                  <ScreenTracker>
+                    <RootNavigator />
+                  </ScreenTracker>
+                </AuthGuard>
+              </AnalyticsProvider>
+            </AuthProvider>
+          </ClerkLoaded>
+        </ClerkProvider>
+      </ThemeProvider>
     </SentryErrorBoundary>
   );
 }
