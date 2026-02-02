@@ -1,0 +1,28 @@
+{
+  "name": "Feature Name",
+  "description": "Brief description of what this feature accomplishes",
+  "branch": "feature/branch-name",
+  "stories": [
+    {
+      "id": 1,
+      "title": "First story title",
+      "description": "Detailed description of what needs to be done. Include acceptance criteria.",
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": 2,
+      "title": "Second story title",
+      "description": "This story depends on story 1 being complete.",
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": 3,
+      "title": "Third story title",
+      "description": "Final story in the sequence.",
+      "priority": 3,
+      "passes": false
+    }
+  ]
+}

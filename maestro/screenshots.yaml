@@ -1,0 +1,18 @@
+appId: host.exp.Exponent
+---
+# Screenshot 1: Dismiss dev menu and capture login/home
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "×"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: /Users/sebastianrusso/projects/split/splitfree/docs/images/assets/01-login
+
+# Try to tap on split it. in Expo Go if we're there
+- tapOn:
+    text: "split it."
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
