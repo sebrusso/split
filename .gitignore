@@ -60,3 +60,13 @@ supabase/.temp/
 tools/receipt-eval/reports/
 tools/receipt-eval/dataset/images/
 tools/receipt-eval/dist/
+
+# Claude Code files with environment-specific project refs
+# These contain Supabase project IDs that GitGuardian flags
+.claude/agents/tech-lead.md
+.claude/commands/db.md
+.claude/skills/supabase-workflow/
+docs/DATABASE_QUICKSTART.md
+docs/DATABASE_WORKFLOW.md
+docs/DATABASE_ARCHITECTURE.md
+docs/DATABASE_ENVIRONMENT_SETUP.md
