@@ -11,9 +11,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useSignIn, useOAuth, isClerkAPIResponseError } from "@clerk/clerk-expo";
+import { useSignIn, useOAuth, useAuth, isClerkAPIResponseError } from "@clerk/clerk-expo";
 import type { ClerkAPIError } from "@clerk/types";
-import * as Linking from "expo-linking";
+import { OAUTH_REDIRECT_URL } from "../../lib/clerk";
 import {
   colors,
   spacing,
@@ -23,6 +23,7 @@ import {
 } from "../../lib/theme";
 import { Button, Input } from "../../components/ui";
 import { useAnalytics, AnalyticsEvents } from "../../lib/analytics-provider";
+import { VENMO_ONBOARDING_KEY } from "../_layout";
 
 /**
  * User-friendly error messages for Clerk error codes
@@ -57,6 +58,7 @@ function isAccountNotFoundError(code: string): boolean {
  */
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
+  const { signOut } = useAuth();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
   const { trackEvent } = useAnalytics();
@@ -107,6 +109,19 @@ export default function SignInScreen() {
         const firstError = clerkErrors[0];
         const errorCode = firstError?.code || "default";
 
+        // Handle stale session - auto sign out and retry
+        if (errorCode === "session_exists") {
+          try {
+            await signOut();
+            // Clear any stale AsyncStorage state
+            await AsyncStorage.removeItem(VENMO_ONBOARDING_KEY);
+            setError("Previous session cleared. Please try signing in again.");
+          } catch {
+            setError("Please restart the app and try again.");
+          }
+          return;
+        }
+
         // Check if this is an "account not found" error
         if (isAccountNotFoundError(errorCode)) {
           setShowSignUpPrompt(true);
@@ -122,7 +137,7 @@ export default function SignInScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isLoaded, email, password, signIn, setActive]);
+  }, [isLoaded, email, password, signIn, setActive, signOut]);
 
   const handleGoogleSignIn = useCallback(async () => {
     if (!isLoaded) return;
@@ -133,7 +148,7 @@ export default function SignInScreen() {
 
     try {
       const { createdSessionId, setActive: setOAuthActive } = await startGoogleOAuth({
-        redirectUrl: Linking.createURL("/"),
+        redirectUrl: OAUTH_REDIRECT_URL,
       });
 
       if (createdSessionId && setOAuthActive) {
@@ -144,6 +159,17 @@ export default function SignInScreen() {
     } catch (err: unknown) {
       if (isClerkAPIResponseError(err)) {
         const errorCode = err.errors[0]?.code || "default";
+        // Handle stale session - auto sign out and retry
+        if (errorCode === "session_exists") {
+          try {
+            await signOut();
+            await AsyncStorage.removeItem(VENMO_ONBOARDING_KEY);
+            setError("Previous session cleared. Please try again.");
+          } catch {
+            setError("Please restart the app and try again.");
+          }
+          return;
+        }
         const userMessage = ERROR_MESSAGES[errorCode] || "Unable to sign in with Google. Please try again.";
         setError(userMessage);
       } else {
@@ -152,7 +178,7 @@ export default function SignInScreen() {
     } finally {
       setOauthLoading(null);
     }
-  }, [isLoaded, startGoogleOAuth]);
+  }, [isLoaded, startGoogleOAuth, signOut]);
 
   const handleAppleSignIn = useCallback(async () => {
     if (!isLoaded) return;
@@ -163,7 +189,7 @@ export default function SignInScreen() {
 
     try {
       const { createdSessionId, setActive: setOAuthActive } = await startAppleOAuth({
-        redirectUrl: Linking.createURL("/"),
+        redirectUrl: OAUTH_REDIRECT_URL,
       });
 
       if (createdSessionId && setOAuthActive) {
@@ -174,6 +200,17 @@ export default function SignInScreen() {
     } catch (err: unknown) {
       if (isClerkAPIResponseError(err)) {
         const errorCode = err.errors[0]?.code || "default";
+        // Handle stale session - auto sign out and retry
+        if (errorCode === "session_exists") {
+          try {
+            await signOut();
+            await AsyncStorage.removeItem(VENMO_ONBOARDING_KEY);
+            setError("Previous session cleared. Please try again.");
+          } catch {
+            setError("Please restart the app and try again.");
+          }
+          return;
+        }
         const userMessage = ERROR_MESSAGES[errorCode] || "Unable to sign in with Apple. Please try again.";
         setError(userMessage);
       } else {
@@ -182,7 +219,7 @@ export default function SignInScreen() {
     } finally {
       setOauthLoading(null);
     }
-  }, [isLoaded, startAppleOAuth]);
+  }, [isLoaded, startAppleOAuth, signOut]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -298,17 +335,27 @@ export default function SignInScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Dev-only: Reset onboarding button */}
+          {/* Dev-only: Reset onboarding buttons */}
           {__DEV__ && (
-            <TouchableOpacity
-              style={styles.devResetButton}
-              onPress={async () => {
-                await AsyncStorage.removeItem("@splitfree/welcome_seen");
-                router.replace("/auth/welcome");
-              }}
-            >
-              <Text style={styles.devResetText}>DEV: Show Welcome Screen</Text>
-            </TouchableOpacity>
+            <View style={styles.devButtons}>
+              <TouchableOpacity
+                style={styles.devResetButton}
+                onPress={async () => {
+                  await AsyncStorage.removeItem("@splitfree/welcome_seen");
+                  router.replace("/auth/welcome");
+                }}
+              >
+                <Text style={styles.devResetText}>DEV: Show Welcome Screen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.devResetButton}
+                onPress={async () => {
+                  await AsyncStorage.removeItem(VENMO_ONBOARDING_KEY);
+                }}
+              >
+                <Text style={styles.devResetText}>DEV: Reset Venmo Onboarding</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -442,9 +489,12 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.primary,
   },
+  devButtons: {
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
   devResetButton: {
     alignItems: "center",
-    marginTop: spacing.xl,
     padding: spacing.sm,
     backgroundColor: colors.warning + "20",
     borderRadius: borderRadius.sm,
