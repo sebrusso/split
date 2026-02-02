@@ -135,9 +135,9 @@ color: red
                                                                                            
   Create .env.local from .env.example:                                                     
                                                                                            
-  # Supabase (Required)                                                                    
-  EXPO_PUBLIC_SUPABASE_URL=https://rzwuknfycyqitcbotsvx.supabase.co                        
-  EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...                                                
+  # Supabase (Required)
+  EXPO_PUBLIC_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
+  EXPO_PUBLIC_SUPABASE_ANON_KEY=<ANON_KEY>                                                
                                                                                            
   # Clerk Authentication (Required)                                                        
   EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...                                            
@@ -190,7 +190,7 @@ color: red
   │  Git Branch: main          │   Git Branch: staging                                  │
   │  ───────────────────────   │   ────────────────────                                 │
   │  Supabase: PRODUCTION      │   Supabase: STAGING BRANCH                             │
-  │  Project: rzwuknfycyqitcbotsvx  │   Project: odjvwviokthebfkbqgnx                   │
+  │  Project: <PROD_REF>            │   Project: <STAGING_REF>                         │
   │  Clerk: Production (pk_live)    │   Clerk: Development (pk_test)                   │
   │  EAS Env: production       │   EAS Env: development                                 │
   │  Build: testflight, production │   Build: development, preview                      │
@@ -200,13 +200,13 @@ color: red
   ┌──────────────────┬──────────────────────────────┬──────────────────────────────────┐
   │    Build Type    │      Supabase Project        │         Clerk Instance           │
   ├──────────────────┼──────────────────────────────┼──────────────────────────────────┤
-  │ Expo Go / Dev    │ Staging (odjvwviokthebfkbqgnx) │ Development (pk_test_...)      │
+  │ Expo Go / Dev    │ Staging (<STAGING_REF>)        │ Development (pk_test_...)      │
   ├──────────────────┼──────────────────────────────┼──────────────────────────────────┤
-  │ Preview          │ Staging (odjvwviokthebfkbqgnx) │ Development (pk_test_...)      │
+  │ Preview          │ Staging (<STAGING_REF>)        │ Development (pk_test_...)      │
   ├──────────────────┼──────────────────────────────┼──────────────────────────────────┤
-  │ TestFlight       │ Production (rzwuknfycyqitcbotsvx) │ Production (pk_live_...)    │
+  │ TestFlight       │ Production (<PROD_REF>)        │ Production (pk_live_...)       │
   ├──────────────────┼──────────────────────────────┼──────────────────────────────────┤
-  │ Production       │ Production (rzwuknfycyqitcbotsvx) │ Production (pk_live_...)    │
+  │ Production       │ Production (<PROD_REF>)        │ Production (pk_live_...)       │
   └──────────────────┴──────────────────────────────┴──────────────────────────────────┘
 
   Key Files
@@ -256,14 +256,14 @@ color: red
      npx supabase db reset
 
   4. DEPLOY TO STAGING
-     npx supabase link --project-ref odjvwviokthebfkbqgnx
+     npx supabase link --project-ref <STAGING_REF>
      npx supabase db push
 
   5. RUN INTEGRATION TESTS
      npm run test:integration
 
   6. DEPLOY TO PRODUCTION (only after staging verification)
-     npx supabase link --project-ref rzwuknfycyqitcbotsvx
+     npx supabase link --project-ref <PROD_REF>
      npx supabase db push
 
   MCP vs CLI Usage
@@ -278,7 +278,7 @@ color: red
   └─────────────────────────────────────┴────────────────────────────────────────┘
 
   IMPORTANT: Supabase MCP connects to PRODUCTION by default.
-  For staging operations, use CLI with --project-ref odjvwviokthebfkbqgnx
+  For staging operations, use CLI with --project-ref <STAGING_REF>
 
   What NOT to Do
   ┌────────────────────────────────────┬────────────────────────────────────────┐
