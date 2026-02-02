@@ -37,8 +37,14 @@
     "build:testflight": "eas build --platform ios --profile testflight",
     "submit:testflight": "eas submit --platform ios --profile testflight",
     "deploy:testflight": "npm run build:testflight && npm run submit:testflight",
+    "build:sim-release": "eas build --platform ios --profile simulator-release --local",
+    "build:local-release": "npx expo run:ios --configuration Release",
+    "build:local-debug": "npx expo run:ios",
     "eval:receipts": "npx ts-node tools/receipt-eval/src/index.ts",
-    "eval:receipts:sample": "npx ts-node tools/receipt-eval/src/index.ts --sample 10 --verbose"
+    "eval:receipts:sample": "npx ts-node tools/receipt-eval/src/index.ts --sample 10 --verbose",
+    "ralph": "./scripts/ralph/ralph.sh",
+    "db:seed": "supabase db reset --local",
+    "db:seed:remote": "supabase db reset --linked"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.0.0",
@@ -66,11 +72,13 @@
     "expo-linking": "~8.0.11",
     "expo-localization": "~17.0.8",
     "expo-notifications": "^0.32.16",
+    "expo-print": "~15.0.8",
     "expo-router": "~6.0.21",
     "expo-secure-store": "^15.0.8",
     "expo-sharing": "^14.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "expo-store-review": "^9.0.9",
     "expo-system-ui": "~6.0.9",
     "expo-updates": "~29.0.16",
     "expo-web-browser": "^15.0.10",
@@ -91,6 +99,8 @@
     "dotenv": "^16.4.0",
     "fast-check": "^4.5.3",
     "jest": "~29.7.0",
+    "pg": "^8.17.2",
+    "reactotron-react-native": "^5.1.10",
     "ts-jest": "^29.4.6",
     "typescript": "~5.9.2"
   },

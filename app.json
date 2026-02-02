@@ -20,7 +20,7 @@
       "associatedDomains": [
         "applinks:splitfree.app"
       ],
-      "buildNumber": "7",
+      "buildNumber": "21",
       "infoPlist": {
         "NSCameraUsageDescription": "split it. uses the camera to scan QR codes for joining groups and to capture receipt photos for bill splitting.",
         "NSPhotoLibraryUsageDescription": "split it. needs access to your photo library to select receipt images for bill splitting.",
@@ -91,6 +91,13 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "split-na",
+          "project": "split-it"
+        }
+      ],
       [
         "expo-notifications",
         {
