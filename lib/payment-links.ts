@@ -6,6 +6,7 @@
  */
 
 import { Linking, Alert, Platform } from 'react-native';
+import { logger } from './logger';
 
 export type PaymentApp = 'venmo' | 'paypal' | 'cashapp' | 'zelle';
 
@@ -230,7 +231,7 @@ export async function openPaymentApp(
       return { opened: false, timestamp, deepLink };
     }
   } catch (error) {
-    console.error(`Error opening ${appName}:`, error);
+    logger.error(`Error opening ${appName}:`, error);
     Alert.alert(
       'Error',
       `Could not open ${appName}. Please make sure it's installed.`

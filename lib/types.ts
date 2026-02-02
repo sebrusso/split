@@ -468,3 +468,35 @@ export interface ReceiptSummary {
   total: number;
   memberTotals: ReceiptMemberCalculation[];
 }
+
+// ============================================
+// User Feedback Types
+// ============================================
+
+export type FeedbackType = 'bug' | 'feature' | 'general';
+export type FeedbackStatus = 'new' | 'reviewed' | 'resolved' | 'wont_fix';
+
+export interface Feedback {
+  id: string;
+  clerk_user_id: string;
+  user_email?: string | null;
+  user_name?: string | null;
+  type: FeedbackType;
+  message: string;
+  screen_name?: string | null;
+  app_version?: string | null;
+  device_info?: {
+    platform?: string;
+    os_version?: string;
+    device_model?: string;
+    app_build?: string;
+  } | null;
+  status: FeedbackStatus;
+  created_at: string;
+}
+
+export interface FeedbackSubmission {
+  type: FeedbackType;
+  message: string;
+  screen_name?: string;
+}

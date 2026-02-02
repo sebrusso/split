@@ -84,35 +84,22 @@ export async function savePushToken(
   token: string
 ): Promise<void> {
   try {
-    // Check if token already exists for this user
-    const { data: existingToken } = await supabaseClient
-      .from("push_tokens")
-      .select("id, token")
-      .eq("user_id", userId)
-      .eq("token", token)
-      .single();
-
-    if (existingToken) {
-      // Token already exists, just update the timestamp
-      const { error } = await supabaseClient
-        .from("push_tokens")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", existingToken.id);
-
-      if (error) {
-        console.error("Error updating push token timestamp:", error);
-      } else {
-        console.log("Push token timestamp updated");
+    // Use upsert to handle the case where:
+    // 1. Token already exists for this user (just update timestamp)
+    // 2. Token exists for different user (update user_id - device changed hands)
+    // 3. Token is new (insert)
+    const { error } = await supabaseClient.from("push_tokens").upsert(
+      {
+        user_id: userId,
+        token,
+        platform: Platform.OS,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "token",
+        ignoreDuplicates: false,
       }
-      return;
-    }
-
-    // Insert new token
-    const { error } = await supabaseClient.from("push_tokens").insert({
-      user_id: userId,
-      token,
-      platform: Platform.OS,
-    });
+    );
 
     if (error) {
       console.error("Error saving push token:", error);

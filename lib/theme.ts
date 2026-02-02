@@ -1,4 +1,12 @@
 import { StyleSheet, useColorScheme as useRNColorScheme } from "react-native";
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Storage key for theme preference
+const THEME_PREFERENCE_KEY = "user_theme_preference";
+
+// Theme preference type: system follows device, light/dark forces that mode
+export type ThemePreference = "system" | "light" | "dark";
 
 // Light mode colors
 export const lightColors = {
@@ -208,14 +216,113 @@ export const shadows = StyleSheet.create({
   },
 });
 
+// ============================================
+// Theme Context and Provider
+// ============================================
+
+interface ThemeContextType {
+  preference: ThemePreference;
+  effectiveScheme: "light" | "dark";
+  colors: typeof lightColors;
+  setPreference: (pref: ThemePreference) => Promise<void>;
+  isLoading: boolean;
+}
+
+const ThemeContext = createContext<ThemeContextType | null>(null);
+
+/**
+ * Theme Provider - wraps app to provide theme context
+ * Handles loading preference from storage and applying it
+ */
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const systemScheme = useRNColorScheme();
+  const [preference, setPreferenceState] = useState<ThemePreference>("system");
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load saved preference on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(THEME_PREFERENCE_KEY);
+        if (saved === "light" || saved === "dark" || saved === "system") {
+          setPreferenceState(saved);
+        }
+      } catch (error) {
+        // Default to system on error
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
+
+  // Calculate effective scheme based on preference
+  const effectiveScheme: "light" | "dark" =
+    preference === "system"
+      ? systemScheme === "dark"
+        ? "dark"
+        : "light"
+      : preference;
+
+  const colors = effectiveScheme === "dark" ? darkColors : lightColors;
+
+  // Save preference to storage
+  const setPreference = useCallback(async (pref: ThemePreference) => {
+    setPreferenceState(pref);
+    try {
+      await AsyncStorage.setItem(THEME_PREFERENCE_KEY, pref);
+    } catch (error) {
+      // Silently fail on storage error
+    }
+  }, []);
+
+  return React.createElement(
+    ThemeContext.Provider,
+    {
+      value: {
+        preference,
+        effectiveScheme,
+        colors,
+        setPreference,
+        isLoading,
+      },
+    },
+    children
+  );
+}
+
+/**
+ * Hook to access theme context
+ * Returns preference, effective scheme, colors, and setter
+ */
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    // Fallback for components outside provider
+    const systemScheme = useRNColorScheme();
+    const effectiveScheme = systemScheme === "dark" ? "dark" : "light";
+    return {
+      preference: "system" as ThemePreference,
+      effectiveScheme,
+      colors: effectiveScheme === "dark" ? darkColors : lightColors,
+      setPreference: async () => {},
+      isLoading: false,
+    };
+  }
+  return context;
+}
+
+// ============================================
+// Legacy hooks for backward compatibility
+// ============================================
+
 // Hook to get current color scheme
 export function useAppColorScheme() {
-  const colorScheme = useRNColorScheme();
-  return colorScheme === "dark" ? "dark" : "light";
+  const { effectiveScheme } = useTheme();
+  return effectiveScheme;
 }
 
 // Hook to get colors for current scheme
 export function useThemeColors() {
-  const scheme = useAppColorScheme();
-  return scheme === "dark" ? darkColors : lightColors;
+  const { colors } = useTheme();
+  return colors;
 }

@@ -264,22 +264,44 @@ export async function getFriends(userId: string): Promise<Friendship[]> {
   }
 
   const friendships = [...(asRequester || []), ...(asAddressee || [])];
-  const result: Friendship[] = [];
 
-  // Fetch friend profiles for each friendship
+  if (friendships.length === 0) {
+    return [];
+  }
+
+  // Collect all friend clerk IDs for batch fetching
+  const friendClerkIds = friendships.map((f) =>
+    f.requester_id === userId ? f.addressee_id : f.requester_id
+  );
+
+  // Batch fetch all friend profiles in a single query
+  const { data: profiles, error: profilesError } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .in("clerk_id", friendClerkIds);
+
+  if (profilesError) {
+    logger.error("Error batch fetching friend profiles:", profilesError);
+  }
+
+  // Create a map for quick lookup
+  const profileMap = new Map<string, UserProfile>();
+  if (profiles) {
+    for (const profile of profiles) {
+      profileMap.set(profile.clerk_id, transformUserProfile(profile));
+    }
+  }
+
+  // Build result with profiles attached
+  const result: Friendship[] = [];
   for (const f of friendships) {
     const friendship = transformFriendship(f);
     const friendClerkId =
       f.requester_id === userId ? f.addressee_id : f.requester_id;
 
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("clerk_id", friendClerkId)
-      .single();
-
+    const profile = profileMap.get(friendClerkId);
     if (profile) {
-      friendship.friend = transformUserProfile(profile);
+      friendship.friend = profile;
     }
 
     result.push(friendship);
@@ -306,21 +328,39 @@ export async function getPendingRequests(userId: string): Promise<Friendship[]> 
     throw new Error("Failed to fetch pending requests");
   }
 
-  const result: Friendship[] = [];
+  if (!data || data.length === 0) {
+    return [];
+  }
 
-  for (const f of data || []) {
-    const friendship = transformFriendship(f);
+  // Collect all requester IDs for batch fetching
+  const requesterIds = data.map((f) => f.requester_id);
 
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("clerk_id", f.requester_id)
-      .single();
+  // Batch fetch all requester profiles
+  const { data: profiles, error: profilesError } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .in("clerk_id", requesterIds);
 
-    if (profile) {
-      friendship.requester = transformUserProfile(profile);
+  if (profilesError) {
+    logger.error("Error batch fetching requester profiles:", profilesError);
+  }
+
+  // Create a map for quick lookup
+  const profileMap = new Map<string, UserProfile>();
+  if (profiles) {
+    for (const profile of profiles) {
+      profileMap.set(profile.clerk_id, transformUserProfile(profile));
     }
+  }
 
+  // Build result with profiles attached
+  const result: Friendship[] = [];
+  for (const f of data) {
+    const friendship = transformFriendship(f);
+    const profile = profileMap.get(f.requester_id);
+    if (profile) {
+      friendship.requester = profile;
+    }
     result.push(friendship);
   }
 
@@ -345,21 +385,39 @@ export async function getOutgoingRequests(userId: string): Promise<Friendship[]>
     throw new Error("Failed to fetch outgoing requests");
   }
 
-  const result: Friendship[] = [];
+  if (!data || data.length === 0) {
+    return [];
+  }
 
-  for (const f of data || []) {
-    const friendship = transformFriendship(f);
+  // Collect all addressee IDs for batch fetching
+  const addresseeIds = data.map((f) => f.addressee_id);
 
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("clerk_id", f.addressee_id)
-      .single();
+  // Batch fetch all addressee profiles
+  const { data: profiles, error: profilesError } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .in("clerk_id", addresseeIds);
 
-    if (profile) {
-      friendship.addressee = transformUserProfile(profile);
+  if (profilesError) {
+    logger.error("Error batch fetching addressee profiles:", profilesError);
+  }
+
+  // Create a map for quick lookup
+  const profileMap = new Map<string, UserProfile>();
+  if (profiles) {
+    for (const profile of profiles) {
+      profileMap.set(profile.clerk_id, transformUserProfile(profile));
     }
+  }
 
+  // Build result with profiles attached
+  const result: Friendship[] = [];
+  for (const f of data) {
+    const friendship = transformFriendship(f);
+    const profile = profileMap.get(f.addressee_id);
+    if (profile) {
+      friendship.addressee = profile;
+    }
     result.push(friendship);
   }
 

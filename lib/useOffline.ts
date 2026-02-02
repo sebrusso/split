@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useSupabase, supabase } from "./supabase";
 import { Group, Member, Expense, SettlementRecord } from "./types";
+import { logger } from "./logger";
 import type { TableName, OperationType } from "./offline";
 
 // Type definitions for dynamically imported modules
@@ -49,7 +50,7 @@ async function loadOfflineModules(): Promise<boolean> {
     syncModule = await import("./sync");
     return true;
   } catch (error) {
-    console.warn(
+    logger.warn(
       "Offline support not available (native modules required for development builds):",
       error,
     );
@@ -67,7 +68,7 @@ export async function initOfflineSupport(): Promise<void> {
       await offlineModule.initDatabase();
       syncModule.initSync();
     } catch (error) {
-      console.warn("Failed to initialize offline support:", error);
+      logger.warn("Failed to initialize offline support:", error);
       offlineAvailable = false;
     }
   }
@@ -262,7 +263,7 @@ export function useGroups(): {
         setGroups(cached);
       }
     } catch (error) {
-      console.error("Error fetching groups:", error);
+      logger.error("Error fetching groups:", error);
       // Try cache as fallback
       if (offlineAvailable) {
         try {
@@ -358,7 +359,7 @@ export function useGroupDetails(groupId: string): {
           await cacheSettlements(settlementsRes.data);
         }
       } catch (error) {
-        console.error("Error fetching group details:", error);
+        logger.error("Error fetching group details:", error);
         // Try cache as fallback
         if (offlineAvailable) {
           try {

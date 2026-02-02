@@ -22,6 +22,7 @@ import {
   getItemRemainingFraction,
 } from './receipts';
 import { prepareImageForUpload } from './imageUtils';
+import { logger, getErrorMessage } from './logger';
 
 /**
  * Hook to fetch a single receipt with all related data
@@ -87,9 +88,9 @@ export function useReceipt(receiptId: string | undefined) {
         if (membersError) throw membersError;
         setMembers(membersData || []);
       }
-    } catch (err: any) {
-      console.error('Error fetching receipt:', err);
-      setError(err.message || 'Failed to fetch receipt');
+    } catch (err: unknown) {
+      logger.error('Error fetching receipt:', err);
+      setError(getErrorMessage(err) || 'Failed to fetch receipt');
     } finally {
       setLoading(false);
     }
@@ -178,9 +179,9 @@ export function useGroupReceipts(groupId: string | undefined) {
 
       if (fetchError) throw fetchError;
       setReceipts(data || []);
-    } catch (err: any) {
-      console.error('Error fetching receipts:', err);
-      setError(err.message || 'Failed to fetch receipts');
+    } catch (err: unknown) {
+      logger.error('Error fetching receipts:', err);
+      setError(getErrorMessage(err) || 'Failed to fetch receipts');
     } finally {
       setLoading(false);
     }
@@ -220,7 +221,7 @@ export function useItemClaims(receiptId: string | undefined) {
         maxFraction?: number;
       } = {}
     ) => {
-      console.log('claimItem hook called:', { receiptId, itemId, memberId, options });
+      logger.debug('claimItem hook called:', { receiptId, itemId, memberId, options });
 
       if (!receiptId) return { success: false, error: 'No receipt ID' };
 
@@ -230,7 +231,7 @@ export function useItemClaims(receiptId: string | undefined) {
 
         const supabase = await getSupabase();
         const claimData = createClaim(itemId, memberId, options);
-        console.log('Created claim data:', claimData);
+        logger.debug('Created claim data:', claimData);
 
         const { data, error: insertError } = await supabase
           .from('item_claims')
@@ -239,14 +240,14 @@ export function useItemClaims(receiptId: string | undefined) {
           })
           .select();
 
-        console.log('Upsert result:', { data, error: insertError });
+        logger.debug('Upsert result:', { data, error: insertError });
 
         if (insertError) throw insertError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error claiming item:', err);
-        const errorMsg = err.message || 'Failed to claim item';
+      } catch (err: unknown) {
+        logger.error('Error claiming item:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to claim item';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -261,7 +262,7 @@ export function useItemClaims(receiptId: string | undefined) {
    */
   const unclaimItem = useCallback(
     async (itemId: string, memberId: string) => {
-      console.log('unclaimItem called:', { itemId, memberId });
+      logger.debug('unclaimItem called:', { itemId, memberId });
 
       try {
         setClaiming(true);
@@ -275,14 +276,14 @@ export function useItemClaims(receiptId: string | undefined) {
           .eq('receipt_item_id', itemId)
           .eq('member_id', memberId);
 
-        console.log('unclaimItem delete result:', { deleteError, count });
+        logger.debug('unclaimItem delete result:', { deleteError, count });
 
         if (deleteError) throw deleteError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error unclaiming item:', err);
-        const errorMsg = err.message || 'Failed to unclaim item';
+      } catch (err: unknown) {
+        logger.error('Error unclaiming item:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to unclaim item';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -329,9 +330,9 @@ export function useItemClaims(receiptId: string | undefined) {
         if (insertError) throw insertError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error splitting item:', err);
-        const errorMsg = err.message || 'Failed to split item';
+      } catch (err: unknown) {
+        logger.error('Error splitting item:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to split item';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -366,9 +367,9 @@ export function useItemClaims(receiptId: string | undefined) {
         if (deleteError) throw deleteError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error clearing claims:', err);
-        const errorMsg = err.message || 'Failed to clear claims';
+      } catch (err: unknown) {
+        logger.error('Error clearing claims:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to clear claims';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -421,26 +422,28 @@ export function useReceiptUpload(groupId: string | undefined) {
         const filePath = `receipts/${groupId}/${fileName}`;
         const thumbPath = `receipts/${groupId}/${thumbFileName}`;
 
-        // Upload compressed image
-        const compressedResponse = await fetch(compressed.uri);
-        const compressedBlob = await compressedResponse.blob();
+        // Upload compressed image (use arrayBuffer for React Native compatibility)
+        const compressedArrayBuffer = await fetch(compressed.uri).then((res) =>
+          res.arrayBuffer()
+        );
 
         const { error: uploadError } = await supabase.storage
           .from('receipts')
-          .upload(filePath, compressedBlob, {
+          .upload(filePath, compressedArrayBuffer, {
             contentType: 'image/jpeg',
             upsert: false,
           });
 
         if (uploadError) throw uploadError;
 
-        // Upload thumbnail
-        const thumbResponse = await fetch(thumbnail.uri);
-        const thumbBlob = await thumbResponse.blob();
+        // Upload thumbnail (use arrayBuffer for React Native compatibility)
+        const thumbArrayBuffer = await fetch(thumbnail.uri).then((res) =>
+          res.arrayBuffer()
+        );
 
         await supabase.storage
           .from('receipts')
-          .upload(thumbPath, thumbBlob, {
+          .upload(thumbPath, thumbArrayBuffer, {
             contentType: 'image/jpeg',
             upsert: false,
           });
@@ -472,9 +475,9 @@ export function useReceiptUpload(groupId: string | undefined) {
         if (insertError) throw insertError;
 
         return { success: true, receipt, compressedUri: compressed.uri };
-      } catch (err: any) {
-        console.error('Error uploading receipt:', err);
-        const errorMsg = err.message || 'Failed to upload receipt';
+      } catch (err: unknown) {
+        logger.error('Error uploading receipt:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to upload receipt';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -649,9 +652,9 @@ export function useReceiptUpload(groupId: string | undefined) {
           ocrResult,
           warnings: validation.warnings,
         };
-      } catch (err: any) {
-        console.error('Error processing receipt:', err);
-        const errorMsg = err.message || 'Failed to process receipt';
+      } catch (err: unknown) {
+        logger.error('Error processing receipt:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to process receipt';
         setError(errorMsg);
 
         try {
@@ -802,9 +805,9 @@ export function useItemExpansion(receiptId: string | undefined) {
           expandedItems: newItems,
           expandedCount: quantity,
         };
-      } catch (err: any) {
-        console.error('Error expanding item:', err);
-        const errorMsg = err.message || 'Failed to expand item';
+      } catch (err: unknown) {
+        logger.error('Error expanding item:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to expand item';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -885,9 +888,9 @@ export function useItemExpansion(receiptId: string | undefined) {
         if (updateError) throw updateError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error collapsing items:', err);
-        const errorMsg = err.message || 'Failed to collapse items';
+      } catch (err: unknown) {
+        logger.error('Error collapsing items:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to collapse items';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -959,9 +962,9 @@ export function useReceiptUpdate() {
         if (updateError) throw updateError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error updating receipt:', err);
-        const errorMsg = err.message || 'Failed to update receipt';
+      } catch (err: unknown) {
+        logger.error('Error updating receipt:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to update receipt';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -990,9 +993,9 @@ export function useReceiptUpdate() {
         if (updateError) throw updateError;
 
         return { success: true };
-      } catch (err: any) {
-        console.error('Error updating item:', err);
-        const errorMsg = err.message || 'Failed to update item';
+      } catch (err: unknown) {
+        logger.error('Error updating item:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to update item';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -1017,9 +1020,9 @@ export function useReceiptUpdate() {
       if (deleteError) throw deleteError;
 
       return { success: true };
-    } catch (err: any) {
-      console.error('Error deleting item:', err);
-      const errorMsg = err.message || 'Failed to delete item';
+    } catch (err: unknown) {
+      logger.error('Error deleting item:', err);
+      const errorMsg = getErrorMessage(err) || 'Failed to delete item';
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -1066,9 +1069,9 @@ export function useReceiptUpdate() {
         if (insertError) throw insertError;
 
         return { success: true, item: data };
-      } catch (err: any) {
-        console.error('Error adding item:', err);
-        const errorMsg = err.message || 'Failed to add item';
+      } catch (err: unknown) {
+        logger.error('Error adding item:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to add item';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -1120,26 +1123,28 @@ export function useReceiptUploadNoGroup() {
         const filePath = `receipts/unassigned/${clerkUserId}/${fileName}`;
         const thumbPath = `receipts/unassigned/${clerkUserId}/${thumbFileName}`;
 
-        // Upload compressed image
-        const compressedResponse = await fetch(compressed.uri);
-        const compressedBlob = await compressedResponse.blob();
+        // Upload compressed image (use arrayBuffer for React Native compatibility)
+        const compressedArrayBuffer = await fetch(compressed.uri).then((res) =>
+          res.arrayBuffer()
+        );
 
         const { error: uploadError } = await supabase.storage
           .from('receipts')
-          .upload(filePath, compressedBlob, {
+          .upload(filePath, compressedArrayBuffer, {
             contentType: 'image/jpeg',
             upsert: false,
           });
 
         if (uploadError) throw uploadError;
 
-        // Upload thumbnail
-        const thumbResponse = await fetch(thumbnail.uri);
-        const thumbBlob = await thumbResponse.blob();
+        // Upload thumbnail (use arrayBuffer for React Native compatibility)
+        const thumbArrayBuffer = await fetch(thumbnail.uri).then((res) =>
+          res.arrayBuffer()
+        );
 
         await supabase.storage
           .from('receipts')
-          .upload(thumbPath, thumbBlob, {
+          .upload(thumbPath, thumbArrayBuffer, {
             contentType: 'image/jpeg',
             upsert: false,
           });
@@ -1171,9 +1176,9 @@ export function useReceiptUploadNoGroup() {
         if (insertError) throw insertError;
 
         return { success: true, receipt, receiptId: receipt.id, compressedUri: compressed.uri };
-      } catch (err: any) {
-        console.error('Error uploading receipt:', err);
-        const errorMsg = err.message || 'Failed to upload receipt';
+      } catch (err: unknown) {
+        logger.error('Error uploading receipt:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to upload receipt';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -1324,9 +1329,9 @@ export function useReceiptUploadNoGroup() {
           warnings: validation.warnings,
           itemCount: items.length,
         };
-      } catch (err: any) {
-        console.error('Error processing receipt:', err);
-        const errorMsg = err.message || 'Failed to process receipt';
+      } catch (err: unknown) {
+        logger.error('Error processing receipt:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to process receipt';
         setError(errorMsg);
 
         // Mark as failed
@@ -1409,9 +1414,9 @@ export function useReceiptGroupAssignment() {
           memberId: member.id,
           shareCode,
         };
-      } catch (err: any) {
-        console.error('Error assigning group:', err);
-        const errorMsg = err.message || 'Failed to assign group';
+      } catch (err: unknown) {
+        logger.error('Error assigning group:', err);
+        const errorMsg = getErrorMessage(err) || 'Failed to assign group';
         setError(errorMsg);
         return { success: false, error: errorMsg };
       } finally {
@@ -1455,9 +1460,9 @@ export function useUnassignedReceipts(clerkUserId: string | undefined) {
 
       if (fetchError) throw fetchError;
       setReceipts(data || []);
-    } catch (err: any) {
-      console.error('Error fetching unassigned receipts:', err);
-      setError(err.message || 'Failed to fetch receipts');
+    } catch (err: unknown) {
+      logger.error('Error fetching unassigned receipts:', err);
+      setError(getErrorMessage(err) || 'Failed to fetch receipts');
     } finally {
       setLoading(false);
     }

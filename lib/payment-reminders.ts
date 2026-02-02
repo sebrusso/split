@@ -61,16 +61,88 @@ export interface ReminderHistory {
 // Reminder CRUD Operations
 // ============================================
 
+// Spam protection: minimum hours between reminders for the same debt
+const MIN_HOURS_BETWEEN_REMINDERS = 24;
+
+/**
+ * Check if a reminder can be sent (spam protection)
+ * Returns true if no reminder was sent in the last 24 hours for this debt
+ */
+export async function canSendReminder(
+  supabaseClient: SupabaseClient,
+  groupId: string,
+  fromMemberId: string,
+  toMemberId: string
+): Promise<{ canSend: boolean; hoursRemaining?: number; lastSentAt?: string }> {
+  try {
+    // Check for recent reminders for this specific debt
+    const cutoffTime = new Date();
+    cutoffTime.setHours(cutoffTime.getHours() - MIN_HOURS_BETWEEN_REMINDERS);
+
+    const { data, error } = await supabaseClient
+      .from("payment_reminders")
+      .select("created_at, sent_at")
+      .eq("group_id", groupId)
+      .eq("from_member_id", fromMemberId)
+      .eq("to_member_id", toMemberId)
+      .in("status", ["pending", "sent"])
+      .gte("created_at", cutoffTime.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      logger.error("Error checking reminder cooldown:", error);
+      return { canSend: true }; // Allow on error (fail open)
+    }
+
+    if (!data || data.length === 0) {
+      return { canSend: true };
+    }
+
+    // Calculate hours remaining
+    const lastReminder = new Date(data[0].created_at);
+    const now = new Date();
+    const hoursSinceLastReminder = (now.getTime() - lastReminder.getTime()) / (1000 * 60 * 60);
+    const hoursRemaining = Math.ceil(MIN_HOURS_BETWEEN_REMINDERS - hoursSinceLastReminder);
+
+    return {
+      canSend: false,
+      hoursRemaining,
+      lastSentAt: data[0].sent_at || data[0].created_at,
+    };
+  } catch (error) {
+    logger.error("Error checking reminder cooldown:", error);
+    return { canSend: true }; // Allow on error
+  }
+}
+
 /**
  * Create a new payment reminder
  * @param supabaseClient - Authenticated Supabase client (required for RLS)
  * @param params - Reminder creation parameters
+ * @param skipSpamCheck - Skip the spam check (use with caution)
  */
 export async function createReminder(
   supabaseClient: SupabaseClient,
-  params: CreateReminderParams
+  params: CreateReminderParams,
+  skipSpamCheck: boolean = false
 ): Promise<PaymentReminder | null> {
   try {
+    // Check spam protection unless explicitly skipped
+    if (!skipSpamCheck) {
+      const cooldownCheck = await canSendReminder(
+        supabaseClient,
+        params.groupId,
+        params.fromMemberId,
+        params.toMemberId
+      );
+
+      if (!cooldownCheck.canSend) {
+        logger.warn(`Reminder blocked by spam protection. Hours remaining: ${cooldownCheck.hoursRemaining}`);
+        return null;
+      }
+    }
+
     const scheduledAt = params.scheduledAt || new Date();
 
     const { data, error } = await supabaseClient

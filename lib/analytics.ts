@@ -77,6 +77,8 @@ export async function initAnalytics(): Promise<PostHog | null> {
         maskAllImages: false,
         // Capture console logs for debugging
         captureLog: true,
+        // Capture network telemetry (iOS only)
+        captureNetworkTelemetry: true,
         // Android debounce for performance
         androidDebouncerDelayMs: 500,
       },

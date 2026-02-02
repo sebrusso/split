@@ -11,6 +11,7 @@ import {
   cacheSettlements,
 } from "./offline";
 import { Group, Member, Expense, SettlementRecord } from "./types";
+import { logger } from "./logger";
 
 // Network status
 let isOnline = true;
@@ -112,7 +113,7 @@ export async function syncPendingOperations(): Promise<{
       await removeFromQueue(operation.id);
       synced++;
     } catch (error) {
-      console.error("Sync operation failed:", error);
+      logger.error("Sync operation failed:", error);
       failed++;
     }
   }
@@ -264,7 +265,7 @@ export async function pullGroupData(
 
     return { success: true };
   } catch (error) {
-    console.error("Pull group data failed:", error);
+    logger.error("Pull group data failed:", error);
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     return { success: false, error: message };
@@ -290,7 +291,7 @@ export async function pullAllGroups(): Promise<{
 
     return { success: true };
   } catch (error) {
-    console.error("Pull all groups failed:", error);
+    logger.error("Pull all groups failed:", error);
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     return { success: false, error: message };
@@ -302,7 +303,10 @@ export async function pullAllGroups(): Promise<{
 // ============================================
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
-const SYNC_INTERVAL_MS = 30000; // 30 seconds
+// 30 seconds for processing pending offline operations queue
+// Real-time data updates are now handled via Supabase Realtime WebSocket subscriptions
+// See lib/realtime.ts and lib/hooks/useRealtimeGroup.ts
+const SYNC_INTERVAL_MS = 30000;
 
 export function startBackgroundSync(): void {
   if (syncInterval) return;
