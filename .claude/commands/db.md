@@ -2,6 +2,67 @@
 
 Check database status, run queries, or apply migrations.
 
+## Environments
+
+| Environment | Project ID | Purpose |
+|-------------|------------|---------|
+| **Staging** | `odjvwviokthebfkbqgnx` | Local dev, Expo Go, preview builds |
+| **Production** | `rzwuknfycyqitcbotsvx` | TestFlight, App Store |
+
+The Supabase MCP is typically connected to **production**. For staging operations, use direct SQL via `scripts/apply-baseline.js` or Supabase CLI.
+
+---
+
+## Workflow Best Practices
+
+### The Golden Rule
+
+> **Your `supabase/migrations/` folder is the single source of truth.** If a schema change isn't in a migration file, it shouldn't exist in staging or production.
+
+### Proper Migration Workflow
+
+1. **Create migration file**: `npx supabase migration new <name>`
+2. **Write SQL** in `supabase/migrations/YYYYMMDDHHMMSS_<name>.sql`
+3. **Test locally**: `npx supabase db reset`
+4. **Deploy to staging**: `npx supabase link --project-ref odjvwviokthebfkbqgnx && npx supabase db push`
+5. **Run tests**: `npm run test:integration`
+6. **Deploy to production**: `npx supabase link --project-ref rzwuknfycyqitcbotsvx && npx supabase db push`
+
+### When to Use MCP vs CLI
+
+| Use MCP For | Use CLI For |
+|-------------|-------------|
+| Read-only queries on production | Creating new migrations |
+| Listing tables/migrations | Deploying to staging |
+| Security/performance advisors | Testing migrations locally |
+| Production migrations (after staging verification) | Switching between environments |
+
+### What NOT to Do
+
+- Never modify schema via Supabase Dashboard
+- Never apply SQL directly without creating a migration file
+- Never skip staging verification before production
+- Never use MCP tools for staging changes (MCP targets production)
+
+### Staging Parity Verification
+
+After deploying, verify staging matches production:
+
+```sql
+-- Check constraints
+SELECT tc.table_name, tc.constraint_name
+FROM information_schema.table_constraints tc
+WHERE tc.constraint_type = 'CHECK' AND tc.table_schema = 'public';
+
+-- Check indexes
+SELECT indexname, tablename FROM pg_indexes
+WHERE schemaname = 'public' AND indexdef LIKE '%UNIQUE%';
+```
+
+See [docs/DATABASE_WORKFLOW.md](../docs/DATABASE_WORKFLOW.md) for detailed documentation.
+
+---
+
 ## Arguments
 - `$ARGUMENTS` - Optional: "tables", "migrations", "advisors", or a SQL query
 

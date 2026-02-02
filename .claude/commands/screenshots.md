@@ -4,12 +4,23 @@ Capture app screenshots for marketing materials including the website and App St
 
 ## Prerequisites
 - iPhone or iOS Simulator running the app
-- Run `/demo` to start the development server
+- Run `/demo` to start the development server (Expo Go mode)
+- Or run `/demo release` for production-like screenshots
+
+## Build Modes for Screenshots
+
+| Mode | Command | Best For |
+|------|---------|----------|
+| Expo Go | `/demo` | Quick iteration, UI tweaks |
+| Local Release | `/demo release` | Production-accurate screenshots |
+| TestFlight | Manual build | Final App Store assets |
+
+**Recommendation:** Use `/demo release` for marketing screenshots to ensure they match production behavior.
 
 ## Step 1: Taking Screenshots
 
 ### On Physical iPhone (Recommended for App Store)
-1. Run the app via Expo Go or a TestFlight/development build
+1. Run the app via TestFlight or a local release build (`npm run build:local-release`)
 2. Navigate to the screen you want to capture
 3. Press **Side button + Volume Up** simultaneously
 4. Screenshots save to Photos app
