@@ -23,6 +23,7 @@ import { useReceiptSummary } from '../../../../../lib/useReceipts';
 import { formatReceiptAmount, roundCurrency } from '../../../../../lib/receipts';
 import { useSupabase } from '../../../../../lib/supabase';
 import { Member } from '../../../../../lib/types';
+import { getErrorMessage } from '../../../../../lib/logger';
 
 export default function SplitEvenlyScreen() {
   const { id, receiptId } = useLocalSearchParams<{ id: string; receiptId: string }>();
@@ -93,7 +94,7 @@ export default function SplitEvenlyScreen() {
           .in('receipt_item_id', itemIds);
       }
     } catch (err) {
-      console.error('Error clearing claims:', err);
+      __DEV__ && console.error('Error clearing claims:', err);
     }
   };
 
@@ -135,9 +136,9 @@ export default function SplitEvenlyScreen() {
 
       // Navigate to settlement screen
       router.replace(`/group/${id}/receipt/${receiptId}/settle`);
-    } catch (err: any) {
-      console.error('Error confirming split:', err);
-      Alert.alert('Error', err.message || 'Failed to confirm split');
+    } catch (err: unknown) {
+      __DEV__ && console.error('Error confirming split:', err);
+      Alert.alert('Error', getErrorMessage(err) || 'Failed to confirm split');
     } finally {
       setConfirming(false);
     }

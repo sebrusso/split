@@ -110,11 +110,11 @@ export default function ReceiptClaimingScreen() {
     useCallback(() => {
       const fetchMember = async () => {
         if (!id || !userId) {
-          console.log('fetchMember skipped - missing id or userId:', { id, userId });
+          __DEV__ && console.log('fetchMember skipped - missing id or userId:', { id, userId });
           return;
         }
 
-        console.log('Fetching member for group/user:', { groupId: id, userId });
+        __DEV__ && console.log('Fetching member for group/user:', { groupId: id, userId });
 
         try {
           const supabase = await getSupabase();
@@ -125,10 +125,10 @@ export default function ReceiptClaimingScreen() {
             .eq('clerk_user_id', userId)
             .single();
 
-          console.log('Member fetch result:', { member, error });
+          __DEV__ && console.log('Member fetch result:', { member, error });
 
           if (error) {
-            console.error('Error fetching member:', error);
+            __DEV__ && console.error('Error fetching member:', error);
             // Provide helpful guidance on how to fix this
             setMemberError(
               'Your account is not linked to this group. ' +
@@ -141,7 +141,7 @@ export default function ReceiptClaimingScreen() {
           setCurrentMember(member);
           setMemberError(null);
         } catch (err) {
-          console.error('Error fetching member:', err);
+          __DEV__ && console.error('Error fetching member:', err);
           setMemberError('Failed to load member data');
         }
       };
@@ -189,7 +189,7 @@ export default function ReceiptClaimingScreen() {
   };
 
   const handleUnclaimItem = async (item: ReceiptItem) => {
-    console.log('handleUnclaimItem called:', {
+    __DEV__ && console.log('handleUnclaimItem called:', {
       itemId: item.id,
       itemDescription: item.description,
       currentMemberId: currentMember?.id,
@@ -198,7 +198,7 @@ export default function ReceiptClaimingScreen() {
     });
 
     if (!currentMember) {
-      console.log('handleUnclaimItem: no currentMember, returning');
+      __DEV__ && console.log('handleUnclaimItem: no currentMember, returning');
       Alert.alert('Error', 'Please wait while we load your membership info');
       return;
     }
@@ -206,10 +206,10 @@ export default function ReceiptClaimingScreen() {
     // Use fresh items data to find the claim (item param might have stale claims)
     const freshItem = items.find(i => i.id === item.id);
     const memberClaim = freshItem?.claims?.find((c) => c.member_id === currentMember.id);
-    console.log('handleUnclaimItem: memberClaim lookup result:', memberClaim, 'freshItem claims:', freshItem?.claims);
+    __DEV__ && console.log('handleUnclaimItem: memberClaim lookup result:', memberClaim, 'freshItem claims:', freshItem?.claims);
 
     if (!memberClaim) {
-      console.log('handleUnclaimItem: no memberClaim found, returning');
+      __DEV__ && console.log('handleUnclaimItem: no memberClaim found, returning');
       return;
     }
 
@@ -321,12 +321,12 @@ export default function ReceiptClaimingScreen() {
 
   const getMemberClaim = (item: ReceiptItem) => {
     if (!currentMember) {
-      console.log('getMemberClaim: no currentMember');
+      __DEV__ && console.log('getMemberClaim: no currentMember');
       return null;
     }
     const claim = item.claims?.find((c) => c.member_id === currentMember.id);
     if (!claim && item.claims && item.claims.length > 0) {
-      console.log('getMemberClaim: no match found', {
+      __DEV__ && console.log('getMemberClaim: no match found', {
         itemId: item.id,
         currentMemberId: currentMember.id,
         claimMemberIds: item.claims.map(c => c.member_id),
@@ -525,83 +525,97 @@ export default function ReceiptClaimingScreen() {
                 isShared && !showAsClaimed && styles.itemCardShared,
               ]}
               onPress={() => {
+                // Get fresh item data to avoid stale closure issues
+                const freshItem = items.find(i => i.id === item.id) || item;
+
                 // Fresh check for current member's claim at tap time
                 // This handles race conditions where render happened before currentMember was set
                 const currentMemberClaim = currentMember
-                  ? item.claims?.find((c) => c.member_id === currentMember.id)
+                  ? freshItem.claims?.find((c) => c.member_id === currentMember.id)
                   : null;
                 const hasCurrentMemberClaim = !!currentMemberClaim;
-                const isAlreadySplit = (item.claims?.length || 0) > 1;
+                const isAlreadySplit = (freshItem.claims?.length || 0) > 1;
+                const freshIsClaimed = isItemFullyClaimed(freshItem);
+                const freshIsShared = freshItem.is_likely_shared;
 
                 // Handle tap based on current state
                 if (isPendingUnclaim) {
                   // Re-claim: cancel the pending unclaim (will reclaim via DB when cleared)
-                  if (successfulUnclaimsRef.current.has(item.id)) {
-                    successfulUnclaimsRef.current.delete(item.id);
+                  if (successfulUnclaimsRef.current.has(freshItem.id)) {
+                    successfulUnclaimsRef.current.delete(freshItem.id);
                     setPendingUnclaims((prev) => {
                       const next = new Set(prev);
-                      next.delete(item.id);
+                      next.delete(freshItem.id);
                       return next;
                     });
-                    handleClaimItem(item);
+                    handleClaimItem(freshItem);
                   } else {
                     setPendingUnclaims((prev) => {
                       const next = new Set(prev);
-                      next.delete(item.id);
+                      next.delete(freshItem.id);
                       return next;
                     });
                   }
                 } else if (isPendingClaim) {
-                  if (successfulClaimsRef.current.has(item.id)) {
-                    successfulClaimsRef.current.delete(item.id);
+                  // User tapped again while claim is pending - toggle back (unclaim)
+                  if (successfulClaimsRef.current.has(freshItem.id)) {
+                    // Claim succeeded, so actually unclaim from DB
+                    successfulClaimsRef.current.delete(freshItem.id);
                     setPendingClaims((prev) => {
                       const next = new Set(prev);
-                      next.delete(item.id);
+                      next.delete(freshItem.id);
                       return next;
                     });
-                    handleUnclaimItem(item);
+                    handleUnclaimItem(freshItem);
                   } else {
+                    // Claim still in flight, just cancel the optimistic UI
                     setPendingClaims((prev) => {
                       const next = new Set(prev);
-                      next.delete(item.id);
+                      next.delete(freshItem.id);
                       return next;
                     });
                   }
                 } else if (isAlreadySplit) {
-                  handleSplitItem(item);
+                  handleSplitItem(freshItem);
                 } else if (hasCurrentMemberClaim) {
-                  handleUnclaimItem(item);
-                } else if (!isClaimed) {
+                  // User has claimed this item - unclaim it
+                  handleUnclaimItem(freshItem);
+                } else if (!freshIsClaimed) {
                   // P0: For shared items, open quick split instead of claiming directly
-                  if (isShared) {
-                    handleQuickSplit(item);
+                  if (freshIsShared) {
+                    handleQuickSplit(freshItem);
                   } else {
-                    handleClaimItem(item);
+                    handleClaimItem(freshItem);
                   }
                 } else {
-                  handleJoinSplit(item);
+                  handleJoinSplit(freshItem);
                 }
               }}
               onLongPress={() => {
+                // Get fresh item data to avoid stale closure issues
+                const freshItem = items.find(i => i.id === item.id) || item;
+                const freshIsClaimed = isItemFullyClaimed(freshItem);
+                const freshIsExpandable = canExpand(freshItem);
+
                 // P0: Long press shows quick split or expand options
-                if (isExpandable && !isClaimed) {
+                if (freshIsExpandable && !freshIsClaimed) {
                   Alert.alert(
                     'Split Options',
-                    `"${item.description}" has ${item.quantity} items.`,
+                    `"${freshItem.description}" has ${freshItem.quantity} items.`,
                     [
                       {
                         text: 'Expand to Individual Items',
-                        onPress: () => handleExpandItem(item),
+                        onPress: () => handleExpandItem(freshItem),
                       },
                       {
                         text: 'Split by People',
-                        onPress: () => handleQuickSplit(item),
+                        onPress: () => handleQuickSplit(freshItem),
                       },
                       { text: 'Cancel', style: 'cancel' },
                     ]
                   );
                 } else {
-                  handleQuickSplit(item);
+                  handleQuickSplit(freshItem);
                 }
               }}
               disabled={claiming || isProcessing || expanding}

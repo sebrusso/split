@@ -45,7 +45,7 @@ export default function ProfileScreen() {
               await signOut();
               router.replace("/auth/sign-in");
             } catch (error) {
-              console.error("Sign out error:", error);
+              __DEV__ && console.error("Sign out error:", error);
               Alert.alert("Error", "Failed to sign out. Please try again.");
             } finally {
               setSigningOut(false);
@@ -315,11 +315,12 @@ export default function ProfileScreen() {
                             try {
                               await user?.delete();
                               router.replace("/auth/sign-in");
-                            } catch (error: any) {
-                              console.error("Delete account error:", error);
+                            } catch (error: unknown) {
+                              __DEV__ && console.error("Delete account error:", error);
+                              const clerkError = error as { errors?: Array<{ message?: string }> };
                               Alert.alert(
                                 "Error",
-                                error.errors?.[0]?.message ||
+                                clerkError.errors?.[0]?.message ||
                                   "Failed to delete account. Contact support@splitfree.app"
                               );
                             }

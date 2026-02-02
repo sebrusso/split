@@ -104,22 +104,11 @@ export default function WelcomeScreen() {
     }
   };
 
-  const handleSkip = async () => {
-    try {
-      await AsyncStorage.setItem(WELCOME_SEEN_KEY, "true");
-      trackEvent(AnalyticsEvents.ONBOARDING_SKIPPED, {
-        skipped_at_step: currentIndex + 1,
-      });
-      router.replace("/auth/sign-in");
-    } catch {
-      router.replace("/auth/sign-in");
-    }
-  };
 
   const renderSlide = ({ item }: { item: WelcomeSlide }) => (
     <View style={styles.slide}>
       <View style={styles.iconContainer}>
-        <Ionicons name={item.icon} size={80} color={colors.primary} />
+        <Ionicons name={item.icon} size={64} color={colors.primary} />
       </View>
       {item.highlight && (
         <View style={styles.highlightBadge}>
@@ -135,15 +124,6 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {/* Skip button */}
-      <TouchableOpacity
-        style={styles.skipButton}
-        onPress={handleSkip}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
-
       {/* Carousel */}
       <FlatList
         ref={flatListRef}
@@ -205,34 +185,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  skipButton: {
-    position: "absolute",
-    top: spacing.xl,
-    right: spacing.lg,
-    zIndex: 10,
-    padding: spacing.sm,
-  },
-  skipText: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
-  },
   carousel: {
     flex: 1,
   },
   slide: {
     width,
     paddingHorizontal: spacing.xl,
-    paddingTop: 80,
+    paddingTop: 40,
     alignItems: "center",
   },
   iconContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   highlightBadge: {
     backgroundColor: colors.primary,

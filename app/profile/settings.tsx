@@ -13,10 +13,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import {
-  colors,
   spacing,
   typography,
   borderRadius,
+  useTheme,
+  ThemePreference,
+  lightColors,
 } from "../../lib/theme";
 import { Card } from "../../components/ui";
 import {
@@ -46,13 +48,22 @@ const CURRENCIES = [
  * Settings Screen
  * App preferences and configuration
  */
+// Theme options for the picker
+const THEME_OPTIONS: { value: ThemePreference; label: string; description: string }[] = [
+  { value: "system", label: "System", description: "Match device settings" },
+  { value: "light", label: "Light", description: "Always light mode" },
+  { value: "dark", label: "Dark", description: "Always dark mode" },
+];
+
 export default function SettingsScreen() {
   const { userId } = useAuth();
   const { isOptedOut, setOptOut } = useAnalytics();
+  const { preference: themePreference, setPreference: setThemePreference, colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
 
   // Notification preferences (placeholders for future implementation)
   const [expenseNotifications, setExpenseNotifications] = useState(true);
@@ -74,7 +85,7 @@ export default function SettingsScreen() {
         const currency = await getDefaultCurrency();
         setDefaultCurrency(currency);
       } catch (error) {
-        console.error("Error loading preferences:", error);
+        __DEV__ && console.error("Error loading preferences:", error);
       } finally {
         setLoading(false);
       }
@@ -99,16 +110,108 @@ export default function SettingsScreen() {
   }, [setOptOut]);
 
   const selectedCurrency = CURRENCIES.find((c) => c.code === defaultCurrency);
+  const selectedTheme = THEME_OPTIONS.find((t) => t.value === themePreference);
+
+  // Dynamic styles based on theme
+  const dynamicStyles = {
+    container: { backgroundColor: colors.background },
+    sectionTitle: { color: colors.textMuted },
+    sectionDescription: { color: colors.textMuted },
+    settingLabel: { color: colors.text },
+    settingDescription: { color: colors.textSecondary },
+    menuArrow: { color: colors.textMuted },
+    currencySymbol: { color: colors.primary },
+    currencyCode: { color: colors.textSecondary },
+    expandArrow: { color: colors.textMuted },
+    currencyList: { borderTopColor: colors.borderLight },
+    currencyOption: { backgroundColor: colors.card },
+    currencyOptionSelected: { backgroundColor: colors.primaryLight },
+    currencyOptionSymbol: { color: colors.text },
+    currencyOptionCode: { color: colors.text },
+    currencyOptionName: { color: colors.textSecondary },
+    checkmark: { color: colors.primary },
+    appName: { color: colors.primary },
+    appVersion: { color: colors.textMuted },
+    appTagline: { color: colors.textSecondary },
+    settingDivider: { backgroundColor: colors.borderLight },
+    themeIcon: { color: colors.primary },
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={["bottom"]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Appearance Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Appearance</Text>
+          <Card style={styles.settingCard}>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => setShowThemePicker(!showThemePicker)}
+            >
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>Theme</Text>
+                <Text style={[styles.settingDescription, dynamicStyles.settingDescription]}>
+                  Choose your preferred appearance
+                </Text>
+              </View>
+              <View style={styles.currencyValue}>
+                <Text style={[styles.currencySymbol, dynamicStyles.themeIcon]}>
+                  {themePreference === "dark" ? "🌙" : themePreference === "light" ? "☀️" : "📱"}
+                </Text>
+                <Text style={[styles.currencyCode, dynamicStyles.currencyCode]}>{selectedTheme?.label}</Text>
+                <Text style={[styles.expandArrow, dynamicStyles.expandArrow]}>
+                  {showThemePicker ? "▲" : "▼"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {showThemePicker && (
+              <View style={[styles.currencyList, dynamicStyles.currencyList]}>
+                {THEME_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.currencyOption,
+                      dynamicStyles.currencyOption,
+                      option.value === themePreference && [
+                        styles.currencyOptionSelected,
+                        dynamicStyles.currencyOptionSelected,
+                      ],
+                    ]}
+                    onPress={async () => {
+                      await setThemePreference(option.value);
+                      setShowThemePicker(false);
+                    }}
+                  >
+                    <View style={styles.currencyOptionContent}>
+                      <Text style={[styles.currencyOptionSymbol, dynamicStyles.currencyOptionSymbol]}>
+                        {option.value === "dark" ? "🌙" : option.value === "light" ? "☀️" : "📱"}
+                      </Text>
+                      <View>
+                        <Text style={[styles.currencyOptionCode, dynamicStyles.currencyOptionCode]}>
+                          {option.label}
+                        </Text>
+                        <Text style={[styles.currencyOptionName, dynamicStyles.currencyOptionName]}>
+                          {option.description}
+                        </Text>
+                      </View>
+                    </View>
+                    {option.value === themePreference && (
+                      <Text style={[styles.checkmark, dynamicStyles.checkmark]}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </Card>
+        </View>
+
         {/* Currency Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Currency</Text>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Currency</Text>
           <Card style={styles.settingCard}>
             <TouchableOpacity
               style={styles.settingItem}
@@ -402,9 +505,9 @@ export default function SettingsScreen() {
 
         {/* App Info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appName}>split it.</Text>
-          <Text style={styles.appVersion}>Version 1.0.0</Text>
-          <Text style={styles.appTagline}>
+          <Text style={[styles.appName, dynamicStyles.appName]}>split it.</Text>
+          <Text style={[styles.appVersion, dynamicStyles.appVersion]}>Version 1.0.0</Text>
+          <Text style={[styles.appTagline, dynamicStyles.appTagline]}>
             100% free expense splitting.{"\n"}No limits. No paywalls.
           </Text>
         </View>
@@ -416,7 +519,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: lightColors.background,
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -428,7 +531,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.small,
-    color: colors.textMuted,
+    color: lightColors.textMuted,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: spacing.sm,
@@ -436,7 +539,7 @@ const styles = StyleSheet.create({
   },
   sectionDescription: {
     ...typography.caption,
-    color: colors.textMuted,
+    color: lightColors.textMuted,
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,
   },
@@ -461,17 +564,17 @@ const styles = StyleSheet.create({
   },
   settingDescription: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: lightColors.textSecondary,
     marginTop: 2,
   },
   settingDivider: {
     height: 1,
-    backgroundColor: colors.borderLight,
+    backgroundColor: lightColors.borderLight,
     marginLeft: spacing.lg,
   },
   menuArrow: {
     fontSize: 18,
-    color: colors.textMuted,
+    color: lightColors.textMuted,
   },
   currencyValue: {
     flexDirection: "row",
@@ -481,20 +584,20 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 18,
     fontWeight: "600",
-    color: colors.primary,
+    color: lightColors.primary,
   },
   currencyCode: {
     ...typography.bodyMedium,
-    color: colors.textSecondary,
+    color: lightColors.textSecondary,
   },
   expandArrow: {
     fontSize: 10,
-    color: colors.textMuted,
+    color: lightColors.textMuted,
     marginLeft: spacing.xs,
   },
   currencyList: {
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: lightColors.borderLight,
   },
   currencyOption: {
     flexDirection: "row",
@@ -502,10 +605,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    backgroundColor: colors.card,
+    backgroundColor: lightColors.card,
   },
   currencyOptionSelected: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: lightColors.primaryLight,
   },
   currencyOptionContent: {
     flexDirection: "row",
@@ -515,7 +618,7 @@ const styles = StyleSheet.create({
   currencyOptionSymbol: {
     fontSize: 20,
     fontWeight: "600",
-    color: colors.text,
+    color: lightColors.text,
     width: 30,
     textAlign: "center",
   },
@@ -524,11 +627,11 @@ const styles = StyleSheet.create({
   },
   currencyOptionName: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: lightColors.textSecondary,
   },
   checkmark: {
     fontSize: 18,
-    color: colors.primary,
+    color: lightColors.primary,
     fontWeight: "bold",
   },
   appInfo: {
@@ -538,16 +641,16 @@ const styles = StyleSheet.create({
   },
   appName: {
     ...typography.h3,
-    color: colors.primary,
+    color: lightColors.primary,
   },
   appVersion: {
     ...typography.caption,
-    color: colors.textMuted,
+    color: lightColors.textMuted,
     marginTop: spacing.xs,
   },
   appTagline: {
     ...typography.small,
-    color: colors.textSecondary,
+    color: lightColors.textSecondary,
     textAlign: "center",
     marginTop: spacing.md,
     lineHeight: 20,

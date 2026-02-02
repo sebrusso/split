@@ -68,7 +68,7 @@ export function SettlementQRCodeModal({
         url: selectedQRCode.url,
       });
     } catch (error) {
-      console.error("Error sharing QR code:", error);
+      __DEV__ && console.error("Error sharing QR code:", error);
     }
   };
 

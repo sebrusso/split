@@ -147,7 +147,7 @@ export default function ExpenseDetailScreen() {
         setShares(shrs);
       }
     } catch (err) {
-      console.error("Error fetching expense:", err);
+      __DEV__ && console.error("Error fetching expense:", err);
       setError("Failed to load expense details");
     } finally {
       setLoading(false);
@@ -320,7 +320,7 @@ export default function ExpenseDetailScreen() {
       setReceiptUrl(finalReceiptUrl);
       fetchData();
     } catch (err) {
-      console.error("Error updating expense:", err);
+      __DEV__ && console.error("Error updating expense:", err);
       setError("Failed to update expense. Please try again.");
     } finally {
       setSaving(false);
@@ -350,7 +350,7 @@ export default function ExpenseDetailScreen() {
               Alert.alert("Expense Deleted", "You can restore this expense from the trash within 30 days.");
               router.back();
             } catch (err) {
-              console.error("Error deleting expense:", err);
+              __DEV__ && console.error("Error deleting expense:", err);
               Alert.alert("Error", "Failed to delete expense. Please try again.");
             }
           },
@@ -386,7 +386,7 @@ export default function ExpenseDetailScreen() {
 
               router.back();
             } catch (err) {
-              console.error("Error permanently deleting expense:", err);
+              __DEV__ && console.error("Error permanently deleting expense:", err);
               Alert.alert("Error", "Failed to delete expense. Please try again.");
             }
           },
@@ -408,7 +408,7 @@ export default function ExpenseDetailScreen() {
       Alert.alert("Expense Restored", "The expense has been restored.");
       router.back();
     } catch (err) {
-      console.error("Error restoring expense:", err);
+      __DEV__ && console.error("Error restoring expense:", err);
       Alert.alert("Error", "Failed to restore expense. Please try again.");
     }
   };

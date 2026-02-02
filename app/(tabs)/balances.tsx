@@ -7,7 +7,7 @@
  * - Each person shows their name and net balance (green if owed to you, red if you owe)
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -72,24 +72,20 @@ export default function BalancesTabScreen() {
         setGroupedPayments([]);
       }
     } catch (error) {
-      console.error("Error fetching balances:", error);
+      __DEV__ && console.error("Error fetching balances:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [userId]);
 
+  // useFocusEffect handles both initial load and refetch on screen focus
+  // No need for separate useEffect - useFocusEffect runs on mount AND on focus
   useFocusEffect(
     useCallback(() => {
       fetchData();
     }, [fetchData])
   );
-
-  useEffect(() => {
-    if (userId) {
-      fetchData();
-    }
-  }, [userId, fetchData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

@@ -29,10 +29,11 @@ import {
   borderRadius,
 } from "../../../lib/theme";
 import { Card, Avatar, Button } from "../../../components/ui";
-import { exportGroup } from "../../../lib/export";
+import { exportGroup, exportGroupAsPDF, ExportFormat } from "../../../lib/export";
 import { getCategoryById } from "../../../lib/categories";
 import { useAuth } from "../../../lib/auth-context";
 import { claimMember, getMemberByUserId } from "../../../lib/members";
+import { useRealtimeGroup } from "../../../lib/hooks";
 
 // Extended member type with profile info
 interface MemberWithProfile extends Member {
@@ -182,6 +183,12 @@ export default function GroupDetailScreen() {
     }, [fetchData]),
   );
 
+  // Subscribe to real-time updates for this group
+  // This replaces the 10-second polling with instant WebSocket updates
+  useRealtimeGroup(id, {
+    onAnyChange: fetchData,
+  });
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
@@ -234,7 +241,7 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format: ExportFormat = "csv") => {
     if (!group || exporting) return;
 
     setExporting(true);
@@ -264,15 +271,44 @@ export default function GroupDetailScreen() {
         group?.currency || "USD"
       );
 
-      const success = await exportGroup(group, expenses, members, settlements, balances);
-      if (success) {
-        // Export was shared successfully
+      if (format === "pdf") {
+        await exportGroupAsPDF(group, expenses, members, settlements, balances);
+      } else {
+        await exportGroup(group, expenses, members, settlements, balances);
       }
     } catch (error) {
       logger.error("Export error:", error);
       Alert.alert("Export Failed", "Could not export group data. Please try again.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const showExportOptions = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Export as CSV", "Export as PDF", "Cancel"],
+          cancelButtonIndex: 2,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            handleExport("csv");
+          } else if (buttonIndex === 1) {
+            handleExport("pdf");
+          }
+        }
+      );
+    } else {
+      Alert.alert(
+        "Export Data",
+        "Choose export format",
+        [
+          { text: "CSV (Spreadsheet)", onPress: () => handleExport("csv") },
+          { text: "PDF (Report)", onPress: () => handleExport("pdf") },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
     }
   };
 
@@ -312,7 +348,7 @@ export default function GroupDetailScreen() {
         router.push(`/group/${id}/edit`);
         break;
       case 2: // Export Data
-        handleExport();
+        showExportOptions();
         break;
       case 3: // Share Group
         handleShare();

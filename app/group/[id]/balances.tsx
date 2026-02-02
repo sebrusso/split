@@ -38,8 +38,9 @@ import { openPaymentApp, getPaymentAppName, getPaymentAppIcon, type PaymentApp }
 import { notifySettlementRecorded } from "../../../lib/notifications";
 import { getVenmoUsernamesForMembers } from "../../../lib/user-profile";
 import { useAuth } from "../../../lib/auth-context";
-import { createReminder, suggestReminderTime } from "../../../lib/payment-reminders";
+import { createReminder, suggestReminderTime, canSendReminder, sendReminder } from "../../../lib/payment-reminders";
 import { Ionicons } from "@expo/vector-icons";
+import { useRealtimeGroup } from "../../../lib/hooks";
 
 interface ExpenseWithSplits {
   id: string;
@@ -178,7 +179,7 @@ export default function BalancesScreen() {
       const venmoMap = await getVenmoUsernamesForMembers(memberIds);
       setVenmoUsernames(venmoMap);
     } catch (error) {
-      console.error("Error fetching balance data:", error);
+      __DEV__ && console.error("Error fetching balance data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -190,6 +191,12 @@ export default function BalancesScreen() {
       fetchData();
     }, [fetchData]),
   );
+
+  // Subscribe to real-time updates for settlements and expenses
+  useRealtimeGroup(id, {
+    onExpenseChange: fetchData,
+    onSettlementChange: fetchData,
+  });
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -265,7 +272,7 @@ export default function BalancesScreen() {
       // Refresh data
       fetchData();
     } catch (error) {
-      console.error("Error creating settlement:", error);
+      __DEV__ && console.error("Error creating settlement:", error);
       Alert.alert("Error", "Failed to record settlement. Please try again.");
     } finally {
       setSettlingIndex(null);
@@ -330,7 +337,7 @@ export default function BalancesScreen() {
               // Refresh data
               fetchData();
             } catch (error) {
-              console.error("Error deleting settlement:", error);
+              __DEV__ && console.error("Error deleting settlement:", error);
               Alert.alert("Error", "Failed to delete settlement. Please try again.");
             }
           },
@@ -367,82 +374,123 @@ export default function BalancesScreen() {
       return;
     }
 
-    Alert.alert(
-      "Send Payment Reminder",
-      `Send a reminder to ${fromMember?.name || "this person"} to pay ${formatCurrency(amount, group?.currency)}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Send Now",
-          onPress: async () => {
-            setSendingReminderIndex(index);
-            try {
-              const supabase = await getSupabase();
-              const reminder = await createReminder(supabase, {
-                groupId: id!,
-                fromMemberId,
-                toMemberId,
-                amount,
-                createdBy: userId,
-                frequency: "once",
-                scheduledAt: new Date(), // Send immediately
-              });
+    // Check if the debtor has an account linked (needed for push notifications)
+    if (!fromMember?.clerk_user_id) {
+      Alert.alert(
+        "Cannot Send Reminder",
+        `${fromMember?.name || "This person"} hasn't linked their account yet. They need to join the group with the app to receive reminders.`
+      );
+      return;
+    }
 
-              if (reminder) {
-                Alert.alert(
-                  "Reminder Sent",
-                  `${fromMember?.name || "They"} will receive a notification to pay you.`
-                );
-              } else {
+    // Check spam protection first
+    setSendingReminderIndex(index);
+    try {
+      const supabase = await getSupabase();
+      const cooldownCheck = await canSendReminder(supabase, id!, fromMemberId, toMemberId);
+
+      if (!cooldownCheck.canSend) {
+        Alert.alert(
+          "Too Soon",
+          `You already sent a reminder recently. You can send another one in ${cooldownCheck.hoursRemaining} hour${cooldownCheck.hoursRemaining === 1 ? "" : "s"}.`
+        );
+        setSendingReminderIndex(null);
+        return;
+      }
+
+      // Show the reminder options
+      Alert.alert(
+        "Send Payment Reminder",
+        `Send a reminder to ${fromMember?.name || "this person"} to pay ${formatCurrency(amount, group?.currency)}?`,
+        [
+          { text: "Cancel", style: "cancel", onPress: () => setSendingReminderIndex(null) },
+          {
+            text: "Send Now",
+            onPress: async () => {
+              try {
+                const reminder = await createReminder(supabase, {
+                  groupId: id!,
+                  fromMemberId,
+                  toMemberId,
+                  amount,
+                  createdBy: userId,
+                  frequency: "once",
+                  scheduledAt: new Date(),
+                }, true); // Skip spam check since we already checked
+
+                if (reminder) {
+                  // Send the push notification immediately
+                  const sendResult = await sendReminder(supabase, {
+                    ...reminder,
+                    fromMember: fromMember ? { id: fromMember.id, name: fromMember.name, clerk_user_id: fromMember.clerk_user_id } : undefined,
+                    toMember: currentUserMember ? { id: currentUserMember.id, name: currentUserMember.name, clerk_user_id: currentUserMember.clerk_user_id } : undefined,
+                    group: group ? { id: group.id, name: group.name, currency: group.currency } : undefined,
+                  });
+
+                  if (sendResult.success) {
+                    Alert.alert(
+                      "Reminder Sent",
+                      `${fromMember?.name || "They"} will receive a notification to pay you.`
+                    );
+                  } else {
+                    Alert.alert(
+                      "Reminder Created",
+                      `The reminder was saved but the notification couldn't be delivered. ${fromMember?.name || "They"} may not have push notifications enabled.`
+                    );
+                  }
+                } else {
+                  Alert.alert("Error", "Failed to send reminder. Please try again.");
+                }
+              } catch (error) {
+                __DEV__ && console.error("Error creating reminder:", error);
                 Alert.alert("Error", "Failed to send reminder. Please try again.");
+              } finally {
+                setSendingReminderIndex(null);
               }
-            } catch (error) {
-              console.error("Error creating reminder:", error);
-              Alert.alert("Error", "Failed to send reminder. Please try again.");
-            } finally {
-              setSendingReminderIndex(null);
-            }
+            },
           },
-        },
-        {
-          text: "Schedule for Later",
-          onPress: async () => {
-            setSendingReminderIndex(index);
-            try {
-              const supabase = await getSupabase();
-              const suggestedTime = suggestReminderTime();
-              const reminder = await createReminder(supabase, {
-                groupId: id!,
-                fromMemberId,
-                toMemberId,
-                amount,
-                createdBy: userId,
-                frequency: "once",
-                scheduledAt: suggestedTime,
-              });
+          {
+            text: "Schedule for Later",
+            onPress: async () => {
+              try {
+                const suggestedTime = suggestReminderTime();
+                const reminder = await createReminder(supabase, {
+                  groupId: id!,
+                  fromMemberId,
+                  toMemberId,
+                  amount,
+                  createdBy: userId,
+                  frequency: "once",
+                  scheduledAt: suggestedTime,
+                }, true); // Skip spam check since we already checked
 
-              if (reminder) {
-                const timeStr = suggestedTime.toLocaleTimeString([], {
-                  hour: 'numeric',
-                  minute: '2-digit'
-                });
-                Alert.alert(
-                  "Reminder Scheduled",
-                  `${fromMember?.name || "They"} will be reminded at ${timeStr}.`
-                );
-              } else {
+                if (reminder) {
+                  const timeStr = suggestedTime.toLocaleTimeString([], {
+                    hour: 'numeric',
+                    minute: '2-digit'
+                  });
+                  Alert.alert(
+                    "Reminder Scheduled",
+                    `${fromMember?.name || "They"} will be reminded at ${timeStr}.`
+                  );
+                } else {
+                  Alert.alert("Error", "Failed to schedule reminder. Please try again.");
+                }
+              } catch (error) {
+                __DEV__ && console.error("Error scheduling reminder:", error);
                 Alert.alert("Error", "Failed to schedule reminder. Please try again.");
+              } finally {
+                setSendingReminderIndex(null);
               }
-            } catch (error) {
-              console.error("Error scheduling reminder:", error);
-              Alert.alert("Error", "Failed to schedule reminder. Please try again.");
-            } finally {
-              setSendingReminderIndex(null);
-            }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      __DEV__ && console.error("Error checking reminder cooldown:", error);
+      Alert.alert("Error", "Failed to check reminder status. Please try again.");
+      setSendingReminderIndex(null);
+    }
   };
 
   if (loading) {

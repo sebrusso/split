@@ -91,7 +91,7 @@ export function GroupPicker({
       if (groupsError) throw groupsError;
       setGroups(groupsData || []);
     } catch (error) {
-      console.error("Error fetching groups:", error);
+      __DEV__ && console.error("Error fetching groups:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);

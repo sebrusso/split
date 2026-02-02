@@ -43,7 +43,7 @@ export default function ShareScreen() {
       if (error) throw error;
       setGroup(data);
     } catch (error) {
-      console.error("Error fetching group:", error);
+      __DEV__ && console.error("Error fetching group:", error);
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function ShareScreen() {
         message: `Join my expense group "${group.name}" on split it.!\n\n${deepLink}\n\nOr enter code: ${group.share_code}`,
       });
     } catch (error) {
-      console.error("Error sharing:", error);
+      __DEV__ && console.error("Error sharing:", error);
     }
   };
 
@@ -78,7 +78,7 @@ export default function ShareScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error("Error copying:", error);
+      __DEV__ && console.error("Error copying:", error);
       Alert.alert("Error", "Failed to copy link");
     }
   };
@@ -90,7 +90,7 @@ export default function ShareScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error("Error copying:", error);
+      __DEV__ && console.error("Error copying:", error);
       Alert.alert("Error", "Failed to copy code");
     }
   };

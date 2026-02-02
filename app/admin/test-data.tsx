@@ -19,7 +19,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Stack } from "expo-router";
+import { Stack, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSupabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth-context";
@@ -44,6 +44,11 @@ interface Group {
 }
 
 export default function TestDataScreen() {
+  // Block access in production builds
+  if (!__DEV__) {
+    return <Redirect href="/" />;
+  }
+
   const { userId, user } = useAuth();
   const { getSupabase } = useSupabase();
   const [groups, setGroups] = useState<Group[]>([]);
@@ -87,7 +92,7 @@ export default function TestDataScreen() {
       }, 0);
       setMyMemberCount(myCount);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      __DEV__ && console.error("Error fetching data:", error);
       Alert.alert("Error", "Failed to fetch data");
     } finally {
       setLoading(false);
@@ -130,7 +135,7 @@ export default function TestDataScreen() {
               Alert.alert("Success", `"${memberName}" is now linked to your account`);
               fetchData();
             } catch (error) {
-              console.error("Error linking member:", error);
+              __DEV__ && console.error("Error linking member:", error);
               Alert.alert("Error", "Failed to link member");
             }
           },
@@ -161,7 +166,7 @@ export default function TestDataScreen() {
               Alert.alert("Success", `"${memberName}" is now a guest member`);
               fetchData();
             } catch (error) {
-              console.error("Error unlinking member:", error);
+              __DEV__ && console.error("Error unlinking member:", error);
               Alert.alert("Error", "Failed to unlink member");
             }
           },
@@ -233,7 +238,7 @@ export default function TestDataScreen() {
               );
               fetchData();
             } catch (error) {
-              console.error("Error linking members:", error);
+              __DEV__ && console.error("Error linking members:", error);
               Alert.alert("Error", "Failed to link some members");
             }
           },

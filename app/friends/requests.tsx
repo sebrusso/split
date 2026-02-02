@@ -39,7 +39,7 @@ export default function FriendRequestsScreen() {
       const data = await getPendingRequests(userId);
       setRequests(data);
     } catch (error) {
-      console.error("Error fetching friend requests:", error);
+      __DEV__ && console.error("Error fetching friend requests:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,7 +63,7 @@ export default function FriendRequestsScreen() {
       await acceptFriendRequest(friendshipId);
       setRequests((prev) => prev.filter((r) => r.id !== friendshipId));
     } catch (error) {
-      console.error("Error accepting friend request:", error);
+      __DEV__ && console.error("Error accepting friend request:", error);
     } finally {
       setProcessingId(null);
     }
@@ -75,7 +75,7 @@ export default function FriendRequestsScreen() {
       await rejectFriendRequest(friendshipId);
       setRequests((prev) => prev.filter((r) => r.id !== friendshipId));
     } catch (error) {
-      console.error("Error rejecting friend request:", error);
+      __DEV__ && console.error("Error rejecting friend request:", error);
     } finally {
       setProcessingId(null);
     }

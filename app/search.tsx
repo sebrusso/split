@@ -55,7 +55,7 @@ export default function SearchScreen() {
       setExpenses(results.expenses);
       setGroups(results.groups);
     } catch (error) {
-      console.error("Search error:", error);
+      __DEV__ && console.error("Search error:", error);
     } finally {
       setLoading(false);
     }

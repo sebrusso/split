@@ -14,7 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useSupabase } from "../../lib/supabase";
-import { Group, GlobalBalance } from "../../lib/types";
+import { Group } from "../../lib/types";
 import logger from "../../lib/logger";
 import {
   colors,
@@ -25,7 +25,7 @@ import {
 } from "../../lib/theme";
 import { Button, Card, Avatar } from "../../components/ui";
 import { SearchBarCompact } from "../../components/ui/SearchBar";
-import { getGlobalBalances } from "../../lib/balances";
+import { getGlobalBalancesForUser, UserGlobalBalance } from "../../lib/balances";
 import { formatCurrency } from "../../lib/utils";
 import { useAuth } from "../../lib/auth-context";
 
@@ -36,7 +36,7 @@ export default function GroupsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [globalBalance, setGlobalBalance] = useState<GlobalBalance | null>(null);
+  const [globalBalance, setGlobalBalance] = useState<UserGlobalBalance | null>(null);
 
   const displayName = user?.fullName || user?.firstName || user?.username || "User";
 
@@ -101,11 +101,13 @@ export default function GroupsScreen() {
       setRefreshing(false);
 
       // Fetch global balances in the background (don't block UI)
-      getGlobalBalances().then((balances) => {
-        setGlobalBalance(balances);
-      }).catch((error) => {
-        logger.error("Error fetching global balances:", error);
-      });
+      if (userId) {
+        getGlobalBalancesForUser(userId).then((balances) => {
+          setGlobalBalance(balances);
+        }).catch((error) => {
+          logger.error("Error fetching global balances:", error);
+        });
+      }
     } catch (error) {
       logger.error("Error fetching data:", error);
       setLoading(false);

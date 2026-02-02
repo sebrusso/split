@@ -14,6 +14,7 @@ import { useSupabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth-context";
 import { Group } from "../../lib/types";
 import { notifyMemberJoined } from "../../lib/notifications";
+import { PostgresErrorCodes } from "../../lib/result";
 import {
   colors,
   spacing,
@@ -75,7 +76,7 @@ export default function JoinGroupScreen() {
 
       setFoundGroup(data);
     } catch (err) {
-      console.error("Error searching for group:", err);
+      __DEV__ && console.error("Error searching for group:", err);
       setError("Failed to search. Please try again.");
     } finally {
       setSearching(false);
@@ -95,27 +96,31 @@ export default function JoinGroupScreen() {
       return;
     }
 
+    // Check if user is authenticated
+    if (!userId) {
+      Alert.alert(
+        "Authentication Required",
+        "You must be signed in to join a group. Please sign in and try again."
+      );
+      return;
+    }
+
     setJoining(true);
 
     try {
       const supabase = await getSupabase();
-      // Check if member with same name already exists in group
-      const { data: existingMembers } = await supabase
-        .from("members")
-        .select("id, name")
-        .eq("group_id", foundGroup.id)
-        .ilike("name", name);
 
-      if (existingMembers && existingMembers.length > 0) {
-        Alert.alert(
-          "Name Already Exists",
-          `Someone named "${name}" is already in this group. Please use a different name or add a last initial.`,
-        );
-        setJoining(false);
-        return;
+      // Debug: Check auth status before attempting insert
+      if (__DEV__) {
+        const { data: authDebug } = await supabase.rpc("debug_auth_status");
+        console.log("[Join Group] Auth debug:", authDebug);
+        if (!authDebug?.[0]?.clerk_user_id) {
+          console.warn("[Join Group] Warning: clerk_user_id is NULL - auth token may not be properly verified");
+        }
       }
 
       // Create member with clerk_user_id linked
+      // The database now enforces uniqueness with idx_members_group_name_unique
       const { data: newMember, error: memberError } = await supabase
         .from("members")
         .insert({
@@ -126,7 +131,34 @@ export default function JoinGroupScreen() {
         .select()
         .single();
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        // Handle unique constraint violation (race condition prevention)
+        if (memberError.code === PostgresErrorCodes.UNIQUE_VIOLATION) {
+          Alert.alert(
+            "Name Already Taken",
+            `Someone named "${name}" is already in this group. Try adding your last initial or a nickname.`,
+            [
+              { text: "OK", onPress: () => setMemberName("") }
+            ]
+          );
+          setJoining(false);
+          return;
+        }
+
+        // Handle RLS policy violation (42501 is insufficient_privilege)
+        if (memberError.code === "42501") {
+          __DEV__ && console.error("[Join Group] RLS policy violation:", memberError);
+          Alert.alert(
+            "Permission Denied",
+            "Unable to join group due to a permissions issue. This may be an authentication problem. Please try signing out and back in.",
+            [{ text: "OK" }]
+          );
+          setJoining(false);
+          return;
+        }
+
+        throw memberError;
+      }
 
       // Notify existing group members about the new member
       notifyMemberJoined(
@@ -135,7 +167,7 @@ export default function JoinGroupScreen() {
         name,
         foundGroup.name,
         userId || undefined
-      ).catch((err) => console.error("Failed to send member joined notification:", err));
+      ).catch((err) => __DEV__ && console.error("Failed to send member joined notification:", err));
 
       trackEvent(AnalyticsEvents.GROUP_JOINED, {
         groupId: foundGroup.id,
@@ -143,9 +175,23 @@ export default function JoinGroupScreen() {
       });
       // Navigate to the group
       router.replace(`/group/${foundGroup.id}`);
-    } catch (err) {
-      console.error("Error joining group:", err);
-      Alert.alert("Error", "Failed to join group. Please try again.");
+    } catch (err: any) {
+      __DEV__ && console.error("Error joining group:", err);
+
+      // Provide more specific error messages based on error type
+      let errorMessage = "Failed to join group. Please try again.";
+
+      if (err?.message?.includes("duplicate")) {
+        errorMessage = `The name "${name}" is already taken. Please choose a different name.`;
+      } else if (err?.message?.includes("JWT") || err?.message?.includes("token")) {
+        errorMessage = "Authentication error. Please try signing out and back in.";
+      } else if (err?.code === "PGRST301" || err?.message?.includes("RLS")) {
+        errorMessage = "Permission denied. Please ensure you are signed in and try again.";
+      } else if (err?.message?.includes("Network request failed")) {
+        errorMessage = "Network error. Please check your connection and try again.";
+      }
+
+      Alert.alert("Error", errorMessage);
     } finally {
       setJoining(false);
     }

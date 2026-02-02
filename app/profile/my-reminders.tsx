@@ -65,7 +65,7 @@ export default function MyRemindersScreen() {
       setSentReminders(sent);
       setReceivedReminders(received);
     } catch (error) {
-      console.error("Error fetching reminders:", error);
+      __DEV__ && console.error("Error fetching reminders:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);

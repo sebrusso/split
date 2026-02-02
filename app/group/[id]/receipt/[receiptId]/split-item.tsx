@@ -29,6 +29,7 @@ import { formatReceiptAmount, roundCurrency } from '../../../../../lib/receipts'
 import { useAuth } from '../../../../../lib/auth-context';
 import { useSupabase } from '../../../../../lib/supabase';
 import { Member, ReceiptItem } from '../../../../../lib/types';
+import { getErrorMessage } from '../../../../../lib/logger';
 
 type SplitMethod = 'equal' | 'percent' | 'exact';
 
@@ -98,7 +99,7 @@ export default function SplitItemScreen() {
           }
         }
       } catch (err) {
-        console.error('Error fetching member:', err);
+        __DEV__ && console.error('Error fetching member:', err);
       }
     };
 
@@ -214,9 +215,9 @@ export default function SplitItemScreen() {
       if (insertError) throw insertError;
 
       router.back();
-    } catch (err: any) {
-      console.error('Error saving split:', err);
-      Alert.alert('Error', err.message || 'Failed to save split');
+    } catch (err: unknown) {
+      __DEV__ && console.error('Error saving split:', err);
+      Alert.alert('Error', getErrorMessage(err) || 'Failed to save split');
     } finally {
       setSaving(false);
     }

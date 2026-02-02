@@ -104,7 +104,7 @@ export default function AssignReceiptScreen() {
         url: shareUrl,
       });
     } catch (err) {
-      console.error("Error sharing:", err);
+      __DEV__ && console.error("Error sharing:", err);
     }
   };
 

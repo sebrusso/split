@@ -47,7 +47,7 @@ export default function FriendsListScreen() {
       setFilteredFriends(friendsData);
       setPendingCount(count);
     } catch (error) {
-      console.error("Error fetching friends:", error);
+      __DEV__ && console.error("Error fetching friends:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,7 +88,7 @@ export default function FriendsListScreen() {
       setFriends((prev) => prev.filter((f) => f.id !== friendshipId));
       setFilteredFriends((prev) => prev.filter((f) => f.id !== friendshipId));
     } catch (error) {
-      console.error("Error removing friend:", error);
+      __DEV__ && console.error("Error removing friend:", error);
     } finally {
       setRemovingId(null);
     }

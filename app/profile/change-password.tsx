@@ -53,9 +53,10 @@ export default function ChangePasswordScreen() {
       });
       Alert.alert("Success", "Password updated successfully");
       router.back();
-    } catch (error: any) {
-      console.error("Error changing password:", error);
-      const message = error.errors?.[0]?.message || "Failed to change password";
+    } catch (error: unknown) {
+      __DEV__ && console.error("Error changing password:", error);
+      const clerkError = error as { errors?: Array<{ message?: string }> };
+      const message = clerkError.errors?.[0]?.message || "Failed to change password";
       if (message.toLowerCase().includes("incorrect")) {
         setError("Current password is incorrect");
       } else {

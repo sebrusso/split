@@ -47,9 +47,10 @@ export default function ChangeEmailScreen() {
       await emailAddress.prepareVerification({ strategy: "email_code" });
       setStep("verify");
       Alert.alert("Code Sent", `A verification code has been sent to ${newEmail}`);
-    } catch (error: any) {
-      console.error("Error sending verification:", error);
-      setError(error.errors?.[0]?.message || "Failed to send verification code");
+    } catch (error: unknown) {
+      __DEV__ && console.error("Error sending verification:", error);
+      const clerkError = error as { errors?: Array<{ message?: string }> };
+      setError(clerkError.errors?.[0]?.message || "Failed to send verification code");
     } finally {
       setLoading(false);
     }
@@ -82,9 +83,10 @@ export default function ChangeEmailScreen() {
 
       Alert.alert("Success", "Email address updated successfully");
       router.back();
-    } catch (error: any) {
-      console.error("Error verifying email:", error);
-      setError(error.errors?.[0]?.message || "Invalid verification code");
+    } catch (error: unknown) {
+      __DEV__ && console.error("Error verifying email:", error);
+      const clerkError = error as { errors?: Array<{ message?: string }> };
+      setError(clerkError.errors?.[0]?.message || "Invalid verification code");
     } finally {
       setLoading(false);
     }

@@ -30,6 +30,7 @@ import { useSupabase } from "../../lib/supabase";
 import { generateShareCode } from "../../lib/utils";
 import { Input } from "./Input";
 import { Button } from "./Button";
+import { getErrorMessage } from '../../lib/logger';
 
 const EMOJIS = [
   "💰", "🏠", "✈️", "🍕", "🎉", "👥",
@@ -106,9 +107,9 @@ export function QuickCreateGroup({
       setCurrency("USD");
 
       onCreated(group.id, group.name);
-    } catch (err: any) {
-      console.error("Error creating group:", err);
-      setError(err.message || "Failed to create group");
+    } catch (err: unknown) {
+      __DEV__ && console.error("Error creating group:", err);
+      setError(getErrorMessage(err) || "Failed to create group");
     } finally {
       setCreating(false);
     }

@@ -1,7 +1,6 @@
 import { Tabs } from "expo-router";
-import { useColorScheme } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { lightColors, darkColors } from "../../lib/theme";
+import { useTheme } from "../../lib/theme";
 
 /**
  * Bottom Tab Navigation Layout
@@ -9,8 +8,7 @@ import { lightColors, darkColors } from "../../lib/theme";
  * Profile is accessed via icon in each screen's header
  */
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const colors = colorScheme === "dark" ? darkColors : lightColors;
+  const { colors } = useTheme();
 
   return (
     <Tabs

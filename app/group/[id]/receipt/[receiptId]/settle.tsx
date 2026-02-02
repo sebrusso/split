@@ -34,8 +34,10 @@ import { useAuth } from '../../../../../lib/auth-context';
 import { supabase, useSupabase } from '../../../../../lib/supabase';
 import { Member, ReceiptMemberCalculation } from '../../../../../lib/types';
 import { getVenmoUsernameForMember } from '../../../../../lib/user-profile';
+import { getErrorMessage } from '../../../../../lib/logger';
+import { FeatureErrorBoundary } from '../../../../../lib/sentry';
 
-export default function ReceiptSettleScreen() {
+function ReceiptSettleScreenContent() {
   const { id, receiptId } = useLocalSearchParams<{ id: string; receiptId: string }>();
   const { userId } = useAuth();
   const { getSupabase } = useSupabase();
@@ -70,13 +72,13 @@ export default function ReceiptSettleScreen() {
             .single();
 
           if (error) {
-            console.error('Error fetching member:', error);
+            __DEV__ && console.error('Error fetching member:', error);
             return;
           }
 
           setCurrentMember(member);
         } catch (err) {
-          console.error('Error fetching member:', err);
+          __DEV__ && console.error('Error fetching member:', err);
         }
       };
 
@@ -94,7 +96,7 @@ export default function ReceiptSettleScreen() {
           const venmoUsername = await getVenmoUsernameForMember(receipt.uploaded_by);
           setUploaderVenmo(venmoUsername);
         } catch (err) {
-          console.error('Error fetching uploader payment info:', err);
+          __DEV__ && console.error('Error fetching uploader payment info:', err);
         }
       };
 
@@ -113,7 +115,7 @@ export default function ReceiptSettleScreen() {
           const usernames = await getVenmoUsernamesForMembers(memberIds);
           setMemberVenmoUsernames(usernames);
         } catch (err) {
-          console.error('Error fetching member Venmo usernames:', err);
+          __DEV__ && console.error('Error fetching member Venmo usernames:', err);
         }
       };
 
@@ -161,7 +163,7 @@ export default function ReceiptSettleScreen() {
                       });
                     } catch (err) {
                       // Silently fail - this is optional analytics tracking
-                      console.log('Payment event tracking failed (table may not exist yet):', err);
+                      __DEV__ && console.log('Payment event tracking failed (table may not exist yet):', err);
                     }
                     setPendingPayment(null);
                     Alert.alert(
@@ -390,9 +392,9 @@ export default function ReceiptSettleScreen() {
         .eq('id', receiptId);
 
       router.replace(`/group/${id}`);
-    } catch (err: any) {
-      console.error('Error finalizing receipt:', err);
-      Alert.alert('Error', err.message || 'Failed to save receipt');
+    } catch (err: unknown) {
+      __DEV__ && console.error('Error finalizing receipt:', err);
+      Alert.alert('Error', getErrorMessage(err) || 'Failed to save receipt');
     } finally {
       setSettling(false);
     }
@@ -785,3 +787,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 });
+
+/**
+ * Wrapped export with FeatureErrorBoundary for granular error tracking
+ */
+export default function ReceiptSettleScreen() {
+  return (
+    <FeatureErrorBoundary feature="Payment Settlement">
+      <ReceiptSettleScreenContent />
+    </FeatureErrorBoundary>
+  );
+}

@@ -122,7 +122,7 @@ export default function AddRecurringScreen() {
         setPercentages(initialPercentages);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      __DEV__ && console.error("Error fetching data:", error);
     }
   };
 
@@ -255,7 +255,7 @@ export default function AddRecurringScreen() {
         [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (err) {
-      console.error("Error creating recurring expense:", err);
+      __DEV__ && console.error("Error creating recurring expense:", err);
       setError("Failed to create recurring expense. Please try again.");
     } finally {
       setLoading(false);

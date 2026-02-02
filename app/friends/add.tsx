@@ -30,6 +30,7 @@ import {
   getFriendshipStatus,
 } from "../../lib/friends";
 import { FriendCard } from "../../components/ui";
+import { getErrorMessage } from '../../lib/logger';
 
 export default function AddFriendScreen() {
   const { userId } = useAuth();
@@ -52,7 +53,7 @@ export default function AddFriendScreen() {
         const requests = await getOutgoingRequests(userId);
         setOutgoingRequests(requests);
       } catch (error) {
-        console.error("Error fetching outgoing requests:", error);
+        __DEV__ && console.error("Error fetching outgoing requests:", error);
       }
     };
     fetchOutgoing();
@@ -79,7 +80,7 @@ export default function AddFriendScreen() {
         }
         setFriendshipStatuses(statuses);
       } catch (error) {
-        console.error("Error searching users:", error);
+        __DEV__ && console.error("Error searching users:", error);
       } finally {
         setSearching(false);
       }
@@ -106,9 +107,9 @@ export default function AddFriendScreen() {
         updated.set(targetClerkId, newStatus);
         return updated;
       });
-    } catch (error: any) {
-      console.error("Error sending friend request:", error);
-      // Could show an alert here with error.message
+    } catch (error: unknown) {
+      __DEV__ && console.error("Error sending friend request:", error);
+      // Could show an alert here with getErrorMessage(error)
     } finally {
       setSendingTo(null);
     }
@@ -130,7 +131,7 @@ export default function AddFriendScreen() {
         });
       }
     } catch (error) {
-      console.error("Error canceling request:", error);
+      __DEV__ && console.error("Error canceling request:", error);
     } finally {
       setCancelingId(null);
     }

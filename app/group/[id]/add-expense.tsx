@@ -125,7 +125,7 @@ export default function AddExpenseScreen() {
         setPercentages(initialPercentages);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      __DEV__ && console.error("Error fetching data:", error);
     }
   };
 
@@ -141,7 +141,7 @@ export default function AddExpenseScreen() {
       const rate = await getExchangeRate(fromCurrency, toCurrency);
       setExchangeRate(rate);
     } catch (error) {
-      console.error("Error fetching exchange rate:", error);
+      __DEV__ && console.error("Error fetching exchange rate:", error);
       setExchangeRate(1); // Fallback to 1:1
     } finally {
       setExchangeRateLoading(false);
@@ -353,7 +353,7 @@ export default function AddExpenseScreen() {
       });
       router.back();
     } catch (err) {
-      console.error("Error creating expense:", err);
+      __DEV__ && console.error("Error creating expense:", err);
       setError("Failed to add expense. Please try again.");
     } finally {
       setLoading(false);

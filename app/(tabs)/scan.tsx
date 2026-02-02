@@ -1,8 +1,9 @@
 /**
  * Scan Tab Screen
  *
- * Group-agnostic receipt scanning interface.
- * Users scan first, then assign to a group in the next step.
+ * Combined scanning interface for:
+ * - Receipt scanning (OCR-based for expense tracking)
+ * - QR code scanning (for joining groups)
  */
 
 import { useState, useRef } from "react";
@@ -21,9 +22,92 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, typography, borderRadius } from "../../lib/theme";
-import { Button } from "../../components/ui";
+import { Button, QRCodeScanner } from "../../components/ui";
 import { useReceiptUploadNoGroup } from "../../lib/useReceipts";
 import { useAuth } from "../../lib/auth-context";
+
+type ScanMode = "receipt" | "qr";
+
+// Mode toggle component to avoid TypeScript narrowing issues
+function ModeToggle({
+  currentMode,
+  onModeChange,
+}: {
+  currentMode: ScanMode;
+  onModeChange: (mode: ScanMode) => void;
+}) {
+  const isReceipt = currentMode === "receipt";
+  const isQR = currentMode === "qr";
+
+  return (
+    <View style={modeStyles.modeToggle}>
+      <TouchableOpacity
+        style={[modeStyles.modeButton, isReceipt && modeStyles.modeButtonActive]}
+        onPress={() => onModeChange("receipt")}
+      >
+        <Ionicons
+          name="receipt-outline"
+          size={18}
+          color={isReceipt ? colors.white : colors.textSecondary}
+        />
+        <Text
+          style={[
+            modeStyles.modeButtonText,
+            isReceipt && modeStyles.modeButtonTextActive,
+          ]}
+        >
+          Receipt
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[modeStyles.modeButton, isQR && modeStyles.modeButtonActive]}
+        onPress={() => onModeChange("qr")}
+      >
+        <Ionicons
+          name="qr-code-outline"
+          size={18}
+          color={isQR ? colors.white : colors.textSecondary}
+        />
+        <Text
+          style={[
+            modeStyles.modeButtonText,
+            isQR && modeStyles.modeButtonTextActive,
+          ]}
+        >
+          Join Group
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const modeStyles = StyleSheet.create({
+  modeToggle: {
+    flexDirection: "row",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: borderRadius.full,
+    padding: 4,
+  },
+  modeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+  },
+  modeButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  modeButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  modeButtonTextActive: {
+    color: colors.white,
+  },
+});
 
 export default function ScanScreen() {
   const { userId } = useAuth();
@@ -31,6 +115,7 @@ export default function ScanScreen() {
 
   const [permission, requestPermission] = useCameraPermissions();
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [scanMode, setScanMode] = useState<ScanMode>("receipt");
 
   const { uploadReceipt, processReceipt, uploading, processing, error } =
     useReceiptUploadNoGroup();
@@ -48,7 +133,7 @@ export default function ScanScreen() {
         setCapturedImage(photo.uri);
       }
     } catch (err) {
-      console.error("Error capturing photo:", err);
+      __DEV__ && console.error("Error capturing photo:", err);
       Alert.alert("Error", "Failed to capture photo");
     }
   };
@@ -135,6 +220,11 @@ export default function ScanScreen() {
     router.push(`/assign-receipt/${uploadResult.receiptId}`);
   };
 
+  const handleQRCodeScanned = (code: string) => {
+    // Navigate to join screen with the extracted code
+    router.push(`/join?code=${code}`);
+  };
+
   // Not logged in
   if (!userId) {
     return (
@@ -143,7 +233,7 @@ export default function ScanScreen() {
           <Ionicons name="person-circle" size={64} color={colors.textMuted} />
           <Text style={styles.errorTitle}>Sign In Required</Text>
           <Text style={styles.errorText}>
-            Please sign in to scan and upload receipts.
+            Please sign in to scan receipts and QR codes.
           </Text>
           <Button
             title="Go to Profile"
@@ -163,8 +253,8 @@ export default function ScanScreen() {
           <Ionicons name="camera" size={64} color={colors.textSecondary} />
           <Text style={styles.permissionTitle}>Camera Access Required</Text>
           <Text style={styles.permissionText}>
-            We need camera access to scan your receipt. You can also choose an
-            image from your photo library.
+            We need camera access to scan receipts and QR codes. You can also
+            choose an image from your photo library for receipts.
           </Text>
           <View style={styles.permissionButtons}>
             <Button
@@ -180,6 +270,25 @@ export default function ScanScreen() {
             />
           </View>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  // QR Code scanning mode
+  if (scanMode === "qr") {
+    return (
+      <SafeAreaView style={styles.container} edges={["bottom"]}>
+        {/* Mode Toggle */}
+        <View style={styles.modeToggleContainer}>
+          <ModeToggle currentMode={scanMode} onModeChange={setScanMode} />
+        </View>
+
+        <QRCodeScanner
+          onScan={handleQRCodeScanned}
+          instructionText="Scan a group's QR code to join"
+          parseDeepLink={true}
+          deepLinkPrefix="splitfree://join/"
+        />
       </SafeAreaView>
     );
   }
@@ -220,10 +329,15 @@ export default function ScanScreen() {
     );
   }
 
-  // Camera view
+  // Receipt Camera view (default)
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <CameraView ref={cameraRef} style={styles.camera} facing="back">
+        {/* Mode Toggle */}
+        <View style={styles.modeToggleOverlay}>
+          <ModeToggle currentMode={scanMode} onModeChange={setScanMode} />
+        </View>
+
         {/* Guide overlay */}
         <View style={styles.guideOverlay}>
           <View style={styles.guideFrame}>
@@ -302,6 +416,22 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+  },
+  modeToggleContainer: {
+    position: "absolute",
+    top: spacing.lg,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    alignItems: "center",
+  },
+  modeToggleOverlay: {
+    position: "absolute",
+    top: spacing.lg,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    alignItems: "center",
   },
   guideOverlay: {
     flex: 1,

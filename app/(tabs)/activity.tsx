@@ -55,7 +55,7 @@ export default function ActivityTabScreen() {
       setActivities(data);
       applyFilter(activeFilter, data);
     } catch (error) {
-      console.error("Error fetching activity:", error);
+      __DEV__ && console.error("Error fetching activity:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);

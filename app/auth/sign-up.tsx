@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
-import * as Linking from "expo-linking";
+import { OAUTH_REDIRECT_URL } from "../../lib/clerk";
 import {
   colors,
   spacing,
@@ -115,8 +115,8 @@ export default function SignUpScreen() {
         password,
       });
 
-      console.log("Sign-up result status:", result.status);
-      console.log("Missing fields:", result.missingFields);
+      __DEV__ && console.log("Sign-up result status:", result.status);
+      __DEV__ && console.log("Missing fields:", result.missingFields);
 
       // Check if we need email verification
       if (result.status === "missing_requirements") {
@@ -146,7 +146,7 @@ export default function SignUpScreen() {
         setPendingVerification(true);
       }
     } catch (err: unknown) {
-      console.error("Sign up error:", err);
+      __DEV__ && console.error("Sign up error:", err);
       const clerkError = err as {
         errors?: Array<{ message?: string; code?: string; longMessage?: string }>;
         message?: string;
@@ -195,10 +195,10 @@ export default function SignUpScreen() {
         code: verificationCode.trim(),
       });
 
-      console.log("Verification status:", result.status);
-      console.log("Session ID:", result.createdSessionId);
-      console.log("Unverified fields:", result.unverifiedFields);
-      console.log("Missing fields:", result.missingFields);
+      __DEV__ && console.log("Verification status:", result.status);
+      __DEV__ && console.log("Session ID:", result.createdSessionId);
+      __DEV__ && console.log("Unverified fields:", result.unverifiedFields);
+      __DEV__ && console.log("Missing fields:", result.missingFields);
 
       if (result.status === "complete" && result.createdSessionId) {
         // Sign-up complete, activate session
@@ -220,7 +220,7 @@ export default function SignUpScreen() {
       } else if (result.status === "missing_requirements") {
         // Check what's still missing
         const unverifiedFields = result.unverifiedFields || [];
-        console.log("Unverified after email:", unverifiedFields);
+        __DEV__ && console.log("Unverified after email:", unverifiedFields);
 
         // Check if phone verification is needed
         if (unverifiedFields.includes("phone_number")) {
@@ -242,13 +242,13 @@ export default function SignUpScreen() {
           setTimeout(() => router.replace("/auth/sign-in"), 1500);
         }
       } else {
-        console.log("Unexpected status:", result.status);
+        __DEV__ && console.log("Unexpected status:", result.status);
         trackEvent(AnalyticsEvents.SIGN_UP_COMPLETED, { method: "email" });
         setSuccessMessage("Account created! Redirecting to sign in...");
         setTimeout(() => router.replace("/auth/sign-in"), 1500);
       }
     } catch (err: unknown) {
-      console.error("Verification error:", err);
+      __DEV__ && console.error("Verification error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message || "Invalid verification code";
@@ -276,8 +276,8 @@ export default function SignUpScreen() {
         code: phoneVerificationCode.trim(),
       });
 
-      console.log("Phone verification status:", result.status);
-      console.log("Session ID:", result.createdSessionId);
+      __DEV__ && console.log("Phone verification status:", result.status);
+      __DEV__ && console.log("Session ID:", result.createdSessionId);
 
       if (result.status === "complete" && result.createdSessionId) {
         // Sign-up complete, activate session
@@ -302,12 +302,12 @@ export default function SignUpScreen() {
           setTimeout(() => router.replace("/auth/sign-in"), 1500);
         }
       } else {
-        console.log("Unexpected phone verification status:", result.status);
+        __DEV__ && console.log("Unexpected phone verification status:", result.status);
         setSuccessMessage("Account created! Redirecting to sign in...");
         setTimeout(() => router.replace("/auth/sign-in"), 1500);
       }
     } catch (err: unknown) {
-      console.error("Phone verification error:", err);
+      __DEV__ && console.error("Phone verification error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message || "Invalid verification code";
@@ -325,7 +325,7 @@ export default function SignUpScreen() {
 
     try {
       const { createdSessionId, setActive: setOAuthActive } = await startGoogleOAuth({
-        redirectUrl: Linking.createURL("/"),
+        redirectUrl: OAUTH_REDIRECT_URL,
       });
 
       if (createdSessionId && setOAuthActive) {
@@ -334,7 +334,7 @@ export default function SignUpScreen() {
         router.replace("/");
       }
     } catch (err: unknown) {
-      console.error("Google sign up error:", err);
+      __DEV__ && console.error("Google sign up error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message || "Failed to sign up with Google";
@@ -352,7 +352,7 @@ export default function SignUpScreen() {
 
     try {
       const { createdSessionId, setActive: setOAuthActive } = await startAppleOAuth({
-        redirectUrl: Linking.createURL("/"),
+        redirectUrl: OAUTH_REDIRECT_URL,
       });
 
       if (createdSessionId && setOAuthActive) {
@@ -361,7 +361,7 @@ export default function SignUpScreen() {
         router.replace("/");
       }
     } catch (err: unknown) {
-      console.error("Apple sign up error:", err);
+      __DEV__ && console.error("Apple sign up error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message || "Failed to sign up with Apple";
@@ -424,7 +424,7 @@ export default function SignUpScreen() {
                     setError("");
                     setSuccessMessage("Code resent!");
                   } catch (err) {
-                    console.error("Resend error:", err);
+                    __DEV__ && console.error("Resend error:", err);
                     setError("Failed to resend code. Please try again.");
                     setSuccessMessage("");
                   }
@@ -492,7 +492,7 @@ export default function SignUpScreen() {
                     setError("");
                     setSuccessMessage("Code resent!");
                   } catch (err) {
-                    console.error("Resend error:", err);
+                    __DEV__ && console.error("Resend error:", err);
                     setError("Failed to resend code. Please try again.");
                     setSuccessMessage("");
                   }

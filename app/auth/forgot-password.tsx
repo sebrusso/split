@@ -49,7 +49,7 @@ export default function ForgotPasswordScreen() {
       });
       setStep("code");
     } catch (err: unknown) {
-      console.error("Send code error:", err);
+      __DEV__ && console.error("Send code error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message ||
@@ -83,7 +83,7 @@ export default function ForgotPasswordScreen() {
         setError("Unexpected status. Please try again.");
       }
     } catch (err: unknown) {
-      console.error("Verify code error:", err);
+      __DEV__ && console.error("Verify code error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message || "Invalid verification code";
@@ -124,7 +124,7 @@ export default function ForgotPasswordScreen() {
         setError("Password reset incomplete. Please try again.");
       }
     } catch (err: unknown) {
-      console.error("Reset password error:", err);
+      __DEV__ && console.error("Reset password error:", err);
       const clerkError = err as { errors?: Array<{ message?: string }> };
       const errorMessage =
         clerkError.errors?.[0]?.message || "Failed to reset password";
@@ -212,7 +212,7 @@ export default function ForgotPasswordScreen() {
                 identifier: email.trim(),
               });
             } catch (err) {
-              console.error("Resend error:", err);
+              __DEV__ && console.error("Resend error:", err);
               setError("Failed to resend code. Please try again.");
             }
           }}

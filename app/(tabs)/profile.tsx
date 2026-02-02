@@ -18,6 +18,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useUser, useClerk } from "@clerk/clerk-expo";
+import * as Linking from "expo-linking";
+import * as StoreReview from "expo-store-review";
 import {
   colors,
   spacing,
@@ -25,7 +27,8 @@ import {
   borderRadius,
   shadows,
 } from "../../lib/theme";
-import { Button, Card, Avatar } from "../../components/ui";
+import { Button, Card, Avatar, FeedbackModal } from "../../components/ui";
+import { submitBugReport } from "../../lib/sentry";
 
 /**
  * Profile Tab Screen
@@ -35,6 +38,28 @@ export default function ProfileTabScreen() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const [signingOut, setSigningOut] = useState(false);
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+
+  const handleRateApp = useCallback(async () => {
+    try {
+      const isAvailable = await StoreReview.isAvailableAsync();
+      if (isAvailable) {
+        await StoreReview.requestReview();
+      } else {
+        // Fallback to App Store link
+        const storeUrl =
+          "https://apps.apple.com/app/split-it-expense-splitter/id6740043970";
+        await Linking.openURL(storeUrl);
+      }
+    } catch (error) {
+      __DEV__ && console.error("Rate app error:", error);
+    }
+  }, []);
+
+  const handleReportBug = useCallback(() => {
+    // Open feedback modal with bug type pre-selected
+    setFeedbackModalVisible(true);
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     Alert.alert(
@@ -51,7 +76,7 @@ export default function ProfileTabScreen() {
               await signOut();
               router.replace("/auth/sign-in");
             } catch (error) {
-              console.error("Sign out error:", error);
+              __DEV__ && console.error("Sign out error:", error);
               Alert.alert("Error", "Failed to sign out. Please try again.");
             } finally {
               setSigningOut(false);
@@ -213,19 +238,50 @@ export default function ProfileTabScreen() {
           <Card style={styles.menuCard}>
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => {
-                Alert.alert(
-                  "Help & Support",
-                  "For questions or feedback, email us at support@splitfree.app"
-                );
-              }}
+              onPress={() => setFeedbackModalVisible(true)}
             >
               <View style={styles.menuItemContent}>
-                <Text style={styles.menuIcon}>❓</Text>
+                <Text style={styles.menuIcon}>💬</Text>
                 <View style={styles.menuItemText}>
-                  <Text style={styles.menuItemTitle}>Help & Support</Text>
+                  <Text style={styles.menuItemTitle}>Send Feedback</Text>
                   <Text style={styles.menuItemSubtitle}>
-                    Get help or send feedback
+                    Share ideas or suggestions
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleReportBug}
+            >
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuIcon}>🐛</Text>
+                <View style={styles.menuItemText}>
+                  <Text style={styles.menuItemTitle}>Report a Bug</Text>
+                  <Text style={styles.menuItemSubtitle}>
+                    Help us fix issues
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuArrow}>→</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleRateApp}
+            >
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuIcon}>⭐</Text>
+                <View style={styles.menuItemText}>
+                  <Text style={styles.menuItemTitle}>Rate the App</Text>
+                  <Text style={styles.menuItemSubtitle}>
+                    Love split it.? Leave a review!
                   </Text>
                 </View>
               </View>
@@ -310,11 +366,12 @@ export default function ProfileTabScreen() {
                             try {
                               await user?.delete();
                               router.replace("/auth/sign-in");
-                            } catch (error: any) {
-                              console.error("Delete account error:", error);
+                            } catch (error: unknown) {
+                              __DEV__ && console.error("Delete account error:", error);
+                              const clerkError = error as { errors?: Array<{ message?: string }> };
                               Alert.alert(
                                 "Error",
-                                error.errors?.[0]?.message ||
+                                clerkError.errors?.[0]?.message ||
                                   "Failed to delete account. Contact support@splitfree.app"
                               );
                             }
@@ -331,6 +388,13 @@ export default function ProfileTabScreen() {
           <Text style={styles.deleteAccountText}>Delete Account</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        visible={feedbackModalVisible}
+        onClose={() => setFeedbackModalVisible(false)}
+        screenName="profile"
+      />
     </SafeAreaView>
   );
 }

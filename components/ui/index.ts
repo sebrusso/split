@@ -39,3 +39,9 @@ export { QuickCreateGroup } from "./QuickCreateGroup";
 
 // Receipt components
 export { QuickSplitModal } from "./QuickSplitModal";
+
+// QR Code scanner
+export { QRCodeScanner } from "./QRCodeScanner";
+
+// Feedback
+export { FeedbackModal } from "./FeedbackModal";

@@ -27,8 +27,9 @@ import { useAuth } from '../../../lib/auth-context';
 import { useSupabase } from '../../../lib/supabase';
 import { Member } from '../../../lib/types';
 import { useAnalytics, AnalyticsEvents } from '../../../lib/analytics-provider';
+import { FeatureErrorBoundary } from '../../../lib/sentry';
 
-export default function ScanReceiptScreen() {
+function ScanReceiptScreenContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
   const { trackEvent } = useAnalytics();
@@ -62,7 +63,7 @@ export default function ScanReceiptScreen() {
 
         setCurrentMember(member);
       } catch (err) {
-        console.error('Error fetching member:', err);
+        __DEV__ && console.error('Error fetching member:', err);
       } finally {
         setLoadingMember(false);
       }
@@ -84,7 +85,7 @@ export default function ScanReceiptScreen() {
         setCapturedImage(photo.uri);
       }
     } catch (err) {
-      console.error('Error capturing photo:', err);
+      __DEV__ && console.error('Error capturing photo:', err);
       Alert.alert('Error', 'Failed to capture photo');
     }
   };
@@ -485,3 +486,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+/**
+ * Wrapped export with FeatureErrorBoundary for granular error tracking
+ */
+export default function ScanReceiptScreen() {
+  return (
+    <FeatureErrorBoundary feature="Receipt Scanning">
+      <ScanReceiptScreenContent />
+    </FeatureErrorBoundary>
+  );
+}
