@@ -4,12 +4,14 @@
 
 ---
 
-## Branch Strategy: GitHub Flow (Simplified)
+## Branch Strategy: GitHub Flow with Staging
 
-We use a simplified GitHub Flow optimized for small teams:
+We use GitHub Flow with a staging branch for database testing:
 
 ```
-main (protected)
+main (protected) ─────────────────────► Production DB + TestFlight
+  │
+staging ──────────────────────────────► Staging DB (test migrations)
   │
   ├── feature/add-voice-input
   ├── fix/venmo-onboarding-loop
@@ -17,12 +19,19 @@ main (protected)
   └── hotfix/critical-auth-fix
 ```
 
+### Environment Mapping
+
+| Branch | Supabase Database | Clerk Instance | EAS Profiles |
+|--------|-------------------|----------------|--------------|
+| `main` | Production (`rzwuknfycyqitcbotsvx`) | Production (`pk_live_...`) | `testflight`, `production` |
+| `staging` | Staging (`odjvwviokthebfkbqgnx`) | Development (`pk_test_...`) | `development`, `preview` |
+
 ### Branch Types
 
 | Prefix | Purpose | Example | Merges To |
 |--------|---------|---------|-----------|
-| `feature/` | New functionality | `feature/receipt-voice-claiming` | `main` via PR |
-| `fix/` | Bug fixes | `fix/navigation-loop` | `main` via PR |
+| `feature/` | New functionality | `feature/receipt-voice-claiming` | `staging` → `main` via PR |
+| `fix/` | Bug fixes | `fix/navigation-loop` | `staging` → `main` via PR |
 | `chore/` | Maintenance, deps, docs | `chore/update-expo-sdk` | `main` via PR |
 | `hotfix/` | Critical production fixes | `hotfix/auth-crash` | `main` via PR (expedited) |
 
@@ -67,6 +76,72 @@ All changes go through Pull Requests. This ensures:
 - `.env.local` is gitignored for a reason
 - API keys go in EAS environment variables
 - If you accidentally commit a secret, rotate it immediately
+
+### 5. Test database changes on staging first
+
+- Migrations auto-deploy when pushed to `staging` branch
+- Verify on staging before merging to `main`
+- Production migrations only run when merged to `main`
+
+---
+
+## Staging Branch: When & Why
+
+### Purpose
+
+The `staging` branch exists to **safely test database migrations** before they hit production. Supabase's GitHub integration automatically runs migrations when you push to this branch.
+
+### When to Use Staging
+
+| Scenario | Use Staging? | Why |
+|----------|--------------|-----|
+| Adding RLS policies | ✅ Yes | RLS bugs can lock out all users |
+| Creating new tables | ✅ Yes | Verify foreign keys, constraints work |
+| Modifying existing tables | ✅ Yes | Prevent data loss or corruption |
+| Adding indexes | ✅ Yes | Large indexes can timeout |
+| UI-only changes | ❌ No | No database impact, go direct to main |
+| Bug fixes (no DB) | ❌ No | Faster iteration |
+
+### Staging Workflow
+
+```bash
+# 1. Create feature branch from main
+git checkout main
+git pull origin main
+git checkout -b feature/new-rls-policy
+
+# 2. Create and test migration locally
+npx supabase migration new add_user_preferences
+# Edit the migration file
+npx supabase db reset  # Test locally
+
+# 3. Merge to staging first
+git add supabase/migrations/
+git commit -m "Add user preferences table"
+git push -u origin feature/new-rls-policy
+
+# Create PR targeting staging branch
+# Merge to staging
+
+# 4. Verify on staging
+#    - Check Supabase dashboard (staging project)
+#    - Test with preview build or Expo Go
+#    - Run integration tests against staging
+
+# 5. If staging works, merge staging → main
+git checkout main
+git merge staging
+git push origin main
+```
+
+### Staging vs Preview Builds
+
+| Build Profile | Database | Use Case |
+|---------------|----------|----------|
+| `development` | Staging | Local Expo Go development |
+| `preview` | Staging | Internal testing builds |
+| `testflight` | Production | Beta testing with real users |
+| `production` | Production | App Store release |
 
 ---
 
@@ -207,15 +282,52 @@ git add supabase/migrations/
 git commit -m "Add user preferences table"
 ```
 
-### Deploying Migrations
+### Deploying Migrations (Safe Path)
 
-1. **Commit and push** to GitHub
-2. **Supabase GitHub integration** auto-deploys to production
-3. **Verify** migration applied in Supabase dashboard
+```bash
+# 1. Push to staging first
+git checkout staging
+git merge feature/my-migration
+git push origin staging
+
+# 2. Verify in Supabase Dashboard
+#    - Check staging project (odjvwviokthebfkbqgnx)
+#    - Confirm migration applied
+#    - Test the feature
+
+# 3. If good, merge to main (production)
+git checkout main
+git merge staging
+git push origin main
+
+# 4. Verify in production
+#    - Check production project (rzwuknfycyqitcbotsvx)
+```
+
+### Deploying Migrations (Fast Path - UI Only)
+
+If the migration has NO production data risk:
+
+```bash
+# Direct to main (skip staging)
+git checkout main
+git merge feature/my-migration
+git push origin main
+```
 
 ### Critical: Never Have Uncommitted Migrations
 
 Uncommitted migrations = production doesn't have them = features break.
+
+### Emergency: Direct SQL Execution
+
+If you must fix production immediately without waiting for GitHub integration:
+
+```bash
+# Use Supabase MCP tool (dangerous - use sparingly)
+# mcp__supabase__execute_sql with the SQL statement
+# ALWAYS create a matching migration file afterward
+```
 
 See `docs/DATABASE_WORKFLOW.md` for detailed migration procedures.
 
@@ -252,7 +364,7 @@ eas build --profile testflight --platform ios --auto-submit
 
 ---
 
-## Protecting Main Branch (GitHub Settings)
+## Protecting Branches (GitHub Settings)
 
 Configure these rules in GitHub repo settings:
 
@@ -264,6 +376,14 @@ Configure these rules in GitHub repo settings:
 - [x] Do not allow bypassing the above settings
 - [ ] Require signed commits (optional, nice to have)
 
+### Branch Protection Rules for `staging`
+
+Staging can be less strict since it's for testing:
+
+- [ ] Require pull request reviews (optional - can push directly for quick tests)
+- [x] Require status checks to pass (TypeScript, tests)
+- [ ] Allow force pushes (for resetting staging to match main)
+
 ### Status Checks to Require
 
 Set up GitHub Actions (`.github/workflows/ci.yml`):
@@ -273,7 +393,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
 
 jobs:
   typecheck:
@@ -297,65 +419,6 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm test
-```
-
----
-
-## Handling the Current State (127 Uncommitted Changes)
-
-You have significant uncommitted work. Here's how to clean it up:
-
-### Option A: Batch Commit by Category
-
-```bash
-# See what's changed
-git status
-
-# Group related changes and commit separately:
-
-# 1. Test file updates
-git add __tests__/
-git commit -m "Update integration tests for new RLS policies"
-
-# 2. App screen changes
-git add app/
-git commit -m "Fix navigation and auth flows across screens"
-
-# 3. Library changes
-git add lib/
-git commit -m "Update user-profile and payment libraries"
-
-# 4. Config changes
-git add *.json .env.example
-git commit -m "Update project configuration"
-
-# 5. Documentation
-git add docs/ CLAUDE.md DEVELOPER_GUIDE.md
-git commit -m "Update documentation and guides"
-
-# Push all commits
-git push origin main
-```
-
-### Option B: Feature Branches (If Changes Are Unrelated)
-
-If the changes represent different features that should be reviewed separately:
-
-```bash
-# Stash everything
-git stash
-
-# Create branch for feature 1
-git checkout -b feature/auth-improvements
-git stash pop
-git add app/auth/ lib/auth*
-git commit -m "Improve auth flow and session handling"
-git push -u origin feature/auth-improvements
-
-# Go back to main, create branch for feature 2
-git checkout main
-git stash pop
-# ... repeat for other features
 ```
 
 ---

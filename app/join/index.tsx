@@ -110,15 +110,6 @@ export default function JoinGroupScreen() {
     try {
       const supabase = await getSupabase();
 
-      // Debug: Check auth status before attempting insert
-      if (__DEV__) {
-        const { data: authDebug } = await supabase.rpc("debug_auth_status");
-        console.log("[Join Group] Auth debug:", authDebug);
-        if (!authDebug?.[0]?.clerk_user_id) {
-          console.warn("[Join Group] Warning: clerk_user_id is NULL - auth token may not be properly verified");
-        }
-      }
-
       // Create member with clerk_user_id linked
       // The database now enforces uniqueness with idx_members_group_name_unique
       const { data: newMember, error: memberError } = await supabase

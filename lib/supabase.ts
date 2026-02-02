@@ -31,14 +31,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * a `role: "authenticated"` claim. This is configured in Clerk Dashboard via:
  * 1. "Connect with Supabase" feature (automatic), OR
  * 2. Session token customization (manual)
+ *
+ * NOTE: As of 2025, Supabase requires the `accessToken` callback pattern
+ * for third-party auth, NOT the Authorization header approach.
  */
 export function createAuthenticatedClient(clerkToken: string) {
   return createClient(supabaseUrl!, supabaseAnonKey!, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${clerkToken}`,
-      },
-    },
+    // Use the accessToken callback for third-party auth (required as of 2025)
+    // This tells Supabase to verify the token against Clerk's JWKS
+    accessToken: async () => clerkToken,
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -82,15 +83,14 @@ export function useSupabase() {
     const token = await getToken();
 
     if (token) {
-      // Debug: Log token claims in development to verify role claim exists
+      // Debug in development only
       if (__DEV__) {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]));
           if (!payload.role) {
             logger.warn(
               "[Supabase] Clerk token missing 'role' claim. " +
-              "RLS policies will fail. Configure Clerk's 'Connect with Supabase' " +
-              "feature or add role claim to session token customization."
+              "RLS policies may fail. Enable Clerk's 'Connect with Supabase' integration."
             );
           }
         } catch {
