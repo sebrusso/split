@@ -1,8 +1,20 @@
 # Receipt-Based Bill Splitting: Technical Architecture & UX Design
 
+> **Implementation Status (February 2026)**
+>
+> | Component | Status |
+> |-----------|--------|
+> | Receipt upload & storage | ✅ Shipped |
+> | OCR with Gemini | ✅ Shipped |
+> | Item claiming (in-app) | ✅ Shipped |
+> | Real-time sync | ✅ Shipped |
+> | Tax/tip distribution | ✅ Shipped |
+> | iMessage extension | ❌ Planned |
+> | Web claiming interface | ❌ Planned |
+
 ## Overview
 
-This document explores the technical architecture and user experience design for split it.'s vision feature: photograph a receipt, extract items via OCR, let friends claim their items, and automatically calculate each person's share including tax and tip.
+This document explores the technical architecture and user experience design for split it.'s receipt scanning feature: photograph a receipt, extract items via OCR, let friends claim their items, and automatically calculate each person's share including tax and tip.
 
 ---
 
@@ -1041,12 +1053,19 @@ Based on the analysis, here's my recommended phased approach:
 
 | Provider | Cost | Accuracy | Speed | Recommendation |
 |----------|------|----------|-------|----------------|
-| Google Vision | $1.50/1K | 85% | 0.5s | MVP |
-| Claude Vision | $0.02/img | 95% | 3s | Production |
+| **Google Gemini 2.5 Flash** | ~$0.01/img | 92% | 1-2s | ✅ **CURRENT** |
+| Google Vision | $1.50/1K | 85% | 0.5s | Not used |
+| Claude Vision | $0.02/img | 95% | 3s | Alternative |
 | GPT-4 Vision | $0.02/img | 93% | 2s | Alternative |
 | AWS Textract | $1.50/1K | 88% | 1s | Enterprise |
 
-**Recommendation:** Start with Google Vision for MVP, add Claude as a fallback for low-confidence results.
+**Current Implementation:** Using Google Gemini 2.5 Flash via Supabase Edge Function (`scan-receipt`). The function accepts base64 image data and returns structured receipt data with items, totals, and metadata.
+
+**Implementation Details:**
+- Edge function: `supabase/functions/scan-receipt/index.ts`
+- Client library: `lib/ocr.ts`
+- Supports single-pass (vision+parsing) and two-pass (extract then parse) modes
+- API key stored as Supabase secret: `GEMINI_API_KEY`
 
 ### 3.2 Real-time Architecture
 
@@ -1128,8 +1147,22 @@ CREATE TABLE anonymous_claims (
 
 ## Next Steps
 
-1. **Prototype OCR pipeline** - Test Google Vision + Claude hybrid
-2. **Design claiming UI** - Figma prototypes for in-app and web
-3. **Build web claiming MVP** - React app at split.free/r/:id
-4. **Validate with users** - Test with real receipts and friend groups
-5. **Evaluate iMessage effort** - Spike on iOS extension development
+1. ~~**Prototype OCR pipeline**~~ - ✅ DONE: Using Gemini 2.5 Flash
+2. ~~**Design claiming UI**~~ - ✅ DONE: In-app claiming implemented
+3. **Build web claiming MVP** - React app at split-it.net/r/:id (PLANNED)
+4. ~~**Validate with users**~~ - ✅ DONE: Testing with real receipts
+5. **Evaluate iMessage effort** - Spike on iOS extension development (PLANNED)
+
+## Current Implementation Notes
+
+**Edge Function:** `supabase/functions/scan-receipt/index.ts`
+- Uses Gemini 2.5 Flash for single-pass OCR + parsing
+- Returns structured JSON with items, quantities, modifiers, tax, tip
+- Handles service charges, discounts, and split item detection
+
+**Client Library:** `lib/ocr.ts`
+- `extractReceipt()` - Main entry point
+- `processReceiptSinglePass()` - Direct Gemini vision call
+- `processReceiptTwoPass()` - Extract text then parse (alternative)
+
+**Storage:** Supabase Storage `receipts` bucket with RLS policies

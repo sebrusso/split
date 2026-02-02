@@ -145,14 +145,18 @@ The app makes these queries that may need optimization:
 | `activity_log WHERE group_id = ? ORDER BY created_at` | `lib/activity.ts` | Needs composite index |
 | `expenses WHERE group_id = ? AND deleted_at IS NULL` | Multiple files | Needs composite index for soft-delete queries |
 
-#### 4. **RLS Policy Concerns**
+#### 4. ~~**RLS Policy Concerns**~~ ✅ RESOLVED
 
-Per CLAUDE.md: "All tables have RLS enabled with public read/write policies for MVP"
+~~Per CLAUDE.md: "All tables have RLS enabled with public read/write policies for MVP"~~
 
-This is a security risk for production:
-- Any user can read/modify any data
-- No ownership enforcement at the database level
-- The app relies on client-side filtering, not database-enforced access control
+**Status:** ✅ FIXED (January 9-12, 2026)
+
+Proper membership-based RLS policies are now in place:
+- All 17 tables have secure policies based on Clerk JWT authentication
+- Helper functions: `get_clerk_user_id()`, `is_group_member()`, `is_own_profile()`
+- Groups/expenses/settlements accessible only to authenticated members
+- Storage objects (receipts) have INSERT/SELECT/DELETE policies
+- See migrations: `20260107000001`, `20260109`, `20260110`, `20260112`, `20260202001533`
 
 ---
 
@@ -316,56 +320,46 @@ This document provides a comprehensive overview of the split it. database archit
 
 ## 6. Migrations Created
 
-The following migrations have been created to address the issues identified in this document:
+The following migrations have been created and applied (as of February 2026):
 
-### `20260113000001_add_performance_indexes.sql`
-Adds all performance indexes:
-- `idx_members_clerk_user_id` - For member lookup by Clerk ID
-- `idx_activity_log_group_created` - For activity feed queries
-- `idx_activity_log_actor_id` - For user-specific activity
-- `idx_expenses_group_not_deleted` - For soft-delete expense queries
-- `idx_expenses_group_deleted` - For trash view
-- `idx_receipts_group_status` - For receipt status queries
-- `idx_receipts_uploaded_by` / `idx_receipts_uploaded_by_clerk` - For receipt lookups
-- `idx_recurring_expenses_next_due_active` - For recurring expense processing
-- `idx_user_profiles_clerk_id` - For profile lookups
-- `idx_friendships_requester` / `idx_friendships_addressee` - For friendship queries
-- `idx_push_tokens_user_id` - For push token lookups
-- `idx_payment_reminders_group` / `idx_payment_reminders_scheduled` - For reminder queries
-- `idx_item_claims_receipt_item` / `idx_item_claims_member` - For claim lookups
+### Core Schema & RLS (January 2026)
+- `20260106_create_baseline.sql` - Base schema creation
+- `20260107000001_add_rls_policies.sql` - Initial RLS framework
+- `20260109_fix_push_tokens_rls_for_clerk.sql` - Push token security
+- `20260110_receipt_tables.sql` - Receipt scanning schema
+- `20260112_fix_receipt_rls_permissive.sql` - Receipt claiming policies
+- `20260113000001_add_performance_indexes.sql` - All performance indexes
+- `20260113000002_secure_rls_policies.sql` - Membership-based RLS
+- `20260113000003_add_updated_at_triggers.sql` - Consistency triggers
 
-### `20260113000002_secure_rls_policies.sql`
-Replaces wide-open "Allow public" policies with secure membership-based policies:
-- Creates helper functions: `get_clerk_user_id()`, `is_group_member()`, `is_own_profile()`
-- Secures all 17 tables with proper RLS policies
-- Allows anonymous access only where needed (share codes, receipt sharing)
-- Enforces group membership for all expense-related operations
+### Recent Additions (January-February 2026)
+- `20260123000001_add_member_name_unique_constraint.sql` - Unique member names per group
+- `20260123194445_create_feedback_table.sql` - User feedback collection
+- `20260124000001_fix_storage_buckets_rls.sql` - Storage bucket security
+- `20260202001533_fix_storage_objects_rls_complete.sql` - Receipt upload policies (INSERT/SELECT/DELETE)
 
-### `20260113000003_add_updated_at_triggers.sql`
-Adds consistency improvements:
-- Creates `update_updated_at_column()` trigger function
-- Adds triggers to all tables with `updated_at` columns
-- Adds `updated_at` columns to tables missing them
-- Documents deprecated `members.user_id` field with comments
+### Key Indexes Added
+- `idx_members_clerk_user_id` - Member lookup by Clerk ID
+- `idx_activity_log_group_created` - Activity feed queries
+- `idx_expenses_group_not_deleted` - Soft-delete expense queries
+- `idx_receipts_group_status` - Receipt status queries
+- `idx_recurring_expenses_next_due_active` - Recurring expense processing
+- `idx_friendships_requester/addressee` - Friendship queries
+- `idx_item_claims_receipt_item/member` - Claim lookups
 
-### `20260113000004_add_fk_constraints_optional.sql` *(Optional)*
-Adds foreign key constraints for data integrity:
-- `friendships.requester_id` → `user_profiles.clerk_id`
-- `friendships.addressee_id` → `user_profiles.clerk_id`
-- `push_tokens.user_id` → `user_profiles.clerk_id`
-
-**Note:** This migration checks for orphaned data before adding constraints. If orphaned records exist, it will skip the constraint and log a warning. See the migration file for cleanup queries.
-
-### Running the Migrations
+### Running Migrations
 
 ```bash
-# Apply migrations to local Supabase
+# Apply migrations to staging
+npx supabase link --project-ref odjvwviokthebfkbqgnx
 npx supabase db push
 
-# Or run against remote
-npx supabase db push --linked
+# Apply migrations to production
+npx supabase link --project-ref rzwuknfycyqitcbotsvx
+npx supabase db push
 ```
 
-**Important Notes:**
-- The RLS policy migration (`20260113000002`) is a breaking change. Ensure all clients are authenticated before deploying to production.
-- The FK constraints migration (`20260113000004`) is optional and will skip constraints if orphaned data exists. Check the migration warnings after running.
+**Notes:**
+- All migrations are now applied to both staging and production
+- RLS policies use Clerk JWT authentication (not Supabase Auth)
+- Storage bucket policies enable receipt image uploads

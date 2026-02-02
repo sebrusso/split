@@ -1,57 +1,54 @@
 # Security Review - split it.
 
-**Review Date:** 2026-01-06
+**Review Date:** 2026-01-06 (Initial) | **Updated:** 2026-02-01
 **Reviewer:** Claude Code Security Analysis
 **Severity Levels:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low
 
 ---
 
+> **⚠️ IMPORTANT UPDATE (February 2026)**
+>
+> This review was originally conducted on January 6, 2026. Since then, **most critical issues have been resolved**:
+> - ✅ RLS policies replaced with membership-based security (Jan 9-12 migrations)
+> - ✅ Credentials moved to environment variables
+> - ✅ Storage RLS policies added for receipt bucket
+>
+> Issues marked with ~~strikethrough~~ have been fixed. Remaining items are still relevant.
+
+---
+
 ## Executive Summary
 
-This security review identified **11 security concerns** across the split it. codebase. The most critical issues relate to **hardcoded API credentials**, **SQL injection vulnerabilities**, and **insufficient authorization controls** in database access.
+This security review initially identified **11 security concerns** across the split it. codebase. ~~The most critical issues relate to **hardcoded API credentials** and **insufficient authorization controls** in database access~~ - these have been fixed. Remaining concerns include SQL injection patterns and input validation.
 
 ---
 
 ## Critical Issues
 
-### 🔴 1. Hardcoded Supabase Credentials in Source Code
+### ~~🔴 1. Hardcoded Supabase Credentials in Source Code~~ ✅ FIXED
 
-**File:** `lib/supabase.ts:3-5`
+**Status:** ✅ RESOLVED (January 2026)
 
-```typescript
-const supabaseUrl = "https://rzwuknfycyqitcbotsvx.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
-```
+**Original Issue:** Supabase credentials were hardcoded in `lib/supabase.ts`.
 
-**Risk:** The Supabase URL and anonymous key are hardcoded directly in the source code. While the anonymous key is designed to be public, this approach:
-- Makes key rotation difficult (requires app update)
-- Exposes the exact Supabase project URL
-- Prevents different configurations for dev/staging/prod environments
-
-**Recommendation:**
-- Move credentials to environment variables using `expo-constants` or `react-native-config`
-- Use different keys for development and production
-- Configure Expo's `app.config.js` for dynamic configuration
+**Resolution:**
+- Credentials now loaded from environment variables (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`)
+- EAS Build uses separate environment configs for staging/production
+- `lib/supabase.ts` validates env vars are present before initializing
 
 ---
 
-### 🔴 2. Hardcoded Clerk Publishable Key
+### ~~🔴 2. Hardcoded Clerk Publishable Key~~ ✅ FIXED
 
-**File:** `lib/clerk.ts:11`
+**Status:** ✅ RESOLVED (January 2026)
 
-```typescript
-export const CLERK_PUBLISHABLE_KEY: string = "pk_test_cHJvbW90ZWQtcmF0dGxlci03Ni5jbGVyay5hY2NvdW50cy5kZXYk";
-```
+**Original Issue:** Clerk publishable key was hardcoded with `pk_test_` prefix.
 
-**Risk:**
-- Using a `pk_test_` key indicates this is a **test/development key** that should not be used in production
-- Hardcoding prevents environment-specific configurations
-- Key rotation requires code changes and app updates
-
-**Recommendation:**
-- Use environment variables for Clerk keys
-- Ensure production builds use `pk_live_` keys
-- Add build-time validation to prevent test keys in production builds
+**Resolution:**
+- Clerk keys now loaded from `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` env var
+- Staging uses `pk_test_...` (Development instance)
+- Production uses `pk_live_...` (Production instance with custom domain)
+- EAS environment configs separate staging vs production credentials
 
 ---
 
@@ -108,24 +105,27 @@ queryBuilder = queryBuilder.or(
 
 ## High Severity Issues
 
-### 🟠 5. Overly Permissive RLS Policies
+### ~~🟠 5. Overly Permissive RLS Policies~~ ✅ FIXED
 
-**Referenced in:** `CLAUDE.md` - "All tables have RLS enabled with public read/write policies for MVP"
+**Status:** ✅ RESOLVED (January 9-12, 2026)
 
-**Risk:** The documentation explicitly states that Row Level Security policies allow public read/write access. This means:
-- Any authenticated user can read ALL data across ALL groups
-- Any authenticated user can modify ANY record
-- No user isolation or authorization checking at the database level
-- Users can access other users' expense data, settlements, and personal information
+**Original Issue:** RLS policies allowed public read/write access to all tables.
 
-**Recommendation:**
-- Implement proper RLS policies immediately:
-  - Groups: Only members can read/write their group data
-  - Members: Only group members can see other members
-  - Expenses/Splits: Only group members can access
-  - Friendships: Only participants can access their relationships
-- Add `user_id` column to relevant tables for ownership tracking
-- Create policies based on authenticated user's JWT claims
+**Resolution:**
+Multiple migrations implemented proper membership-based RLS:
+- `20260107000001_add_rls_policies.sql` - Initial RLS framework
+- `20260109_fix_push_tokens_rls_for_clerk.sql` - Push tokens secured
+- `20260110_receipt_tables.sql` - Receipt tables with proper RLS
+- `20260112_fix_receipt_rls_permissive.sql` - Receipt claiming policies
+- `20260202001533_fix_storage_objects_rls_complete.sql` - Storage bucket policies
+
+**Current State:**
+- All 17 tables have membership-based RLS policies
+- Groups accessible only to authenticated members
+- Expenses/splits/settlements require group membership
+- Receipts and item claims use proper ownership checks
+- Storage objects (receipt images) have INSERT/SELECT/DELETE policies
+- Helper functions: `get_clerk_user_id()`, `is_group_member()`, `is_own_profile()`
 
 ---
 
@@ -309,14 +309,14 @@ The web configuration doesn't specify security-related settings.
 
 ## Immediate Action Items (Priority Order)
 
-1. **[CRITICAL]** Fix RLS policies - implement proper user-based access control
-2. **[CRITICAL]** Move credentials to environment variables
-3. **[CRITICAL]** Fix SQL injection in friend search and queries
-4. **[HIGH]** Add authorization checks at application level
-5. **[HIGH]** Replace `Math.random()` with secure random generation
-6. **[MEDIUM]** Implement signed URLs for receipt storage
-7. **[MEDIUM]** Remove/gate debug logging for production
-8. **[LOW]** Add input validation and sanitization
+1. ~~**[CRITICAL]** Fix RLS policies - implement proper user-based access control~~ ✅ DONE
+2. ~~**[CRITICAL]** Move credentials to environment variables~~ ✅ DONE
+3. **[CRITICAL]** Fix SQL injection in friend search and queries - STILL OPEN
+4. **[HIGH]** Add authorization checks at application level - STILL OPEN
+5. **[HIGH]** Replace `Math.random()` with secure random generation - STILL OPEN
+6. ~~**[MEDIUM]** Implement signed URLs for receipt storage~~ ✅ DONE (RLS policies)
+7. **[MEDIUM]** Remove/gate debug logging for production - STILL OPEN
+8. **[LOW]** Add input validation and sanitization - STILL OPEN
 
 ---
 

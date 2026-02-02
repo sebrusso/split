@@ -36,11 +36,12 @@ A simple, single-page marketing website to promote the split it. mobile app. The
 - **Solution**: Brief explanation of how split it. solves this
 - Why free? Ad-supported model explanation (transparent)
 
-### 3. Features Section (3-4 key features)
+### 3. Features Section (4-5 key features) ✅ SHIPPED
 - **Unlimited Groups & Expenses** - No transaction limits
 - **Smart Debt Simplification** - Minimize payments needed
 - **Easy Sharing** - QR codes and deep links to invite friends
 - **Works Offline** - Track expenses anywhere, sync later
+- **Receipt Scanning** - Snap a photo, we extract items with AI (Gemini)
 
 ### 4. How It Works (3 steps)
 1. Create a group
@@ -128,11 +129,15 @@ website/
 
 ## App Store Links
 
+**Domain:** split-it.net (custom domain configured)
+
 Placeholder URLs (update when live):
-- iOS: `https://apps.apple.com/app/splitfree/id[APP_ID]`
-- Android: `https://play.google.com/store/apps/details?id=com.splitfree.app`
+- iOS: `https://apps.apple.com/app/split-it/id[APP_ID]`
+- Android: `https://play.google.com/store/apps/details?id=com.splitit.app`
 
 For MVP, buttons can link to `#coming-soon` or show "Coming Soon" state.
+
+**Bundle ID:** `com.splitit.app` (as configured in app.json)
 
 ---
 
@@ -161,6 +166,7 @@ For MVP, buttons can link to `#coming-soon` or show "Coming Soon" state.
 3. Blog/content section
 4. Localization (Spanish, French, etc.)
 5. Comparison page (split it. vs Splitwise)
+6. Voice expense entry (planned - not yet built)
 
 ---
 

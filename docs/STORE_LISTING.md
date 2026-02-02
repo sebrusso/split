@@ -85,17 +85,19 @@ Start splitting expenses the free way today!
 ## URLs
 
 ### Privacy Policy URL
-`https://splitfree.app/privacy`
+`https://split-it.net/privacy.html`
 
-**[TODO: Create privacy policy page before submission]**
+✅ Created and live
 
 ### Support URL
-`https://splitfree.app/support`
+`https://split-it.net/support.html`
 
-**[TODO: Create support page before submission]**
+✅ Created and live
 
 ### Marketing URL (Optional)
-`https://splitfree.app`
+`https://split-it.net`
+
+✅ Live (custom domain)
 
 ---
 
@@ -108,7 +110,7 @@ Start splitting expenses the free way today!
 - Email: [your-email@example.com]
 
 ### Demo Account (if needed)
-This app does not require login. Users can create groups and track expenses without an account.
+The app requires authentication via Clerk (Apple Sign-In, Google Sign-In, or email). However, users can join existing groups via share links without creating a full account initially.
 
 ### Notes for Review
 split it. is a free expense-splitting app. The app displays occasional interstitial ads (non-intrusive, shown only when closing the app). No in-app purchases or subscriptions are offered.
@@ -217,17 +219,17 @@ Split expenses with friends, roommates, and travel buddies. 100% free - no subsc
 
 ## Checklist Before Submission
 
-- [ ] Privacy policy URL is live and accessible
-- [ ] Support URL is live and accessible
-- [ ] App icon meets all size requirements
+- [x] Privacy policy URL is live and accessible (split-it.net/privacy.html)
+- [x] Support URL is live and accessible (split-it.net/support.html)
+- [x] App icon meets all size requirements
 - [ ] All 6 iPhone screenshots created
 - [ ] iPad screenshots created (if supporting iPad)
 - [ ] Android screenshots created
-- [ ] Promotional text finalized
+- [x] Promotional text finalized
 - [ ] Contact information updated
-- [ ] EAS project ID added to app.json
-- [ ] Apple Developer account configured
+- [x] EAS project ID added to app.json
+- [x] Apple Developer account configured
 - [ ] Google Play Developer account configured
 - [ ] AdMob integration tested
-- [ ] App tested on physical devices
-- [ ] All placeholder content removed from app
+- [x] App tested on physical devices
+- [x] All placeholder content removed from app

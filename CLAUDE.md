@@ -56,7 +56,39 @@ expenses (id, group_id, description, amount, paid_by, created_at)
 splits (id, expense_id, member_id, amount)
 ```
 
-All tables have RLS enabled with public read/write policies for MVP.
+All tables have RLS enabled with Clerk JWT-based policies.
+
+---
+
+## Database Environments
+
+Uses Supabase Branching (Pro plan) for staging/production separation.
+
+| Environment | Supabase Project | Clerk Instance | EAS Env | Build Profiles |
+|-------------|------------------|----------------|---------|----------------|
+| **Staging** | `odjvwviokthebfkbqgnx` | Development (`pk_test_...`) | development | development, preview |
+| **Production** | `rzwuknfycyqitcbotsvx` | Production (`pk_live_...`) | production | testflight, production |
+
+### Key Files
+- `supabase/config.toml` - Branch refs, seeding config
+- `supabase/seed.sql` - Test data (5 groups, 16 members, 17 expenses)
+- `.env.local` - Local dev uses STAGING credentials
+
+### Database Commands
+```bash
+# Seed staging database
+node scripts/apply-baseline.js
+
+# Create new migration
+npx supabase migration new <name>
+
+# Push migrations
+npx supabase db push --linked
+```
+
+### Clerk Third-Party Auth
+- **Staging**: `promoted-rattler-76.clerk.accounts.dev` → Supabase staging branch
+- **Production**: `clerk.split-it.net` → Supabase main branch
 
 ---
 
