@@ -9,12 +9,9 @@
  * 2. RLS policies for unassigned receipts
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { generateShareCode } from '../lib/utils';
-
-const supabaseUrl = 'https://rzwuknfycyqitcbotsvx.supabase.co';
-const supabaseAnonKey =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6d3VrbmZ5Y3lxaXRjYm90c3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1Nzc0MTcsImV4cCI6MjA4MzE1MzQxN30.TKXVVOCaiV-wX--V4GEPNg2yupF-ERSZFMfekve2yt8';
+import { createTestClient } from './helpers/test-config';
 
 let supabase: SupabaseClient;
 
@@ -27,7 +24,7 @@ const testClerkUserId = 'test_clerk_user_' + Date.now();
 const testClerkUserId2 = 'test_clerk_user_2_' + Date.now();
 
 beforeAll(() => {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  supabase = createTestClient();
 });
 
 // Setup: Create test group and members

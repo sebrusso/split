@@ -45,6 +45,8 @@ module.exports = {
     '^expo-sharing$': '<rootDir>/__tests__/__mocks__/expo-sharing.ts',
     '^expo-linear-gradient$': '<rootDir>/__tests__/__mocks__/expo-linear-gradient.ts',
     '^@expo/vector-icons$': '<rootDir>/__tests__/__mocks__/expo-vector-icons.ts',
+    '^@sentry/react-native$': '<rootDir>/__tests__/__mocks__/sentry-react-native.ts',
     '^(\\.\\./)+lib/clerk$': '<rootDir>/__tests__/__mocks__/clerk.ts',
+    '^@op-engineering/op-sqlite$': '<rootDir>/__tests__/__mocks__/op-sqlite.ts',
   },
 };

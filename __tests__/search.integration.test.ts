@@ -7,12 +7,9 @@
  * Run with: npm test -- --testPathPattern=search.integration
  */
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { escapeILike, validateClerkId, isValidClerkId } from "../lib/sanitize";
-
-const supabaseUrl = "https://rzwuknfycyqitcbotsvx.supabase.co";
-const supabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6d3VrbmZ5Y3lxaXRjYm90c3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1Nzc0MTcsImV4cCI6MjA4MzE1MzQxN30.TKXVVOCaiV-wX--V4GEPNg2yupF-ERSZFMfekve2yt8";
+import { createTestClient } from "./helpers/test-config";
 
 let supabase: SupabaseClient;
 
@@ -22,7 +19,7 @@ let testMemberId: string;
 const testExpenseIds: string[] = [];
 
 beforeAll(async () => {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  supabase = createTestClient();
 
   // Create test group
   const { data: group } = await supabase
