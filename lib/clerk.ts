@@ -32,29 +32,51 @@ export const CLERK_PUBLISHABLE_KEY: string = clerkPublishableKey;
 /**
  * Token cache configuration using expo-secure-store
  * This persists auth tokens securely on the device
+ *
+ * Uses AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY for better reliability:
+ * - Available after first unlock since device boot
+ * - Survives app restarts
+ * - Device-specific (not backed up to iCloud)
  */
 export const tokenCache = {
   async getToken(key: string): Promise<string | null> {
     try {
-      const item = await SecureStore.getItemAsync(key);
+      const item = await SecureStore.getItemAsync(key, {
+        keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+      });
       return item;
-    } catch (error) {
-      logger.error("Error getting token from cache:", error);
+    } catch (error: any) {
+      // Log with error code for debugging keychain issues
+      logger.error("Error getting token from cache:", {
+        code: error?.code,
+        message: error?.message,
+      });
       return null;
     }
   },
   async saveToken(key: string, value: string): Promise<void> {
     try {
-      await SecureStore.setItemAsync(key, value);
-    } catch (error) {
-      logger.error("Error saving token to cache:", error);
+      await SecureStore.setItemAsync(key, value, {
+        keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+      });
+    } catch (error: any) {
+      // Log with error code for debugging keychain issues
+      logger.error("Error saving token to cache:", {
+        code: error?.code,
+        message: error?.message,
+      });
     }
   },
   async clearToken(key: string): Promise<void> {
     try {
-      await SecureStore.deleteItemAsync(key);
-    } catch (error) {
-      logger.error("Error clearing token from cache:", error);
+      await SecureStore.deleteItemAsync(key, {
+        keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+      });
+    } catch (error: any) {
+      logger.error("Error clearing token from cache:", {
+        code: error?.code,
+        message: error?.message,
+      });
     }
   },
 };

@@ -23,6 +23,7 @@ import {
 } from "../../lib/theme";
 import { Button, Card, Input } from "../../components/ui";
 import { useAnalytics, AnalyticsEvents } from "../../lib/analytics-provider";
+import { captureException, addBreadcrumb, Sentry } from "../../lib/sentry";
 
 export default function JoinGroupScreen() {
   // Get code from deep link if present
@@ -107,6 +108,14 @@ export default function JoinGroupScreen() {
 
     setJoining(true);
 
+    // Add Sentry breadcrumb for debugging production issues
+    addBreadcrumb("join_group", "Starting join group flow", {
+      groupId: foundGroup.id,
+      groupName: foundGroup.name,
+      userId: userId,
+      memberName: name,
+    });
+
     try {
       const supabase = await getSupabase();
 
@@ -139,6 +148,22 @@ export default function JoinGroupScreen() {
         // Handle RLS policy violation (42501 is insufficient_privilege)
         if (memberError.code === "42501") {
           __DEV__ && console.error("[Join Group] RLS policy violation:", memberError);
+
+          // Capture RLS error to Sentry for debugging
+          Sentry.withScope((scope) => {
+            scope.setTag("feature", "join_group");
+            scope.setTag("error_type", "rls_violation");
+            scope.setContext("rls_error", {
+              groupId: foundGroup?.id,
+              userId: userId,
+              errorCode: memberError.code,
+              errorMessage: memberError.message,
+              errorDetails: memberError.details,
+              errorHint: memberError.hint,
+            });
+            captureException(new Error(`RLS violation in join group: ${memberError.message}`));
+          });
+
           Alert.alert(
             "Permission Denied",
             "Unable to join group due to a permissions issue. This may be an authentication problem. Please try signing out and back in.",
@@ -168,6 +193,23 @@ export default function JoinGroupScreen() {
       router.replace(`/group/${foundGroup.id}`);
     } catch (err: any) {
       __DEV__ && console.error("Error joining group:", err);
+
+      // Capture to Sentry with full context for production debugging
+      Sentry.withScope((scope) => {
+        scope.setTag("feature", "join_group");
+        scope.setTag("error_code", err?.code || "unknown");
+        scope.setContext("join_attempt", {
+          groupId: foundGroup?.id,
+          groupName: foundGroup?.name,
+          userId: userId,
+          memberName: name,
+          errorCode: err?.code,
+          errorMessage: err?.message,
+          errorDetails: err?.details,
+          errorHint: err?.hint,
+        });
+        captureException(err instanceof Error ? err : new Error(String(err?.message || err)));
+      });
 
       // Provide more specific error messages based on error type
       let errorMessage = "Failed to join group. Please try again.";

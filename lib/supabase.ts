@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { useCallback, useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useAuth } from "./auth-context";
-import { logger } from "./logger";
 
 // Validate required environment variables
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -21,89 +20,54 @@ if (!supabaseAnonKey) {
   );
 }
 
+// Unauthenticated client for public operations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
- * Creates a Supabase client with the user's Clerk session token
- * Uses native Supabase third-party auth (Clerk verified via JWKS)
- *
- * IMPORTANT: For third-party auth to work, Clerk session tokens must include
- * a `role: "authenticated"` claim. This is configured in Clerk Dashboard via:
- * 1. "Connect with Supabase" feature (automatic), OR
- * 2. Session token customization (manual)
- *
- * NOTE: As of 2025, Supabase requires the `accessToken` callback pattern
- * for third-party auth, NOT the Authorization header approach.
- */
-export function createAuthenticatedClient(clerkToken: string) {
-  return createClient(supabaseUrl!, supabaseAnonKey!, {
-    // Use the accessToken callback for third-party auth (required as of 2025)
-    // This tells Supabase to verify the token against Clerk's JWKS
-    accessToken: async () => clerkToken,
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-}
-
-/**
  * Hook that provides an authenticated Supabase client
- * The client is automatically configured with the user's Clerk session token
- * for RLS policies to work correctly.
  *
  * Uses Supabase's native third-party auth integration with Clerk.
- * Supabase verifies tokens via Clerk's JWKS endpoint.
+ * The client is created ONCE with a dynamic accessToken callback that
+ * fetches a fresh Clerk token for each request.
  *
  * REQUIREMENTS for this to work:
- * 1. Clerk Dashboard: Enable "Connect with Supabase" OR customize session tokens
- *    to include `role: "authenticated"` claim
+ * 1. Clerk Dashboard: Enable "Connect with Supabase" (adds role claim automatically)
  * 2. Supabase Dashboard: Add Clerk as third-party auth provider with your
- *    Clerk domain (e.g., clerk.split-it.net)
+ *    Clerk domain (e.g., https://clerk.split-it.net)
  *
  * @example
- * const { getSupabase } = useSupabase();
- * const authSupabase = await getSupabase();
- * const { data } = await authSupabase.from('expenses').insert({...});
+ * const { supabase } = useSupabase();
+ * const { data } = await supabase.from('expenses').insert({...});
  */
 export function useSupabase() {
   const { getToken } = useAuth();
 
-  const getSupabase = useCallback(async (): Promise<SupabaseClient> => {
-    // Get Clerk session token for Supabase third-party auth
-    //
-    // The token MUST include a `role: "authenticated"` claim for Supabase
-    // to recognize the user as authenticated. This is configured in Clerk:
-    // - Via "Connect with Supabase" feature (adds role claim automatically)
-    // - Or via session token customization in Clerk Dashboard
-    //
-    // Without the role claim, auth.jwt() returns NULL in Supabase and
-    // RLS policies will fail with "new row violates row-level security policy"
-    const token = await getToken();
-
-    if (token) {
-      // Debug in development only
-      if (__DEV__) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          if (!payload.role) {
-            logger.warn(
-              "[Supabase] Clerk token missing 'role' claim. " +
-              "RLS policies may fail. Enable Clerk's 'Connect with Supabase' integration."
-            );
-          }
-        } catch {
-          // Ignore parsing errors
-        }
-      }
-      return createAuthenticatedClient(token);
-    }
-
-    // Fallback to unauthenticated client (will fail RLS checks)
-    logger.warn("No auth token available, using unauthenticated Supabase client");
-    return supabase;
+  // Create a single authenticated client with a dynamic accessToken callback
+  // This matches the Clerk docs pattern where getToken() is called inside the callback
+  const authenticatedClient = useMemo(() => {
+    return createClient(supabaseUrl!, supabaseAnonKey!, {
+      // Dynamic accessToken callback - fetches fresh token for each request
+      // This is the pattern recommended by Clerk for Supabase third-party auth
+      accessToken: async () => {
+        const token = await getToken();
+        return token ?? null;
+      },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
   }, [getToken]);
 
-  return { getSupabase };
+  // Legacy API - returns a promise for backwards compatibility
+  // Memoized to prevent infinite re-render loops in hooks that depend on this
+  const getSupabase = useCallback(async (): Promise<SupabaseClient> => {
+    return authenticatedClient;
+  }, [authenticatedClient]);
+
+  return {
+    supabase: authenticatedClient,  // New: direct access to client
+    getSupabase,                     // Legacy: async getter for compatibility
+  };
 }

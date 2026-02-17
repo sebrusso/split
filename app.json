@@ -20,7 +20,7 @@
       "associatedDomains": [
         "applinks:splitfree.app"
       ],
-      "buildNumber": "25",
+      "buildNumber": "41",
       "infoPlist": {
         "NSCameraUsageDescription": "split it. uses the camera to scan QR codes for joining groups and to capture receipt photos for bill splitting.",
         "NSPhotoLibraryUsageDescription": "split it. needs access to your photo library to select receipt images for bill splitting.",
@@ -117,6 +117,12 @@
         "expo-image-picker",
         {
           "photosPermission": "split it. needs access to your photos to select receipt images for bill splitting."
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow split it. to access your Face ID for secure authentication."
         }
       ]
     ],
